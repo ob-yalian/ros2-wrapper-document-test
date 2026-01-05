@@ -1337,13 +1337,6 @@ void OBCameraNode::setupProfiles() {
         images_[elem] =
             cv::Mat(height_[elem], width_[elem], image_format_[elem], cv::Scalar(0, 0, 0));
       }
-      RCLCPP_INFO_STREAM(logger_,
-                         " stream "
-                             << stream_name_[elem]
-                             << " is enabled - width: " << selected_profile->getWidth()
-                             << ", height: " << selected_profile->getHeight()
-                             << ", fps: " << selected_profile->getFps() << ", "
-                             << "Format: " << magic_enum::enum_name(selected_profile->getFormat()));
     }
   }
   // IMU
@@ -2231,27 +2224,35 @@ void OBCameraNode::setupPipelineConfig() {
 
       if (stream_index == COLOR && enable_stream_[COLOR] && align_filter_) {
         auto video_profile = profile;
-        RCLCPP_INFO_STREAM(
-            logger_, "color video_profile: " << video_profile->getWidth() << "x"
-                                             << video_profile->getHeight() << " "
-                                             << video_profile->getFps() << "fps "
-                                             << magic_enum::enum_name(video_profile->getFormat()));
         align_filter_->setAlignToStreamProfile(video_profile);
       }
+      if (enable_stream_[DEPTH] && enable_stream_[COLOR] && depth_registration_ &&
+          align_target_stream_ == OB_STREAM_COLOR && stream_index == DEPTH) {
+        auto profile = stream_profile_[COLOR]->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(logger_,
+                           "depth_registration is enabled. "
+                               << "Depth stream will be aligned to COLOR stream resolution:");
+        RCLCPP_INFO_STREAM(logger_, "Stream depth "
+                                        << " width: " << profile->getWidth() << " height: "
+                                        << profile->getHeight() << " fps: " << profile->getFps());
+      } else if (enable_stream_[DEPTH] && enable_stream_[COLOR] && depth_registration_ &&
+                 align_target_stream_ == OB_STREAM_DEPTH && stream_index == COLOR) {
+        auto profile = stream_profile_[DEPTH]->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(logger_,
+                           "depth_registration is enabled. "
+                               << "Color stream will be aligned to DEPTH stream resolution:");
+        RCLCPP_INFO_STREAM(logger_, "Stream color "
+                                        << " width: " << profile->getWidth() << " height: "
+                                        << profile->getHeight() << " fps: " << profile->getFps());
+      } else {
+        RCLCPP_INFO_STREAM(
+            logger_, "Stream " << stream_name_[stream_index] << " width: " << profile->getWidth()
+                               << " height: " << profile->getHeight() << " fps: "
+                               << profile->getFps() << " format: " << profile->getFormat());
+      }
 
-      RCLCPP_INFO_STREAM(
-          logger_, "Stream " << stream_name_[stream_index] << " width: " << profile->getWidth()
-                             << " height: " << profile->getHeight() << " fps: " << profile->getFps()
-                             << " format: " << profile->getFormat());
       pipeline_config_->enableStream(stream_profile_[stream_index]);
     }
-  }
-  if (enable_stream_[DEPTH] && depth_registration_) {
-    auto profile = stream_profile_[COLOR]->as<ob::VideoStreamProfile>();
-    RCLCPP_INFO_STREAM(logger_, "depth_registration is enabled. "
-                                    << "Depth stream will be aligned to COLOR stream resolution:"
-                                    << " width: " << profile->getWidth() << " height: "
-                                    << profile->getHeight() << " fps: " << profile->getFps());
   }
 
   if (frame_aggregate_mode_ == "full_frame") {
