@@ -1268,8 +1268,18 @@ void OBCameraNode::setupProfiles() {
             format_[elem] == OB_FORMAT_UNKNOWN) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
-          selected_profile = profiles->getVideoStreamProfile(width_[elem], height_[elem],
-                                                             format_[elem], fps_[elem]);
+          auto pid = device_->getDeviceInfo()->getPid();
+          if (pid == 0x0840 && elem == DEPTH) {
+            // Gemini 305
+            OBDownSampleConfig conf;
+            conf.originWidth = width_[elem];
+            conf.originHeight = height_[elem];
+            conf.scaleFactor = depth_downscale_;
+            selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
+          } else {
+            selected_profile = profiles->getVideoStreamProfile(width_[elem], height_[elem],
+                                                               format_[elem], fps_[elem]);
+          }
         }
 
       } catch (const ob::Error &ex) {
@@ -1912,6 +1922,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
+  setAndGetNodeParameter<int>(depth_downscale_, "depth_downscale", 1);
   setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
   setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
   setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);

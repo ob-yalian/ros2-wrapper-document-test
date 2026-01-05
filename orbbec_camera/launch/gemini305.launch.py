@@ -122,6 +122,7 @@ def generate_launch_description():
 
         DeclareLaunchArgument('depth_width', default_value='0'),
         DeclareLaunchArgument('depth_height', default_value='0'),
+        DeclareLaunchArgument('depth_downscale', default_value='1'),
         DeclareLaunchArgument('depth_fps', default_value='0'),
         DeclareLaunchArgument('depth_format', default_value='ANY'),
         DeclareLaunchArgument('enable_depth', default_value='true'),
