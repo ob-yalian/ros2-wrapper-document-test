@@ -8,15 +8,35 @@ from launch_ros.descriptions import ComposableNode
 
 
 def load_yaml(file_path):
-    with open(file_path, 'r') as f:
-        return yaml.safe_load(f)
+    try:
+        with open(file_path, 'r') as f:
+            return yaml.safe_load(f)
+    except Exception as e:
+        print(f"[orbbec_camera] Failed to load yaml '{file_path}': {e}")
+        return {}
 
 
 def merge_params(default_params, yaml_params):
+    if not isinstance(yaml_params, dict):
+        print(f"[orbbec_camera] YAML parameters should be a dictionary.")
+        return default_params
     for key, value in yaml_params.items():
-        if key in default_params:
-            default_params[key] = value
+        default_params[key] = value
     return default_params
+
+
+def resolve_config_file_path(config_file_path: str) -> str:
+    if not config_file_path:
+        return config_file_path
+    if os.path.isabs(config_file_path) and os.path.exists(config_file_path):
+        return config_file_path
+    if os.path.exists(config_file_path):
+        return config_file_path
+    config_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), '..', 'config'))
+    candidate = os.path.join(config_dir, config_file_path)
+    if os.path.exists(candidate):
+        return candidate
+    return config_file_path
 
 
 def convert_value(value):
@@ -38,7 +58,9 @@ def convert_value(value):
 
 def load_parameters(context, args):
     default_params = {arg.name: LaunchConfiguration(arg.name).perform(context) for arg in args}
-    config_file_path = LaunchConfiguration('config_file_path').perform(context)
+    config_file_path = resolve_config_file_path(
+        LaunchConfiguration('config_file_path').perform(context)
+    )
     if config_file_path:
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)

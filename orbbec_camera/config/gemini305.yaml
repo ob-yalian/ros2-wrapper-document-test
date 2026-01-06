@@ -15,16 +15,6 @@ tf_publish_rate: 0.0
 ir_info_url: ""
 color_info_url: ""
 
-# network
-enumerate_net_device: true
-net_device_ip: ""
-net_device_port: 0
-force_ip_enable: false
-force_ip_mac: ""
-force_ip_address: 192.168.1.10
-force_ip_subnet_mask: 255.255.255.0
-force_ip_gateway: 192.168.1.1
-
 # device_misc
 device_access_mode: Default
 exposure_range_mode: default
@@ -57,108 +47,53 @@ interleave_skip_enable: false
 interleave_skip_index: 1
 show_fps_enable: false
 
-# point_cloud
-point_cloud_qos: default
-enable_point_cloud: false
-point_cloud_decimation_filter_factor: 1
-enable_colored_point_cloud: false
-cloud_frame_id: ""
-ordered_pc: false
-
 # color
+enable_color: false
 color_width: 0
 color_height: 0
 color_fps: 0
 color_format: ANY
-enable_color: true
-enable_left_color: true
-enable_right_color: true
 color_qos: default
 color_camera_info_qos: default
-enable_color_auto_exposure_priority: false
 color_rotation: -1
 color_flip: false
 color_mirror: false
-color_ae_roi_left: -1
-color_ae_roi_right: -1
-color_ae_roi_top: -1
-color_ae_roi_bottom: -1
-color_exposure: -1
-color_gain: -1
-enable_color_auto_white_balance: true
-color_white_balance: -1
-enable_color_auto_exposure: true
-color_ae_max_exposure: -1
-color_brightness: -1
-color_sharpness: -1
-color_gamma: -1
-color_saturation: -1
-color_contrast: -1
-color_hue: -1
-color_backlight_compensation: -1
-color_powerline_freq: ""
-enable_color_decimation_filter: false
-color_decimation_filter_scale: -1
-color_denoising_level: -1
-enable_color_undistortion: false
-
 
 # left_color
-color_width: 0
-color_height: 0
-color_fps: 0
-color_format: ANY
-enable_color: true
-color_qos: default
-color_camera_info_qos: default
-enable_color_auto_exposure_priority: false
-color_rotation: -1
-color_flip: false
-color_mirror: false
-color_ae_roi_left: -1
-color_ae_roi_right: -1
-color_ae_roi_top: -1
-color_ae_roi_bottom: -1
-color_exposure: -1
-color_gain: -1
-enable_color_auto_white_balance: true
-color_white_balance: -1
-enable_color_auto_exposure: true
-color_ae_max_exposure: -1
-color_brightness: -1
-color_sharpness: -1
-color_gamma: -1
-color_saturation: -1
-color_contrast: -1
-color_hue: -1
-color_backlight_compensation: -1
-color_powerline_freq: ""
-enable_color_decimation_filter: false
-color_decimation_filter_scale: -1
-color_denoising_level: -1
-enable_color_undistortion: false
+enable_left_color: true
+left_color_width: 0
+left_color_height: 0
+left_color_fps: 0
+left_color_format: ANY
+left_color_qos: default
+left_color_camera_info_qos: default
+left_color_rotation: -1
+left_color_flip: false
+left_color_mirror: false
 
 # right_color
-color_width: 0
-color_height: 0
-color_fps: 0
-color_format: ANY
-enable_color: true
-color_qos: default
-color_camera_info_qos: default
+enable_right_color: true
+right_color_width: 0
+right_color_height: 0
+right_color_fps: 0
+right_color_format: ANY
+right_color_qos: default
+right_color_camera_info_qos: default
+right_color_rotation: -1
+right_color_flip: false
+right_color_mirror: false
+
+# color_common
 enable_color_auto_exposure_priority: false
-color_rotation: -1
-color_flip: false
-color_mirror: false
+enable_color_auto_white_balance: true
+enable_color_auto_exposure: true
 color_ae_roi_left: -1
 color_ae_roi_right: -1
 color_ae_roi_top: -1
 color_ae_roi_bottom: -1
 color_exposure: -1
 color_gain: -1
-enable_color_auto_white_balance: true
 color_white_balance: -1
-enable_color_auto_exposure: true
 color_ae_max_exposure: -1
 color_brightness: -1
 color_sharpness: -1
@@ -173,14 +108,12 @@ color_decimation_filter_scale: -1
 color_denoising_level: -1
 enable_color_undistortion: false
 
-
-
 # depth
+enable_depth: false
 depth_width: 0
 depth_height: 0
 depth_fps: 0
 depth_format: ANY
-enable_depth: false
 depth_qos: default
 depth_camera_info_qos: default
 enable_depth_auto_exposure_priority: false
@@ -228,16 +161,25 @@ enable_spatial_moderate_filter: false
 spatial_moderate_filter_diff_threshold: -1
 spatial_moderate_filter_magnitude: -1
 spatial_moderate_filter_radius: -1
+
+# point_cloud
+point_cloud_qos: default
+enable_point_cloud: false
+point_cloud_decimation_filter_factor: 1
+enable_colored_point_cloud: false
+cloud_frame_id: ""
+ordered_pc: false
+
 # ldp
 enable_ldp: true
 ldp_power_level: -1
 
 # left_ir
+enable_left_ir: false
 left_ir_width: 0
 left_ir_height: 0
 left_ir_fps: 0
 left_ir_format: ANY
-enable_left_ir: false
 left_ir_qos: default
 left_ir_camera_info_qos: default
 left_ir_rotation: -1
@@ -247,11 +189,11 @@ enable_left_ir_sequence_id_filter: false
 left_ir_sequence_id_filter_id: -1
 
 # right_ir
+enable_right_ir: false
 right_ir_width: 0
 right_ir_height: 0
 right_ir_fps: 0
 right_ir_format: ANY
-enable_right_ir: false
 right_ir_qos: default
 right_ir_camera_info_qos: default
 right_ir_rotation: -1

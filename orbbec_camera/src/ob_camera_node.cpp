@@ -510,6 +510,10 @@ void OBCameraNode::setupDevices() {
         mirrorPropertyID = OB_PROP_IR_MIRROR_BOOL;
       } else if (stream_index == INFRA2) {
         mirrorPropertyID = OB_PROP_IR_RIGHT_MIRROR_BOOL;
+      } else if (stream_index == COLOR_LEFT) {
+        mirrorPropertyID = OB_PROP_COLOR_LEFT_MIRROR_BOOL;
+      } else if (stream_index == COLOR_RIGHT) {
+        mirrorPropertyID = OB_PROP_COLOR_RIGHT_MIRROR_BOOL;
       }
       if (device_->isPropertySupported(mirrorPropertyID, OB_PERMISSION_WRITE)) {
         RCLCPP_INFO_STREAM(logger_, "Setting " << stream_name_[stream_index] << " mirror to "
@@ -527,6 +531,10 @@ void OBCameraNode::setupDevices() {
         flipPropertyID = OB_PROP_IR_FLIP_BOOL;
       } else if (stream_index == INFRA2) {
         flipPropertyID = OB_PROP_IR_RIGHT_FLIP_BOOL;
+      } else if (stream_index == COLOR_LEFT) {
+        flipPropertyID = OB_PROP_COLOR_LEFT_FLIP_BOOL;
+      } else if (stream_index == COLOR_RIGHT) {
+        flipPropertyID = OB_PROP_COLOR_RIGHT_FLIP_BOOL;
       }
       if (device_->isPropertySupported(flipPropertyID, OB_PERMISSION_WRITE)) {
         RCLCPP_INFO_STREAM(logger_, "Setting " << stream_name_[stream_index] << " flip to "
@@ -544,6 +552,10 @@ void OBCameraNode::setupDevices() {
         rotationPropertyID = OB_PROP_IR_ROTATE_INT;
       } else if (stream_index == INFRA2) {
         rotationPropertyID = OB_PROP_IR_RIGHT_ROTATE_INT;
+      } else if (stream_index == COLOR_LEFT) {
+        rotationPropertyID = OB_PROP_COLOR_LEFT_ROTATE_INT;
+      } else if (stream_index == COLOR_RIGHT) {
+        rotationPropertyID = OB_PROP_COLOR_RIGHT_ROTATE_INT;
       }
       if (rotation_stream_[stream_index] != -1 &&
           device_->isPropertySupported(rotationPropertyID, OB_PERMISSION_WRITE)) {
