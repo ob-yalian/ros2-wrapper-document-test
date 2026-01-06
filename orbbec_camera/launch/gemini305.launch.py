@@ -86,6 +86,8 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_colored_point_cloud', default_value='false'),
         DeclareLaunchArgument('cloud_frame_id', default_value=''),
         DeclareLaunchArgument('connection_delay', default_value='10'),
+        DeclareLaunchArgument('ae_mode', default_value='depthbased'), # depthbased or colorbased
+        DeclareLaunchArgument('enable_sports_mode', default_value='false'),
         DeclareLaunchArgument('color_width', default_value='0'),
         DeclareLaunchArgument('color_height', default_value='0'),
         DeclareLaunchArgument('color_fps', default_value='0'),

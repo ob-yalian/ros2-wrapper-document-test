@@ -955,6 +955,22 @@ void OBCameraNode::setupDevices() {
       RCLCPP_ERROR(logger_, "intra camera sync reference does not support this setting");
     }
   }
+  if (pid == 0x0840) {
+    if (enable_sports_mode_) {
+      if (device_->isPropertySupported(OB_PROP_COLOR_AE_MODE_INT, OB_PERMISSION_WRITE)) {
+        device_->setIntProperty(OB_PROP_COLOR_AE_MODE_INT, enable_sports_mode_);
+        RCLCPP_INFO_STREAM(logger_,
+                           "Setting Sports Mode to " << (enable_sports_mode_ ? "ON" : "OFF"));
+      }
+    }
+    if (!ae_mode_.empty()) {
+      if (device_->isPropertySupported(OB_PROP_COLOR_AE_MODE_INT, OB_PERMISSION_WRITE)) {
+        auto ae_mode = ae_mode_ == "depthbased" ? 0 : 1;
+        device_->setIntProperty(OB_PROP_COLOR_AE_MODE_INT, ae_mode);
+        RCLCPP_INFO_STREAM(logger_, "Setting AE Mode to " << ae_mode_);
+      }
+    }
+  }
 }
 void OBCameraNode::setupColorPostProcessFilter() {
   try {
@@ -2153,6 +2169,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
   setAndGetNodeParameter<std::string>(intra_camera_sync_reference_, "intra_camera_sync_reference",
                                       "Middle");
+  setAndGetNodeParameter<std::string>(ae_mode_, "ae_mode", "depthbased");
+  setAndGetNodeParameter<bool>(enable_sports_mode_, "enable_sports_mode", false);
 
   RCLCPP_INFO_STREAM(logger_, "current time domain: " << time_domain_);
   RCLCPP_INFO_STREAM(logger_, "hdr_index1_laser_control_ "
