@@ -121,6 +121,8 @@ using GetUserCalibParams = orbbec_camera_msgs::srv::GetUserCalibParams;
 typedef std::pair<ob_stream_type, int> stream_index_pair;
 
 const stream_index_pair COLOR{OB_STREAM_COLOR, 0};
+const stream_index_pair COLOR_LEFT{OB_STREAM_COLOR_LEFT, 0};
+const stream_index_pair COLOR_RIGHT{OB_STREAM_COLOR_RIGHT, 0};
 const stream_index_pair DEPTH{OB_STREAM_DEPTH, 0};
 const stream_index_pair INFRA0{OB_STREAM_IR, 0};
 const stream_index_pair INFRA1{OB_STREAM_IR_LEFT, 0};
@@ -130,12 +132,15 @@ const stream_index_pair LIDAR{OB_STREAM_LIDAR, 0};
 const stream_index_pair GYRO{OB_STREAM_GYRO, 0};
 const stream_index_pair ACCEL{OB_STREAM_ACCEL, 0};
 
-const std::vector<stream_index_pair> IMAGE_STREAMS = {COLOR, DEPTH, INFRA0, INFRA1, INFRA2, LIDAR};
+const std::vector<stream_index_pair> IMAGE_STREAMS = {COLOR,  COLOR_LEFT, COLOR_RIGHT, DEPTH,
+                                                      INFRA0, INFRA1,     INFRA2,      LIDAR};
 
 const std::vector<stream_index_pair> HID_STREAMS = {GYRO, ACCEL};
 
 const std::map<OBStreamType, OBFrameType> STREAM_TYPE_TO_FRAME_TYPE = {
     {OB_STREAM_COLOR, OB_FRAME_COLOR},
+    {OB_STREAM_COLOR_LEFT, OB_FRAME_COLOR_LEFT},
+    {OB_STREAM_COLOR_RIGHT, OB_FRAME_COLOR_RIGHT},
     {OB_STREAM_DEPTH, OB_FRAME_DEPTH},
     {OB_STREAM_IR, OB_FRAME_IR},
     {OB_STREAM_IR_LEFT, OB_FRAME_IR_LEFT},
@@ -423,7 +428,8 @@ class OBCameraNode {
 
   void onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set);
 
-  std::shared_ptr<ob::Frame> softwareDecodeColorFrame(const std::shared_ptr<ob::Frame>& frame);
+  std::shared_ptr<ob::Frame> softwareDecodeColorFrame(const std::shared_ptr<ob::Frame>& frame,
+                                                      const stream_index_pair& stream_index);
 
   bool decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame>& frame, uint8_t* buffer);
 
@@ -436,6 +442,10 @@ class OBCameraNode {
                        const stream_index_pair& stream_index, const std_msgs::msg::Header& header);
 
   void onNewColorFrameCallback();
+
+  void onNewLeftColorFrameCallback();
+
+  void onNewRightColorFrameCallback();
 
   void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& image,
                        const sensor_msgs::msg::Image& image_msg);
@@ -456,6 +466,7 @@ class OBCameraNode {
   void FillImuDataCopy(const IMUData& imu_data, std::deque<sensor_msgs::msg::Imu>& imu_msgs);
 
   bool setupFormatConvertType(OBFormat format);
+  bool setupFormatConvertType(OBFormat format, ob::FormatConvertFilter& filter);
 
   orbbec_camera_msgs::msg::IMUInfo createIMUInfo(const stream_index_pair& stream_index);
 
@@ -531,6 +542,8 @@ class OBCameraNode {
   std::map<stream_index_pair, int> unit_step_size_;
   std::vector<int> compression_params_;
   ob::FormatConvertFilter format_convert_filter_;
+  ob::FormatConvertFilter format_convert_filter_left_;
+  ob::FormatConvertFilter format_convert_filter_right_;
 
   std::map<stream_index_pair, bool> enable_stream_;
   std::map<stream_index_pair, bool> flip_stream_;
@@ -700,7 +713,13 @@ class OBCameraNode {
   bool enable_gyro_data_correction_ = true;
   // mjpeg decoder
   std::shared_ptr<JPEGDecoder> jpeg_decoder_ = nullptr;
+  std::shared_ptr<JPEGDecoder> jpeg_decoder_left_ = nullptr;
+  std::shared_ptr<JPEGDecoder> jpeg_decoder_right_ = nullptr;
   uint8_t* rgb_buffer_ = nullptr;
+  uint8_t* rgb_buffer_left_ = nullptr;
+  uint8_t* rgb_buffer_right_ = nullptr;
+  bool is_left_color_frame_decoded_ = false;
+  bool is_right_color_frame_decoded_ = false;
   bool is_color_frame_decoded_ = false;
   std::recursive_mutex device_lock_;
   // For color
@@ -708,6 +727,18 @@ class OBCameraNode {
   std::shared_ptr<std::thread> colorFrameThread_ = nullptr;
   std::mutex color_frame_queue_lock_;
   std::condition_variable color_frame_queue_cv_;
+
+  // For left color
+  std::queue<std::shared_ptr<ob::FrameSet>> left_color_frame_queue_;
+  std::shared_ptr<std::thread> leftColorFrameThread_ = nullptr;
+  std::mutex left_color_frame_queue_lock_;
+  std::condition_variable left_color_frame_queue_cv_;
+
+  // For right color
+  std::queue<std::shared_ptr<ob::FrameSet>> right_color_frame_queue_;
+  std::shared_ptr<std::thread> rightColorFrameThread_ = nullptr;
+  std::mutex right_color_frame_queue_lock_;
+  std::condition_variable right_color_frame_queue_cv_;
 
   bool ordered_pc_ = false;
   bool enable_depth_scale_ = true;
@@ -794,6 +825,8 @@ class OBCameraNode {
   std::string cloud_frame_id_;
   std::vector<std::shared_ptr<ob::Filter>> depth_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> color_filter_list_;
+  std::vector<std::shared_ptr<ob::Filter>> left_color_filter_list_;
+  std::vector<std::shared_ptr<ob::Filter>> right_color_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> right_ir_filter_list_;
 

@@ -91,6 +91,8 @@ def generate_launch_description():
         DeclareLaunchArgument('color_fps', default_value='0'),
         DeclareLaunchArgument('color_format', default_value='ANY'),
         DeclareLaunchArgument('enable_color', default_value='true'),
+        DeclareLaunchArgument('enable_left_color', default_value='true'),
+        DeclareLaunchArgument('enable_right_color', default_value='true'),
         DeclareLaunchArgument('color_qos', default_value='default'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
@@ -250,7 +252,7 @@ def generate_launch_description():
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'), # seconds
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_precision', default_value=''),
-        DeclareLaunchArgument('device_preset', default_value='Default'),
+        DeclareLaunchArgument('device_preset', default_value='Default'), # Default, High Accuracy, Close Range High Accuracy, Factory Calib, Dual Color Streams, Custom
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('laser_energy_level', default_value='-1'),
         DeclareLaunchArgument('enable_sync_host_time', default_value='true'),
