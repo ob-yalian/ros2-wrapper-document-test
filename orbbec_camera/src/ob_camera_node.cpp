@@ -438,7 +438,24 @@ void OBCameraNode::setupDevices() {
       RCLCPP_INFO_STREAM(logger_, "depthModeList[" << i << "]: " << (*depthModeList)[i].name);
     }
     TRY_EXECUTE_BLOCK(device_->switchDepthWorkMode(depth_work_mode_.c_str()));
-    RCLCPP_INFO_STREAM(logger_, "Set depth work mode: " << depth_work_mode_);
+    RCLCPP_INFO_STREAM(logger_, "Set device preset: " << depth_work_mode_);
+  } else if (!device_preset_.empty()) {
+    try {
+      RCLCPP_INFO_STREAM(logger_, "Available presets:");
+      auto preset_list = device_->getAvailablePresetList();
+      for (uint32_t i = 0; i < preset_list->getCount(); i++) {
+        RCLCPP_INFO_STREAM(logger_, "Preset " << i << ": " << preset_list->getName(i));
+      }
+      RCLCPP_INFO_STREAM(logger_, "Load device preset: " << device_preset_);
+      TRY_EXECUTE_BLOCK(device_->loadPreset(device_preset_.c_str()));
+      RCLCPP_INFO_STREAM(logger_, "Device preset " << device_->getCurrentPresetName() << " loaded");
+    } catch (const ob::Error &e) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to load device preset: " << e.getMessage());
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to load device preset: " << e.what());
+    } catch (...) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to load device preset");
+    }
   }
   if (!sync_mode_str_.empty()) {
     auto sync_config = device_->getMultiDeviceSyncConfig();
@@ -2033,7 +2050,6 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_left_ir_sequence_id_filter_,
                                "enable_left_ir_sequence_id_filter", false);
   setAndGetNodeParameter<int>(left_ir_sequence_id_filter_id_, "left_ir_sequence_id_filter_id", -1);
-  setAndGetNodeParameter<std::string>(depth_work_mode_, "depth_work_mode", "");
   setAndGetNodeParameter<std::string>(preset_resolution_config_, "preset_resolution_config", "");
   setAndGetNodeParameter<std::string>(sync_mode_str_, "sync_mode", "");
   setAndGetNodeParameter<int>(depth_delay_us_, "depth_delay_us", 0);
@@ -2058,10 +2074,11 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
-  setAndGetNodeParameter<int>(depth_downscale_, "depth_downscale", 1);
-  setAndGetNodeParameter<int>(left_ir_downscale_, "left_ir_downscale", 1);
-  setAndGetNodeParameter<int>(right_ir_downscale_, "right_ir_downscale", 1);
-  setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
+  if (isDepthWorkModeDevices(device_->getDeviceInfo()->getPid())) {
+    setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "");
+  } else {
+    setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
+  }
   setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
   setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);
   setAndGetNodeParameter<bool>(enable_sequence_id_filter_, "enable_sequence_id_filter", false);
@@ -4218,6 +4235,10 @@ bool OBCameraNode::isGemini335PID(uint32_t pid) {
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 bool OBCameraNode::isPublishMetaData(uint32_t pid) {
   return isGemini335PID(pid) || isGemini435LePID(pid) || pid == GEMINI_305_PID;
+}
+
+bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) {
+  return pid == GEMINI_435Le_PID || pid == GEMINI2_PID;
 }
 
 orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(

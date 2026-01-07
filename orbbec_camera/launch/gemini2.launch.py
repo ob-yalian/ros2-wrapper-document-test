@@ -114,7 +114,7 @@ def generate_launch_description():
         # Unbinned Sparse Default
         # Binned Sparse Default
         # Obstacle Avoidance
-        DeclareLaunchArgument("depth_work_mode", default_value=""),
+        DeclareLaunchArgument("device_preset", default_value="Unbinned Dense Default"),
         DeclareLaunchArgument("sync_mode", default_value="standalone"),
         DeclareLaunchArgument("depth_delay_us", default_value="0"),
         DeclareLaunchArgument("color_delay_us", default_value="0"),
