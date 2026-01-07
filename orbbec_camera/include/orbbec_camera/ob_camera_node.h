@@ -751,6 +751,8 @@ class OBCameraNode {
   bool ordered_pc_ = false;
   bool enable_depth_scale_ = true;
   int depth_downscale_ = 1;
+  int left_ir_downscale_ = 1;
+  int right_ir_downscale_ = 1;
   std::string device_preset_ = "Default";
   // filter switch
   bool enable_decimation_filter_ = false;

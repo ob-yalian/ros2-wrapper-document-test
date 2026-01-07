@@ -1354,6 +1354,7 @@ void OBCameraNode::printSensorProfiles(const std::shared_ptr<ob::Sensor> &sensor
 
 void OBCameraNode::setupProfiles() {
   // Image stream
+  auto pid = device_->getDeviceInfo()->getPid();
   for (const auto &elem : IMAGE_STREAMS) {
     if (enable_stream_[elem]) {
       const auto &sensor = sensors_[elem];
@@ -1384,13 +1385,23 @@ void OBCameraNode::setupProfiles() {
             format_[elem] == OB_FORMAT_UNKNOWN) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
-          auto pid = device_->getDeviceInfo()->getPid();
           if (pid == GEMINI_305_PID && elem == DEPTH) {
-            // Gemini 305
             OBDownSampleConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.scaleFactor = depth_downscale_;
+            selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
+          } else if (pid == GEMINI_305_PID && elem == INFRA1) {
+            OBDownSampleConfig conf;
+            conf.originWidth = width_[elem];
+            conf.originHeight = height_[elem];
+            conf.scaleFactor = left_ir_downscale_;
+            selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
+          } else if (pid == GEMINI_305_PID && elem == INFRA2) {
+            OBDownSampleConfig conf;
+            conf.originWidth = width_[elem];
+            conf.originHeight = height_[elem];
+            conf.scaleFactor = right_ir_downscale_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
           } else {
             selected_profile = profiles->getVideoStreamProfile(width_[elem], height_[elem],
@@ -2048,6 +2059,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
   setAndGetNodeParameter<int>(depth_downscale_, "depth_downscale", 1);
+  setAndGetNodeParameter<int>(left_ir_downscale_, "left_ir_downscale", 1);
+  setAndGetNodeParameter<int>(right_ir_downscale_, "right_ir_downscale", 1);
   setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
   setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
   setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);

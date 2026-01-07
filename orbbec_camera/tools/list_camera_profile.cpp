@@ -24,13 +24,15 @@ void listSensorProfiles(const std::shared_ptr<ob::Device>& device) {
     auto profile_list = sensor->getStreamProfileList();
     for (size_t j = 0; j < profile_list->getCount(); j++) {
       auto origin_profile = profile_list->getProfile(j);
-      if (sensor->getType() == OB_SENSOR_DEPTH && pid == GEMINI_305_PID) {
+      if ((sensor->getType() == OB_SENSOR_DEPTH || sensor->getType() == OB_SENSOR_IR_LEFT ||
+           sensor->getType() == OB_SENSOR_IR_RIGHT) &&
+          pid == GEMINI_305_PID) {
         // Gemini 305
         auto profile = origin_profile->as<ob::VideoStreamProfile>();
         std::cout << magic_enum::enum_name(sensor->getType()) << " profile: " << profile->getWidth()
                   << "x" << profile->getHeight() << " " << profile->getFps() << "fps "
                   << magic_enum::enum_name(profile->getFormat())
-                  << " Weight: " << profile->getDownSampleConfig().originWidth
+                  << " | Weight: " << profile->getDownSampleConfig().originWidth
                   << " Height: " << profile->getDownSampleConfig().originHeight
                   << " downscale:" << profile->getDownSampleConfig().scaleFactor << std::endl;
       } else if (sensor->getType() == OB_SENSOR_COLOR || sensor->getType() == OB_SENSOR_DEPTH ||
