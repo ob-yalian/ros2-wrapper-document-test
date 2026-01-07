@@ -24,7 +24,7 @@ void listSensorProfiles(const std::shared_ptr<ob::Device>& device) {
     auto profile_list = sensor->getStreamProfileList();
     for (size_t j = 0; j < profile_list->getCount(); j++) {
       auto origin_profile = profile_list->getProfile(j);
-      if (sensor->getType() == OB_SENSOR_DEPTH && pid == 0x0840) {
+      if (sensor->getType() == OB_SENSOR_DEPTH && pid == GEMINI_305_PID) {
         // Gemini 305
         auto profile = origin_profile->as<ob::VideoStreamProfile>();
         std::cout << magic_enum::enum_name(sensor->getType()) << " profile: " << profile->getWidth()

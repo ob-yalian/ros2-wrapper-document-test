@@ -968,15 +968,16 @@ void OBCameraNode::setupDevices() {
       RCLCPP_ERROR(logger_, "intra camera sync reference does not support this setting");
     }
   }
-  if (pid == 0x0840) {
+  if (pid == GEMINI_305_PID) {
     if (enable_sports_mode_) {
-      if (device_->isPropertySupported(OB_PROP_COLOR_AE_MODE_INT, OB_PERMISSION_WRITE)) {
-        device_->setIntProperty(OB_PROP_COLOR_AE_MODE_INT, enable_sports_mode_);
+      if (device_->isPropertySupported(OB_PROP_COLOR_FAST_AE_BOOL, OB_PERMISSION_WRITE)) {
+        device_->setIntProperty(OB_PROP_COLOR_FAST_AE_BOOL, (enable_sports_mode_ ? 0 : 1));
         RCLCPP_INFO_STREAM(logger_,
                            "Setting Sports Mode to " << (enable_sports_mode_ ? "ON" : "OFF"));
       }
     }
-    if (!ae_mode_.empty()) {
+    if ((ae_mode_ == "depthbased" || ae_mode_ == "colorbased") &&
+        device_->isPropertySupported(OB_PROP_COLOR_AE_MODE_INT, OB_PERMISSION_WRITE)) {
       if (device_->isPropertySupported(OB_PROP_COLOR_AE_MODE_INT, OB_PERMISSION_WRITE)) {
         auto ae_mode = ae_mode_ == "depthbased" ? 0 : 1;
         device_->setIntProperty(OB_PROP_COLOR_AE_MODE_INT, ae_mode);
@@ -1384,7 +1385,7 @@ void OBCameraNode::setupProfiles() {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
           auto pid = device_->getDeviceInfo()->getPid();
-          if (pid == 0x0840 && elem == DEPTH) {
+          if (pid == GEMINI_305_PID && elem == DEPTH) {
             // Gemini 305
             OBDownSampleConfig conf;
             conf.originWidth = width_[elem];

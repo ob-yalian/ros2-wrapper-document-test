@@ -231,25 +231,37 @@ void OBCameraNode::setupCameraCtrlServices() {
                                       std::shared_ptr<SetBool::Response> response) {
         sendSoftwareTriggerCallback(request, response);
       });
-  write_customerdata_srv_ = node_->create_service<SetString>(
-      "write_customer_data", [this](const std::shared_ptr<SetString::Request> request,
-                                    std::shared_ptr<SetString::Response> response) {
-        writeCustomerDataCallback(request, response);
+  if (device_->getDeviceInfo()->getPid() == GEMINI_435Le_PID) {
+    write_customerdata_srv_ = node_->create_service<SetString>(
+        "write_customer_data", [this](const std::shared_ptr<SetString::Request> request,
+                                      std::shared_ptr<SetString::Response> response) {
+          writeCustomerDataCallback(request, response);
+        });
+    read_customerdata_srv_ = node_->create_service<GetString>(
+        "read_customer_data", [this](const std::shared_ptr<GetString::Request> request,
+                                     std::shared_ptr<GetString::Response> response) {
+          readCustomerDataCallback(request, response);
+        });
+    set_user_calib_params_srv_ = node_->create_service<SetUserCalibParams>(
+        "set_user_calib_params", [this](const std::shared_ptr<SetUserCalibParams::Request> request,
+                                        std::shared_ptr<SetUserCalibParams::Response> response) {
+          setUserCalibParamsCallback(request, response);
+        });
+    get_user_calib_params_srv_ = node_->create_service<GetUserCalibParams>(
+        "get_user_calib_params", [this](const std::shared_ptr<GetUserCalibParams::Request> request,
+                                        std::shared_ptr<GetUserCalibParams::Response> response) {
+          getUserCalibParamsCallback(request, response);
+        });
+  }
+  set_ae_mode_srv_ = node_->create_service<SetString>(
+      "set_ae_mode", [this](const std::shared_ptr<SetString::Request> request,
+                            std::shared_ptr<SetString::Response> response) {
+        setAEModeCallback(request, response);
       });
-  read_customerdata_srv_ = node_->create_service<GetString>(
-      "read_customer_data", [this](const std::shared_ptr<GetString::Request> request,
-                                   std::shared_ptr<GetString::Response> response) {
-        readCustomerDataCallback(request, response);
-      });
-  set_user_calib_params_srv_ = node_->create_service<SetUserCalibParams>(
-      "set_user_calib_params", [this](const std::shared_ptr<SetUserCalibParams::Request> request,
-                                      std::shared_ptr<SetUserCalibParams::Response> response) {
-        setUserCalibParamsCallback(request, response);
-      });
-  get_user_calib_params_srv_ = node_->create_service<GetUserCalibParams>(
-      "get_user_calib_params", [this](const std::shared_ptr<GetUserCalibParams::Request> request,
-                                      std::shared_ptr<GetUserCalibParams::Response> response) {
-        getUserCalibParamsCallback(request, response);
+  set_sports_mode_srv_ = node_->create_service<SetBool>(
+      "set_sports_mode", [this](const std::shared_ptr<SetBool::Request> request,
+                                std::shared_ptr<SetBool::Response> response) {
+        setSportsModeCallback(request, response);
       });
   set_streams_enable_srv_ = node_->create_service<SetBool>(
       "set_streams_enable", [this](const std::shared_ptr<SetBool::Request> request,
@@ -1448,6 +1460,39 @@ void OBCameraNode::getUserCalibParamsCallback(
     for (size_t i = 0; i < 3; ++i) ss >> response->translation[i];
     response->success = true;
     response->message = "read success";
+  } catch (...) {
+    response->success = false;
+    response->message = "exception occurred";
+  }
+}
+void OBCameraNode::setAEModeCallback(const std::shared_ptr<SetString::Request>& request,
+                                     std::shared_ptr<SetString::Response>& response) {
+  try {
+    if (device_->isPropertySupported(OB_PROP_COLOR_AE_MODE_INT, OB_PERMISSION_WRITE) &&
+        (request->data == "depthbased" || request->data == "colorbased")) {
+      device_->setIntProperty(OB_PROP_COLOR_AE_MODE_INT, request->data == "depthbased" ? 0 : 1);
+      response->success = true;
+      response->message = "set AE mode success";
+    } else {
+      response->success = false;
+      response->message = "set AE mode failed";
+    }
+  } catch (...) {
+    response->success = false;
+    response->message = "exception occurred";
+  }
+}
+void OBCameraNode::setSportsModeCallback(const std::shared_ptr<SetBool::Request>& request,
+                                         std::shared_ptr<SetBool::Response>& response) {
+  try {
+    if (device_->isPropertySupported(OB_PROP_COLOR_FAST_AE_BOOL, OB_PERMISSION_WRITE)) {
+      device_->setIntProperty(OB_PROP_COLOR_FAST_AE_BOOL, request->data ? 1 : 0);
+      response->success = true;
+      response->message = "set sports mode success";
+    } else {
+      response->success = false;
+      response->message = "set sports mode failed";
+    }
   } catch (...) {
     response->success = false;
     response->message = "exception occurred";

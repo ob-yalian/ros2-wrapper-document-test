@@ -404,6 +404,12 @@ class OBCameraNode {
   void getUserCalibParamsCallback(const std::shared_ptr<GetUserCalibParams::Request>& request,
                                   std::shared_ptr<GetUserCalibParams::Response>& response);
 
+  void setAEModeCallback(const std::shared_ptr<SetString::Request>& request,
+                         std::shared_ptr<SetString::Response>& response);
+
+  void setSportsModeCallback(const std::shared_ptr<SetBool::Request>& request,
+                             std::shared_ptr<SetBool::Response>& response);
+
   void setUserCalibParamsCallback(const std::shared_ptr<SetUserCalibParams::Request>& request,
                                   std::shared_ptr<SetUserCalibParams::Response>& response);
 
@@ -596,6 +602,8 @@ class OBCameraNode {
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
   rclcpp::Service<SetUserCalibParams>::SharedPtr set_user_calib_params_srv_;
+  rclcpp::Service<SetString>::SharedPtr set_ae_mode_srv_;
+  rclcpp::Service<SetBool>::SharedPtr set_sports_mode_srv_;
 
   bool enable_sync_output_accel_gyro_ = false;
   bool publish_tf_ = false;
