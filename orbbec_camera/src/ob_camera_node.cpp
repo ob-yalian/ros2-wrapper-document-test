@@ -765,7 +765,8 @@ void OBCameraNode::setupDevices() {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_GAIN_INT, depth_gain_);
     }
   }
-  if (device_->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT, OB_PERMISSION_WRITE)) {
+  if (enable_stream_[DEPTH] &&
+      device_->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT, OB_PERMISSION_WRITE)) {
     int set_enable_depth_auto_exposure_priority = enable_depth_auto_exposure_priority_ ? 1 : 0;
     RCLCPP_INFO_STREAM(logger_, "Setting depth auto exposure priority to "
                                     << (set_enable_depth_auto_exposure_priority ? "ON" : "OFF"));

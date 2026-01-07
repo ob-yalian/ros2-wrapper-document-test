@@ -212,11 +212,11 @@ ir_brightness: -1
 # imu
 enable_sync_output_accel_gyro: false
 enable_accel: false
-enable_accel_data_correction: true
+enable_accel_data_correction: false
 accel_rate: 200hz
 accel_range: 4g
 enable_gyro: false
-enable_gyro_data_correction: true
+enable_gyro_data_correction: false
 gyro_rate: 200hz
 gyro_range: 1000dps
 linear_accel_cov: 0.01
