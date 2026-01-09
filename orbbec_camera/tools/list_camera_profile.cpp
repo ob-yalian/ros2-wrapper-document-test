@@ -34,7 +34,7 @@ void listSensorProfiles(const std::shared_ptr<ob::Device>& device) {
                   << magic_enum::enum_name(profile->getFormat())
                   << " | Weight: " << profile->getDownSampleConfig().originWidth
                   << " Height: " << profile->getDownSampleConfig().originHeight
-                  << " downscale:" << profile->getDownSampleConfig().scaleFactor << std::endl;
+                  << " downscale:" << profile->getDownSampleConfig().decimationFactor << std::endl;
       } else if (sensor->getType() == OB_SENSOR_COLOR || sensor->getType() == OB_SENSOR_DEPTH ||
                  sensor->getType() == OB_SENSOR_IR || sensor->getType() == OB_SENSOR_IR_LEFT ||
                  sensor->getType() == OB_SENSOR_IR_RIGHT) {
