@@ -1324,6 +1324,7 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     }
     reset_device_cond_.notify_all();
   }
+  ob_camera_node_->startStreams();
 }
 void OBCameraNodeDriver::updatePresetFirmware(std::string path) {
   if (path.empty()) {
