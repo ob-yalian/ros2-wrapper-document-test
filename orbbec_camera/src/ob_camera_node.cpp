@@ -2504,7 +2504,7 @@ void OBCameraNode::setupPublishers() {
     camera_info_publishers_[stream_index] = node_->create_publisher<CameraInfo>(
         topic, rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
                            camera_info_qos_profile));
-    if (isGemini335PID(pid) || isGemini435LePID(pid)) {
+    if (isPublishMetaData(pid)) {
       metadata_publishers_[stream_index] =
           node_->create_publisher<orbbec_camera_msgs::msg::Metadata>(
               name + "/metadata",
@@ -2586,6 +2586,11 @@ void OBCameraNode::setupPublishers() {
   if (enable_stream_[DEPTH] && enable_stream_[GYRO] && enable_publish_extrinsic_) {
     depth_to_other_extrinsics_publishers_[GYRO] =
         node_->create_publisher<orbbec_camera_msgs::msg::Extrinsics>("depth_to_gyro",
+                                                                     extrinsics_qos);
+  }
+  if (enable_stream_[COLOR_LEFT] && enable_stream_[COLOR_RIGHT] && enable_publish_extrinsic_) {
+    depth_to_other_extrinsics_publishers_[COLOR_LEFT] =
+        node_->create_publisher<orbbec_camera_msgs::msg::Extrinsics>("left_color_to_right_color",
                                                                      extrinsics_qos);
   }
   filter_status_pub_ =
@@ -3534,7 +3539,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   CHECK(camera_info_publishers_.count(stream_index) > 0);
   camera_info_publishers_[stream_index]->publish(camera_info);
-  if (isGemini335PID(pid) || isGemini435LePID(pid)) {
+  if (isPublishMetaData(pid)) {
     publishMetadata(frame, stream_index, camera_info.header);
   }
   CHECK_NOTNULL(image_publishers_[stream_index]);
@@ -4038,6 +4043,21 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     CHECK_NOTNULL(depth_to_other_extrinsics_publishers_[GYRO]);
     depth_to_other_extrinsics_publishers_[GYRO]->publish(ex_msg);
   }
+  if (enable_stream_[COLOR_LEFT] && enable_stream_[COLOR_RIGHT] && enable_publish_extrinsic_) {
+    static const char *frame_id = "left_color_to_right_color_extrinsics";
+    OBExtrinsic ex;
+    try {
+      ex = stream_profile_[COLOR_LEFT]->getExtrinsicTo(stream_profile_[COLOR_RIGHT]);
+    } catch (const ob::Error &e) {
+      RCLCPP_ERROR_STREAM(logger_,
+                          "Failed to get " << frame_id << " extrinsic: " << e.getMessage());
+      ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
+    }
+    depth_to_other_extrinsics_[COLOR_LEFT] = ex;
+    auto ex_msg = obExtrinsicsToMsg(ex, frame_id);
+    CHECK_NOTNULL(depth_to_other_extrinsics_publishers_[COLOR_LEFT]);
+    depth_to_other_extrinsics_publishers_[COLOR_LEFT]->publish(ex_msg);
+  }
   if (enable_sync_output_accel_gyro_) {
     tf2::Quaternion zero_rot;
     zero_rot.setRPY(0.0, 0.0, 0.0);
@@ -4169,6 +4189,9 @@ bool OBCameraNode::isGemini335PID(uint32_t pid) {
 }
 
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
+bool OBCameraNode::isPublishMetaData(uint32_t pid) {
+  return isGemini335PID(pid) || isGemini435LePID(pid) || pid == GEMINI_305_PID;
+}
 
 orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
     const stream_index_pair &stream_index) {
