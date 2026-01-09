@@ -2633,10 +2633,20 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     RCLCPP_ERROR_STREAM(logger_, "depth frame is null");
     return;
   }
-  CHECK_NOTNULL(pipeline_);
+  if (!pipeline_) {
+    RCLCPP_ERROR_STREAM(logger_, "pipeline is null in publishDepthPointCloud");
+    return;
+  }
   auto camera_params = pipeline_->getCameraParam();
+  if (!device_) {
+    RCLCPP_ERROR_STREAM(logger_, "device is null in publishDepthPointCloud");
+    return;
+  }
   auto device_info = device_->getDeviceInfo();
-  CHECK_NOTNULL(device_info.get());
+  if (!device_info || !device_info.get()) {
+    RCLCPP_ERROR_STREAM(logger_, "device_info is null in publishDepthPointCloud");
+    return;
+  }
   auto pid = device_info->pid();
   if (depth_registration_ || pid == DABAI_MAX_PID) {
     camera_params.depthIntrinsic = camera_params.rgbIntrinsic;
@@ -2744,10 +2754,20 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     return;
   }
 
-  CHECK_NOTNULL(pipeline_);
+  if (!pipeline_) {
+    RCLCPP_ERROR_STREAM(logger_, "pipeline is null in publishColoredPointCloud");
+    return;
+  }
   auto camera_params = pipeline_->getCameraParam();
+  if (!device_) {
+    RCLCPP_ERROR_STREAM(logger_, "device is null in publishColoredPointCloud");
+    return;
+  }
   auto device_info = device_->getDeviceInfo();
-  CHECK_NOTNULL(device_info.get());
+  if (!device_info || !device_info.get()) {
+    RCLCPP_ERROR_STREAM(logger_, "device_info is null in publishColoredPointCloud");
+    return;
+  }
   auto pid = device_info->pid();
   if (depth_registration_ || pid == DABAI_MAX_PID) {
     camera_params.depthIntrinsic = camera_params.rgbIntrinsic;
@@ -3464,8 +3484,15 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   int height = static_cast<int>(video_frame->getHeight());
   auto frame_timestamp = getFrameTimestampUs(frame);
   auto timestamp = fromUsToROSTime(frame_timestamp);
+  if (!device_) {
+    RCLCPP_ERROR_STREAM(logger_, "device is null in onNewFrameCallback");
+    return;
+  }
   auto device_info = device_->getDeviceInfo();
-  CHECK_NOTNULL(device_info);
+  if (!device_info || !device_info.get()) {
+    RCLCPP_ERROR_STREAM(logger_, "device_info is null in onNewFrameCallback");
+    return;
+  }
   auto pid = device_info->getPid();
   OBCameraIntrinsic intrinsic;
   OBCameraDistortion distortion;
