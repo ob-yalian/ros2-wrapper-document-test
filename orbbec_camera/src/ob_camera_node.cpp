@@ -1536,7 +1536,9 @@ void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {
 }
 int OBCameraNode::init_interleave_hdr_param() {
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 1);
-  device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index1_laser_control_);
+  if (device_->getDeviceInfo()->getPid() != GEMINI_305_PID) {
+    device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index1_laser_control_);
+  }
   device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index1_depth_exposure_);
   device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, hdr_index1_depth_exposure_);
   device_->setIntProperty(OB_PROP_DEPTH_GAIN_INT, hdr_index1_depth_gain_);
@@ -1545,7 +1547,9 @@ int OBCameraNode::init_interleave_hdr_param() {
 
   // set interleaveae
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 0);
-  device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index0_laser_control_);
+  if (device_->getDeviceInfo()->getPid() != GEMINI_305_PID) {
+    device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index0_laser_control_);
+  }
   device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index0_depth_exposure_);
   device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, hdr_index0_depth_exposure_);
   device_->setIntProperty(OB_PROP_DEPTH_GAIN_INT, hdr_index0_depth_gain_);
