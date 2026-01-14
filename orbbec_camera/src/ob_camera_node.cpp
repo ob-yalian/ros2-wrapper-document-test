@@ -2684,14 +2684,14 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
   }
   auto point_size = result_frame->dataSize() / sizeof(OBPoint);
   auto *points = static_cast<OBPoint *>(result_frame->data());
-  auto width = depth_frame->width();
-  auto height = depth_frame->height();
+  auto width = depth_frame->width() / point_cloud_decimation_filter_factor_;
+  auto height = depth_frame->height() / point_cloud_decimation_filter_factor_;
   auto point_cloud_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
   sensor_msgs::PointCloud2Modifier modifier(*point_cloud_msg);
   modifier.setPointCloud2FieldsByString(1, "xyz");
   modifier.resize(width * height);
-  point_cloud_msg->width = depth_frame->width();
-  point_cloud_msg->height = depth_frame->height();
+  point_cloud_msg->width = width;
+  point_cloud_msg->height = height;
   point_cloud_msg->row_step = point_cloud_msg->width * point_cloud_msg->point_step;
   point_cloud_msg->data.resize(point_cloud_msg->height * point_cloud_msg->row_step);
   sensor_msgs::PointCloud2Iterator<float> iter_x(*point_cloud_msg, "x");
@@ -2806,12 +2806,14 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
   }
   auto point_size = result_frame->dataSize() / sizeof(OBColorPoint);
   auto *point_cloud = static_cast<OBColorPoint *>(result_frame->data());
-
+  auto width = color_frame->getWidth() / point_cloud_decimation_filter_factor_;
+  auto height = color_frame->getHeight() / point_cloud_decimation_filter_factor_;
   auto point_cloud_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
   sensor_msgs::PointCloud2Modifier modifier(*point_cloud_msg);
   modifier.setPointCloud2FieldsByString(1, "xyz");
-  point_cloud_msg->width = color_frame->getWidth();
-  point_cloud_msg->height = color_frame->getHeight();
+  modifier.resize(width * height);
+  point_cloud_msg->width = width;
+  point_cloud_msg->height = height;
   std::string format_str = "rgb";
   point_cloud_msg->point_step =
       addPointField(*point_cloud_msg, format_str, 1, sensor_msgs::msg::PointField::FLOAT32,
