@@ -41,7 +41,7 @@ disparity_offset_config: false
 offset_index0: -1
 offset_index1: -1
 frame_aggregate_mode: ANY
-interleave_ae_mode: laser
+interleave_ae_mode: hdr
 interleave_frame_enable: false
 interleave_skip_enable: false
 interleave_skip_index: 1
@@ -108,6 +108,21 @@ color_decimation_filter_scale: -1
 color_denoising_level: -1
 enable_color_undistortion: false
 
+# hdr_params
+hdr_index1_depth_exposure: 1
+hdr_index1_depth_gain: 16
+hdr_index1_ir_brightness: 30
+hdr_index1_ir_ae_max_exposure: 30458
+hdr_index0_depth_exposure: 7500
+hdr_index0_depth_gain: 16
+hdr_index0_ir_brightness: 90
+hdr_index0_ir_ae_max_exposure: 30458
+
+# publishers and transports
+left_color.image_raw.enable_pub_plugins: ["image_transport/compressed", "image_transport/raw", "image_transport/theora"]
+right_color.image_raw.enable_pub_plugins: ["image_transport/compressed", "image_transport/raw", "image_transport/theora"]
+
+# In dual color mode, it is not recommended to change the following parameters
 # depth
 enable_depth: false
 depth_width: 0
@@ -163,6 +178,7 @@ spatial_moderate_filter_magnitude: -1
 spatial_moderate_filter_radius: -1
 
 # point_cloud
+depth_registration: false
 point_cloud_qos: default
 enable_point_cloud: false
 point_cloud_decimation_filter_factor: 1
@@ -237,18 +253,6 @@ enable_frame_sync: true
 noise_removal_filter_min_diff: 256
 noise_removal_filter_max_size: 80
 
-# hdr_params
-hdr_index1_laser_control: 1
-hdr_index1_depth_exposure: 1
-hdr_index1_depth_gain: 16
-hdr_index1_ir_brightness: 30
-hdr_index1_ir_ae_max_exposure: 30458
-hdr_index0_laser_control: 1
-hdr_index0_depth_exposure: 7500
-hdr_index0_depth_gain: 16
-hdr_index0_ir_brightness: 90
-hdr_index0_ir_ae_max_exposure: 30458
-
 # laser_params
 laser_index1_laser_control: 0
 laser_index1_depth_exposure: 3000
@@ -261,19 +265,3 @@ laser_index0_depth_gain: 16
 laser_index0_ir_brightness: 60
 laser_index0_ir_ae_max_exposure: 30000
 
-# publishers and transports
-color_image_transport_plugins:
-  - image_transport/compressed
-  - image_transport/raw
-  - image_transport/theora
-depth_image_transport_plugins:
-  - image_transport/compressedDepth
-  - image_transport/raw
-left_ir_image_transport_plugins:
-  - image_transport/compressed
-  - image_transport/raw
-  - image_transport/theora
-right_ir_image_transport_plugins:
-  - image_transport/compressed
-  - image_transport/raw
-  - image_transport/theora
