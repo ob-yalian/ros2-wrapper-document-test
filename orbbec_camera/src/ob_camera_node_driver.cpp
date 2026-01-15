@@ -1315,6 +1315,10 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     if (GEMINI_335LG_PID == pid) {
       ob_camera_node_->startGmslTrigger();
     }
+    if (pid == GEMINI_305_PID) {
+      // Fixing 305 hot-swap not outputting power
+      ob_camera_node_->startStreams();
+    }
   } catch (ob::Error &e) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to initialize device " << e.getMessage());
     start_device_failed = true;
@@ -1333,7 +1337,6 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     }
     reset_device_cond_.notify_all();
   }
-  ob_camera_node_->startStreams();
 }
 void OBCameraNodeDriver::updatePresetFirmware(std::string path) {
   if (path.empty()) {

@@ -756,7 +756,7 @@ class OBCameraNode {
   int depth_downscale_ = 1;
   int left_ir_downscale_ = 1;
   int right_ir_downscale_ = 1;
-  std::string device_preset_ = "Default";
+  std::string device_preset_;
   // filter switch
   bool enable_decimation_filter_ = false;
   bool enable_hdr_merge_ = false;

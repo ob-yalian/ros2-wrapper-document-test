@@ -2079,9 +2079,9 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
   if (isDepthWorkModeDevices(device_->getDeviceInfo()->getPid())) {
-    setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "");
+    setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "Default");
   } else {
-    setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
+    setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "Default");
   }
   setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
   setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);
@@ -2419,35 +2419,14 @@ void OBCameraNode::setupPipelineConfig() {
       RCLCPP_INFO_STREAM(logger_, "Enable " << stream_name_[stream_index] << " stream");
       auto profile = stream_profile_[stream_index]->as<ob::VideoStreamProfile>();
 
-      if (stream_index == COLOR && enable_stream_[COLOR] && align_filter_) {
+      if (stream_index == COLOR && align_target_stream_ == OB_STREAM_COLOR && align_filter_) {
         auto video_profile = profile;
         align_filter_->setAlignToStreamProfile(video_profile);
       }
-      if (enable_stream_[DEPTH] && enable_stream_[COLOR] && depth_registration_ &&
-          align_target_stream_ == OB_STREAM_COLOR && stream_index == DEPTH) {
-        auto profile = stream_profile_[COLOR]->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(logger_,
-                           "depth_registration is enabled. "
-                               << "Depth stream will be aligned to COLOR stream resolution:");
-        RCLCPP_INFO_STREAM(logger_, "Stream depth "
-                                        << " width: " << profile->getWidth() << " height: "
-                                        << profile->getHeight() << " fps: " << profile->getFps());
-      } else if (enable_stream_[DEPTH] && enable_stream_[COLOR] && depth_registration_ &&
-                 align_target_stream_ == OB_STREAM_DEPTH && stream_index == COLOR) {
-        auto profile = stream_profile_[DEPTH]->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(logger_,
-                           "depth_registration is enabled. "
-                               << "Color stream will be aligned to DEPTH stream resolution:");
-        RCLCPP_INFO_STREAM(logger_, "Stream color "
-                                        << " width: " << profile->getWidth() << " height: "
-                                        << profile->getHeight() << " fps: " << profile->getFps());
-      } else {
-        RCLCPP_INFO_STREAM(
-            logger_, "Stream " << stream_name_[stream_index] << " width: " << profile->getWidth()
-                               << " height: " << profile->getHeight() << " fps: "
-                               << profile->getFps() << " format: " << profile->getFormat());
+      if (stream_index == DEPTH && align_target_stream_ == OB_STREAM_DEPTH && align_filter_) {
+        auto video_profile = profile;
+        align_filter_->setAlignToStreamProfile(video_profile);
       }
-
       pipeline_config_->enableStream(stream_profile_[stream_index]);
     }
   }
@@ -3127,6 +3106,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     CHECK_NOTNULL(device_info);
     auto pid = device_info->getPid();
     auto depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
+    auto depthframe = std::shared_ptr<ob::DepthFrame>();
     auto color_frame = frame_set->getFrame(OB_FRAME_COLOR);
     auto left_ir_frame = frame_set->getFrame(OB_FRAME_IR_LEFT);
     auto right_ir_frame = frame_set->getFrame(OB_FRAME_IR_RIGHT);
@@ -3137,34 +3117,84 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       setDepthAutoExposureROI();
       depth_frame = processDepthFrameFilter(depth_frame);
       frame_set->pushFrame(depth_frame);
-
+      static bool depth_frame_info_printed = false;
+      if (!depth_frame_info_printed) {
+        auto profile = depth_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(logger_, "Depth Frame - Width: " << profile->getWidth()
+                                                            << " Height: " << profile->getHeight()
+                                                            << " fps: " << profile->getFps()
+                                                            << " Format: " << profile->getFormat());
+        depth_frame_info_printed = true;
+      }
       fps_counter_depth_->tick();
     }
     if (color_frame) {
       setColorAutoExposureROI();
       color_frame = processColorFrameFilter(color_frame);
       frame_set->pushFrame(color_frame);
-
+      static bool color_frame_info_printed = false;
+      if (!color_frame_info_printed) {
+        auto profile = color_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(logger_, "Color Frame - Width: " << profile->getWidth()
+                                                            << " Height: " << profile->getHeight()
+                                                            << " fps: " << profile->getFps()
+                                                            << " Format: " << profile->getFormat());
+        color_frame_info_printed = true;
+      }
       fps_counter_color_->tick();
     }
     if (left_color_frame) {
       left_color_frame = processColorFrameFilter(left_color_frame);
       frame_set->pushFrame(left_color_frame);
+      static bool left_color_frame_info_printed = false;
+      if (!left_color_frame_info_printed) {
+        auto profile = left_color_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(
+            logger_, "Left Color Frame - Width: "
+                         << profile->getWidth() << " Height: " << profile->getHeight()
+                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
+        left_color_frame_info_printed = true;
+      }
     }
     if (right_color_frame) {
       right_color_frame = processColorFrameFilter(right_color_frame);
       frame_set->pushFrame(right_color_frame);
+      static bool right_color_frame_info_printed = false;
+      if (!right_color_frame_info_printed) {
+        auto profile = right_color_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(
+            logger_, "Right Color Frame - Width: "
+                         << profile->getWidth() << " Height: " << profile->getHeight()
+                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
+        right_color_frame_info_printed = true;
+      }
     }
     if (left_ir_frame && isGemini335PID(pid)) {
       left_ir_frame = processLeftIrFrameFilter(left_ir_frame);
       frame_set->pushFrame(left_ir_frame);
-
+      static bool left_ir_frame_info_printed = false;
+      if (!left_ir_frame_info_printed) {
+        auto profile = left_ir_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(
+            logger_, "Left IR Frame - Width: "
+                         << profile->getWidth() << " Height: " << profile->getHeight()
+                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
+        left_ir_frame_info_printed = true;
+      }
       fps_counter_left_ir_->tick();
     }
     if (right_ir_frame && isGemini335PID(pid)) {
       right_ir_frame = processRightIrFrameFilter(right_ir_frame);
       frame_set->pushFrame(right_ir_frame);
-
+      static bool right_ir_frame_info_printed = false;
+      if (!right_ir_frame_info_printed) {
+        auto profile = right_ir_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(
+            logger_, "Right IR Frame - Width: "
+                         << profile->getWidth() << " Height: " << profile->getHeight()
+                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
+        right_ir_frame_info_printed = true;
+      }
       fps_counter_right_ir_->tick();
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
