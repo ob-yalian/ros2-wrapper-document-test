@@ -3130,6 +3130,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       fps_counter_color_->tick();
     }
     if (left_color_frame) {
+      setColorAutoExposureROI();
       left_color_frame = processColorFrameFilter(left_color_frame);
       frame_set->pushFrame(left_color_frame);
       static bool left_color_frame_info_printed = false;
