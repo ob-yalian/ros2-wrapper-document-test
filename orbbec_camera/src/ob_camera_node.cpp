@@ -3604,9 +3604,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   CHECK(camera_info_publishers_.count(stream_index) > 0);
   camera_info_publishers_[stream_index]->publish(camera_info);
-  if (isPublishMetaData(pid_)) {
-    publishMetadata(frame, stream_index, camera_info.header);
-  }
+  publishMetadata(frame, stream_index, camera_info.header);
   CHECK_NOTNULL(image_publishers_[stream_index]);
   if (image_publishers_[stream_index]->get_subscription_count() == 0) {
     return;
