@@ -62,6 +62,7 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   compression_params_.push_back(cv::IMWRITE_PNG_STRATEGY_DEFAULT);
   setupDefaultImageFormat();
   setupTopics();
+  pid_ = device_->getDeviceInfo()->getPid();
 #if defined(USE_RK_HW_DECODER)
   if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
     jpeg_decoder_ = std::make_unique<RKJPEGDecoder>(width_[COLOR], height_[COLOR]);
@@ -336,7 +337,6 @@ void OBCameraNode::setupDevices() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  auto pid = device_info->getPid();
 
   if (retry_on_usb3_detection_failure_ &&
       device_->isPropertySupported(OB_PROP_DEVICE_USB3_REPEAT_IDENTIFY_BOOL,
@@ -742,7 +742,7 @@ void OBCameraNode::setupDevices() {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_BACKLIGHT_COMPENSATION_INT,
                         color_backlight_compensation_);
   }
-  if (isGemini335PID(pid) && color_denoising_level_ != -1 &&
+  if (isGemini335PID(pid_) && color_denoising_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_DENOISING_LEVEL_INT, OB_PERMISSION_WRITE)) {
     RCLCPP_INFO_STREAM(logger_, "Setting color denoising level to " << color_denoising_level_);
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_DENOISING_LEVEL_INT, color_denoising_level_);
@@ -969,7 +969,7 @@ void OBCameraNode::setupDevices() {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_GYRO_FRAME_TRANSFORMED_BOOL,
                         enable_gyro_data_correction_);
   }
-  if (isGemini335PID(pid) && !intra_camera_sync_reference_.empty() &&
+  if (isGemini335PID(pid_) && !intra_camera_sync_reference_.empty() &&
       (sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING ||
        sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_HARDWARE_TRIGGERING) &&
       device_->isPropertySupported(OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT, OB_PERMISSION_WRITE)) {
@@ -985,7 +985,7 @@ void OBCameraNode::setupDevices() {
       RCLCPP_ERROR(logger_, "intra camera sync reference does not support this setting");
     }
   }
-  if (pid == GEMINI_305_PID) {
+  if (pid_ == GEMINI_305_PID) {
     if (enable_sports_mode_) {
       if (device_->isPropertySupported(OB_PROP_COLOR_FAST_AE_BOOL, OB_PERMISSION_WRITE)) {
         device_->setIntProperty(OB_PROP_COLOR_FAST_AE_BOOL, (enable_sports_mode_ ? 0 : 1));
@@ -1054,8 +1054,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  auto pid = device_info->getPid();
-  if (pid == GEMINI2_PID || pid == GEMINI2L_PID) {
+  if (pid_ == GEMINI2_PID || pid_ == GEMINI2L_PID) {
     if (enable_color_decimation_filter_) {
       auto decimation_filter = std::make_shared<ob::DecimationFilter>();
       decimation_filter->enable(true);
@@ -1074,7 +1073,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
       }
     }
   }
-  if (pid == GEMINI_305_PID) {
+  if (pid_ == GEMINI_305_PID) {
     if (enable_color_decimation_filter_) {
       if (!left_color_filter_list_.empty()) {
         auto decimation_filter = std::make_shared<ob::DecimationFilter>();
@@ -1092,8 +1091,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
 void OBCameraNode::setupLeftIrPostProcessFilter() {
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  auto pid = device_info->getPid();
-  if (isGemini335PID(pid)) {
+  if (isGemini335PID(pid_)) {
     auto left_ir_sensor = device_->getSensor(OB_SENSOR_IR_LEFT);
     left_ir_filter_list_ = left_ir_sensor->createRecommendedFilters();
     if (left_ir_filter_list_.empty()) {
@@ -1127,8 +1125,7 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
 void OBCameraNode::setupRightIrPostProcessFilter() {
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  auto pid = device_info->getPid();
-  if (isGemini335PID(pid)) {
+  if (isGemini335PID(pid_)) {
     auto right_ir_sensor = device_->getSensor(OB_SENSOR_IR_RIGHT);
     right_ir_filter_list_ = right_ir_sensor->createRecommendedFilters();
     if (right_ir_filter_list_.empty()) {
@@ -1289,8 +1286,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  auto pid = device_info->getPid();
-  if (pid == GEMINI2_PID || pid == GEMINI2L_PID) {
+  if (pid_ == GEMINI2_PID || pid_ == GEMINI2L_PID) {
     if (enable_decimation_filter_) {
       auto decimation_filter = std::make_shared<ob::DecimationFilter>();
       decimation_filter->enable(true);
@@ -1371,7 +1367,6 @@ void OBCameraNode::printSensorProfiles(const std::shared_ptr<ob::Sensor> &sensor
 
 void OBCameraNode::setupProfiles() {
   // Image stream
-  auto pid = device_->getDeviceInfo()->getPid();
   for (const auto &elem : IMAGE_STREAMS) {
     if (enable_stream_[elem]) {
       const auto &sensor = sensors_[elem];
@@ -1402,19 +1397,19 @@ void OBCameraNode::setupProfiles() {
             format_[elem] == OB_FORMAT_UNKNOWN) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
-          if (pid == GEMINI_305_PID && elem == DEPTH) {
+          if (pid_ == GEMINI_305_PID && elem == DEPTH) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.factor = depth_downscale_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
-          } else if (pid == GEMINI_305_PID && elem == INFRA1) {
+          } else if (pid_ == GEMINI_305_PID && elem == INFRA1) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.factor = left_ir_downscale_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
-          } else if (pid == GEMINI_305_PID && elem == INFRA2) {
+          } else if (pid_ == GEMINI_305_PID && elem == INFRA2) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
@@ -1536,7 +1531,7 @@ void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {
 }
 int OBCameraNode::init_interleave_hdr_param() {
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 1);
-  if (device_->getDeviceInfo()->getPid() != GEMINI_305_PID) {
+  if (!isnotLaserDevices(pid_)) {
     device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index1_laser_control_);
   }
   device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index1_depth_exposure_);
@@ -1547,7 +1542,7 @@ int OBCameraNode::init_interleave_hdr_param() {
 
   // set interleaveae
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 0);
-  if (device_->getDeviceInfo()->getPid() != GEMINI_305_PID) {
+  if (!isnotLaserDevices(pid_)) {
     device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index0_laser_control_);
   }
   device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index0_depth_exposure_);
@@ -2140,7 +2135,6 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_gyro_data_correction_, "enable_gyro_data_correction", true);
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info.get());
-  auto pid = device_info->getPid();
 
   if (device_preset_ == "Dual Color Streams") {
     RCLCPP_INFO_STREAM(logger_,
@@ -2162,7 +2156,7 @@ void OBCameraNode::getParameters() {
     enable_color_undistortion_ = false;
   }
 
-  if (isOpenNIDevice(pid)) {
+  if (isOpenNIDevice(pid_)) {
     time_domain_ = "system";
   }
   if (time_domain_ == "global") {
@@ -2475,7 +2469,6 @@ void OBCameraNode::setupPublishers() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info.get());
-  auto pid = device_info->getPid();
   for (const auto &stream_index : IMAGE_STREAMS) {
     if (!enable_stream_[stream_index]) {
       continue;
@@ -2504,7 +2497,7 @@ void OBCameraNode::setupPublishers() {
     camera_info_publishers_[stream_index] = node_->create_publisher<CameraInfo>(
         topic, rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
                            camera_info_qos_profile));
-    if (isPublishMetaData(pid)) {
+    if (isPublishMetaData(pid_)) {
       metadata_publishers_[stream_index] =
           node_->create_publisher<orbbec_camera_msgs::msg::Metadata>(
               name + "/metadata",
@@ -2647,8 +2640,7 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     RCLCPP_ERROR_STREAM(logger_, "device_info is null in publishDepthPointCloud");
     return;
   }
-  auto pid = device_info->pid();
-  if (depth_registration_ || pid == DABAI_MAX_PID) {
+  if (depth_registration_ || pid_ == DABAI_MAX_PID) {
     camera_params.depthIntrinsic = camera_params.rgbIntrinsic;
   }
   depth_point_cloud_filter_.setCameraParam(camera_params);
@@ -2768,8 +2760,7 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     RCLCPP_ERROR_STREAM(logger_, "device_info is null in publishColoredPointCloud");
     return;
   }
-  auto pid = device_info->pid();
-  if (depth_registration_ || pid == DABAI_MAX_PID) {
+  if (depth_registration_ || pid_ == DABAI_MAX_PID) {
     camera_params.depthIntrinsic = camera_params.rgbIntrinsic;
   }
 
@@ -3104,7 +3095,6 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     }
     auto device_info = device_->getDeviceInfo();
     CHECK_NOTNULL(device_info);
-    auto pid = device_info->getPid();
     auto depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
     auto depthframe = std::shared_ptr<ob::DepthFrame>();
     auto color_frame = frame_set->getFrame(OB_FRAME_COLOR);
@@ -3169,7 +3159,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
         right_color_frame_info_printed = true;
       }
     }
-    if (left_ir_frame && isGemini335PID(pid)) {
+    if (left_ir_frame && isGemini335PID(pid_)) {
       left_ir_frame = processLeftIrFrameFilter(left_ir_frame);
       frame_set->pushFrame(left_ir_frame);
       static bool left_ir_frame_info_printed = false;
@@ -3183,7 +3173,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       }
       fps_counter_left_ir_->tick();
     }
-    if (right_ir_frame && isGemini335PID(pid)) {
+    if (right_ir_frame && isGemini335PID(pid_)) {
       right_ir_frame = processRightIrFrameFilter(right_ir_frame);
       frame_set->pushFrame(right_ir_frame);
       static bool right_ir_frame_info_printed = false;
@@ -3546,7 +3536,6 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     RCLCPP_ERROR_STREAM(logger_, "device_info is null in onNewFrameCallback");
     return;
   }
-  auto pid = device_info->getPid();
   OBCameraIntrinsic intrinsic;
   OBCameraDistortion distortion;
   auto stream_profile = frame->getStreamProfile();
@@ -3555,7 +3544,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   CHECK_NOTNULL(video_stream_profile);
   intrinsic = video_stream_profile->getIntrinsic();
   distortion = video_stream_profile->getDistortion();
-  if (pid == DABAI_MAX_PID) {
+  if (pid_ == DABAI_MAX_PID) {
     auto camera_params = pipeline_->getCameraParam();
     // use color param
     intrinsic = camera_params.rgbIntrinsic;
@@ -3619,7 +3608,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   CHECK(camera_info_publishers_.count(stream_index) > 0);
   camera_info_publishers_[stream_index]->publish(camera_info);
-  if (isPublishMetaData(pid)) {
+  if (isPublishMetaData(pid_)) {
     publishMetadata(frame, stream_index, camera_info.header);
   }
   CHECK_NOTNULL(image_publishers_[stream_index]);
@@ -3975,7 +3964,6 @@ void OBCameraNode::calcAndPublishStaticTransform() {
   auto base_stream_profile = stream_profile_[base_stream_];
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  auto pid = device_info->getPid();
   if (!base_stream_profile) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to get base stream profile");
     return;
@@ -4017,7 +4005,7 @@ void OBCameraNode::calcAndPublishStaticTransform() {
                                             << ", " << Q.getW());
   }
 
-  if ((pid == FEMTO_BOLT_PID || pid == FEMTO_MEGA_PID) && enable_stream_[DEPTH] &&
+  if ((pid_ == FEMTO_BOLT_PID || pid_ == FEMTO_MEGA_PID) && enable_stream_[DEPTH] &&
       enable_stream_[COLOR]) {
     // calc depth to color
 
@@ -4276,6 +4264,8 @@ bool OBCameraNode::isPublishMetaData(uint32_t pid) {
 bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) {
   return pid == GEMINI_435Le_PID || pid == GEMINI2_PID;
 }
+
+bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return pid == GEMINI_305_PID; }
 
 orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
     const stream_index_pair &stream_index) {

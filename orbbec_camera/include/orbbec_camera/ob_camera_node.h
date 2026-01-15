@@ -482,6 +482,7 @@ class OBCameraNode {
   static bool isPublishMetaData(uint32_t pid);
 
   static bool isDepthWorkModeDevices(uint32_t pid);
+  static bool isnotLaserDevices(uint32_t pid);
 
   void setupDepthPostProcessFilter();
   void setupColorPostProcessFilter();
@@ -893,5 +894,6 @@ class OBCameraNode {
   std::string intra_camera_sync_reference_ = "";
   std::string ae_mode_;
   bool enable_sports_mode_;
+  int pid_ = 0;
 };
 }  // namespace orbbec_camera
