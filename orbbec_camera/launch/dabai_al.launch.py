@@ -234,7 +234,7 @@ def generate_launch_description():
                     name="ob_camera_node",
                     namespace=LaunchConfiguration("camera_name"),
                     parameters=params,
-                    output="screen",
+                    output="log",
                 )
             ]
         else:
@@ -254,7 +254,7 @@ def generate_launch_description():
                                 parameters=params,
                             ),
                         ],
-                        output="screen",
+                        output="log",
                     )
                 ])
             ]
