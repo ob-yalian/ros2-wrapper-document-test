@@ -1567,7 +1567,8 @@ void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {
       unit_step_size_[stream_index] = sizeof(uint8_t);
     }
   }
-  if (format_[stream_index] == OB_FORMAT_Y16 && stream_index == COLOR) {
+  if (format_[stream_index] == OB_FORMAT_Y16 &&
+      (stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT)) {
     image_format_[stream_index] = CV_16UC1;
     encoding_[stream_index] = sensor_msgs::image_encodings::MONO16;
     unit_step_size_[stream_index] = sizeof(uint16_t);
