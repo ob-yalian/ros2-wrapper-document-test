@@ -44,6 +44,7 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
       parameters_(std::move(parameters)),
       logger_(node->get_logger()),
       use_intra_process_(use_intra_process) {
+  pid_ = device_->getDeviceInfo()->getPid();
   RCLCPP_INFO_STREAM(logger_,
                      "OBCameraNode: use_intra_process: " << (use_intra_process ? "ON" : "OFF"));
   is_running_.store(true);
@@ -62,7 +63,6 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   compression_params_.push_back(cv::IMWRITE_PNG_STRATEGY_DEFAULT);
   setupDefaultImageFormat();
   setupTopics();
-  pid_ = device_->getDeviceInfo()->getPid();
 #if defined(USE_RK_HW_DECODER)
   if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
     jpeg_decoder_ = std::make_unique<RKJPEGDecoder>(width_[COLOR], height_[COLOR]);
