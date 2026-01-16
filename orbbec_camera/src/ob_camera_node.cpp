@@ -1048,6 +1048,68 @@ void OBCameraNode::setupColorPostProcessFilter() {
       }
     }
   }
+
+  for (size_t i = 0; i < left_color_filter_list_.size(); i++) {
+    auto filter = left_color_filter_list_[i];
+    std::map<std::string, bool> filter_params = {
+        {"DecimationFilter", enable_left_color_decimation_filter_},
+    };
+    std::string filter_name = filter->type();
+    RCLCPP_INFO_STREAM(logger_, "Setting left " << filter_name << "......");
+    if (filter_params.find(filter_name) != filter_params.end()) {
+      std::string value = filter_params[filter_name] ? "true" : "false";
+      RCLCPP_INFO_STREAM(logger_, "set left color " << filter_name << " to " << value);
+      filter->enable(filter_params[filter_name]);
+    }
+    if (filter_name == "DecimationFilter" && enable_left_color_decimation_filter_) {
+      auto decimation_filter = filter->as<ob::DecimationFilter>();
+      auto range = decimation_filter->getScaleRange();
+      if (left_color_decimation_filter_scale_ != -1 &&
+          left_color_decimation_filter_scale_ <= range.max &&
+          left_color_decimation_filter_scale_ >= range.min) {
+        RCLCPP_INFO_STREAM(logger_, "Set left color decimation filter scale value to "
+                                        << left_color_decimation_filter_scale_);
+        decimation_filter->setScaleValue(left_color_decimation_filter_scale_);
+      }
+      if (left_color_decimation_filter_scale_ != -1 &&
+          (left_color_decimation_filter_scale_ < range.min ||
+           left_color_decimation_filter_scale_ > range.max)) {
+        RCLCPP_ERROR_STREAM(logger_, "Left Color Decimation filter scale value is out of range "
+                                         << range.min << " - " << range.max);
+      }
+    }
+  }
+
+  for (size_t i = 0; i < right_color_filter_list_.size(); i++) {
+    auto filter = right_color_filter_list_[i];
+    std::map<std::string, bool> filter_params = {
+        {"DecimationFilter", enable_right_color_decimation_filter_},
+    };
+    std::string filter_name = filter->type();
+    RCLCPP_INFO_STREAM(logger_, "Setting right " << filter_name << "......");
+    if (filter_params.find(filter_name) != filter_params.end()) {
+      std::string value = filter_params[filter_name] ? "true" : "false";
+      RCLCPP_INFO_STREAM(logger_, "set right color " << filter_name << " to " << value);
+      filter->enable(filter_params[filter_name]);
+    }
+    if (filter_name == "DecimationFilter" && enable_right_color_decimation_filter_) {
+      auto decimation_filter = filter->as<ob::DecimationFilter>();
+      auto range = decimation_filter->getScaleRange();
+      if (right_color_decimation_filter_scale_ != -1 &&
+          right_color_decimation_filter_scale_ <= range.max &&
+          right_color_decimation_filter_scale_ >= range.min) {
+        RCLCPP_INFO_STREAM(logger_, "Set right color decimation filter scale value to "
+                                        << right_color_decimation_filter_scale_);
+        decimation_filter->setScaleValue(right_color_decimation_filter_scale_);
+      }
+      if (right_color_decimation_filter_scale_ != -1 &&
+          (right_color_decimation_filter_scale_ < range.min ||
+           right_color_decimation_filter_scale_ > range.max)) {
+        RCLCPP_ERROR_STREAM(logger_, "Right Color Decimation filter scale value is out of range "
+                                         << range.min << " - " << range.max);
+      }
+    }
+  }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
   if (pid_ == GEMINI2_PID || pid_ == GEMINI2L_PID) {
@@ -1066,20 +1128,6 @@ void OBCameraNode::setupColorPostProcessFilter() {
                                                    color_decimation_filter_scale_ > range.max)) {
         RCLCPP_ERROR_STREAM(logger_, "Color Decimation filter scale value is out of range "
                                          << range.min << " - " << range.max);
-      }
-    }
-  }
-  if (pid_ == GEMINI_305_PID) {
-    if (enable_color_decimation_filter_) {
-      if (!left_color_filter_list_.empty()) {
-        auto decimation_filter = std::make_shared<ob::DecimationFilter>();
-        decimation_filter->enable(true);
-        left_color_filter_list_.push_back(decimation_filter);
-      }
-      if (!right_color_filter_list_.empty()) {
-        auto decimation_filter = std::make_shared<ob::DecimationFilter>();
-        decimation_filter->enable(true);
-        right_color_filter_list_.push_back(decimation_filter);
       }
     }
   }
@@ -2020,6 +2068,14 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_color_decimation_filter_, "enable_color_decimation_filter",
                                false);
   setAndGetNodeParameter<int>(color_decimation_filter_scale_, "color_decimation_filter_scale", -1);
+  setAndGetNodeParameter<bool>(enable_left_color_decimation_filter_,
+                               "enable_left_color_decimation_filter", false);
+  setAndGetNodeParameter<int>(left_color_decimation_filter_scale_,
+                              "left_color_decimation_filter_scale", -1);
+  setAndGetNodeParameter<bool>(enable_right_color_decimation_filter_,
+                               "enable_right_color_decimation_filter", false);
+  setAndGetNodeParameter<int>(right_color_decimation_filter_scale_,
+                              "right_color_decimation_filter_scale", -1);
   setAndGetNodeParameter<bool>(enable_depth_auto_exposure_priority_,
                                "enable_depth_auto_exposure_priority", false);
   setAndGetNodeParameter<int>(depth_ae_roi_left_, "depth_ae_roi_left", -1);
