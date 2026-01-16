@@ -376,7 +376,7 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Create align filter");
     align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
   }
-  if (enable_stream_[DEPTH] &&
+  if (sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE) &&
       device_->isPropertySupported(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE)) {
     if (disparity_to_depth_mode_ == "HW") {
@@ -583,7 +583,7 @@ void OBCameraNode::setupDevices() {
     }
   }
 
-  if (enable_stream_[DEPTH] &&
+  if (sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
     device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, enable_noise_removal_filter_);
     RCLCPP_INFO_STREAM(
@@ -782,7 +782,7 @@ void OBCameraNode::setupDevices() {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_GAIN_INT, depth_gain_);
     }
   }
-  if (enable_stream_[DEPTH] &&
+  if (sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT, OB_PERMISSION_WRITE)) {
     int set_enable_depth_auto_exposure_priority = enable_depth_auto_exposure_priority_ ? 1 : 0;
     RCLCPP_INFO_STREAM(logger_, "Setting depth auto exposure priority to "
@@ -858,7 +858,7 @@ void OBCameraNode::setupDevices() {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_IR_LONG_EXPOSURE_BOOL, enable_ir_long_exposure_);
   }
 
-  if (enable_stream_[DEPTH] &&
+  if (sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
     auto default_noise_removal_filter_min_diff =
         device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
@@ -883,7 +883,7 @@ void OBCameraNode::setupDevices() {
     }
   }
 
-  if (enable_stream_[DEPTH] &&
+  if (sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
     auto default_noise_removal_filter_max_size =
         device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
