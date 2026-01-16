@@ -173,7 +173,7 @@ Here is the device support list of main branch (v1.x) and v2-main branch (v2.x):
 
 **Migration Guide**
 
-If you need to migrate existing projects from the main (v1.x) branch to the v2-main (v2.x) branch, please refer to the official [migration guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/7_developer_guide/migration_guide.html)
+If you need to migrate existing projects from the main (v1.x) branch to the v2-main (v2.x) branch, please refer to the official [migration guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/7_developer_guide/migration_guide.html)
 
 ## Installation Instructions
 
@@ -305,7 +305,7 @@ ros2 topic echo /camera/depth/camera_info
 ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString '{}'
 ```
 
-For more usage details, please refer to the official [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/4_application_guide/application_guide.html)
+For more usage details, please refer to the official [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/4_application_guide/application_guide.html)
 
 ## Supported Devices
 
@@ -337,7 +337,7 @@ for different models within the same series. Differences in USB standards, such 
 
 ## Tutorial
 
-please refer to the official [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/5_advanced_guide/advanced_guide.html)
+please refer to the official [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/5_advanced_guide/advanced_guide.html)
 
 ## Examples
 
