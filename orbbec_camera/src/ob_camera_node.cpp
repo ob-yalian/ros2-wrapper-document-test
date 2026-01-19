@@ -3213,7 +3213,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
         right_color_frame_info_printed = true;
       }
     }
-    if (left_ir_frame && isGemini335PID(pid_)) {
+    if (left_ir_frame) {
       left_ir_frame = processLeftIrFrameFilter(left_ir_frame);
       frame_set->pushFrame(left_ir_frame);
       static bool left_ir_frame_info_printed = false;
@@ -3227,7 +3227,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       }
       fps_counter_left_ir_->tick();
     }
-    if (right_ir_frame && isGemini335PID(pid_)) {
+    if (right_ir_frame) {
       right_ir_frame = processRightIrFrameFilter(right_ir_frame);
       frame_set->pushFrame(right_ir_frame);
       static bool right_ir_frame_info_printed = false;
