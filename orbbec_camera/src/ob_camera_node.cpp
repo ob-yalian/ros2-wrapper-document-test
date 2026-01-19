@@ -3149,12 +3149,12 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     auto device_info = device_->getDeviceInfo();
     CHECK_NOTNULL(device_info);
     auto depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
-    auto depthframe = std::shared_ptr<ob::DepthFrame>();
     auto color_frame = frame_set->getFrame(OB_FRAME_COLOR);
     auto left_ir_frame = frame_set->getFrame(OB_FRAME_IR_LEFT);
     auto right_ir_frame = frame_set->getFrame(OB_FRAME_IR_RIGHT);
     auto left_color_frame = frame_set->getFrame(OB_FRAME_COLOR_LEFT);
     auto right_color_frame = frame_set->getFrame(OB_FRAME_COLOR_RIGHT);
+    auto ir_frame = frame_set->getFrame(OB_FRAME_IR);
     if (depth_frame) {
       setDisparitySearchOffset();
       setDepthAutoExposureROI();
@@ -3240,6 +3240,17 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
         right_ir_frame_info_printed = true;
       }
       fps_counter_right_ir_->tick();
+    }
+    if (ir_frame) {
+      static bool ir_frame_info_printed = false;
+      if (!ir_frame_info_printed) {
+        auto profile = ir_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+        RCLCPP_INFO_STREAM(logger_, "IR Frame - Width: " << profile->getWidth()
+                                                         << " Height: " << profile->getHeight()
+                                                         << " fps: " << profile->getFps()
+                                                         << " Format: " << profile->getFormat());
+        ir_frame_info_printed = true;
+      }
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
       if (auto new_frame = align_filter_->process(frame_set)) {
