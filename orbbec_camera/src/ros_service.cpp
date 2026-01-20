@@ -496,15 +496,13 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
   if (device_->getDeviceInfo()->getPid() == GEMINI_305_PID &&
       (stream != OB_STREAM_COLOR && ae_mode_ == "colorbased")) {
     response->success = false;
-    response->message =
-        "AE MODE is colorbased, other sensors setting is not supported on Gemini305";
+    response->message = "AE MODE is colorbased, other sensors setting is not supported";
     return;
   }
   if (device_->getDeviceInfo()->getPid() == GEMINI_305_PID &&
       (stream != OB_STREAM_DEPTH && ae_mode_ == "depthbased")) {
     response->success = false;
-    response->message =
-        "AE MODE is depthbased, other sensors sensor setting is not supported on Gemini305";
+    response->message = "AE MODE is depthbased, other sensors sensor setting is not supported";
     return;
   }
   auto config = OBRegionOfInterest();
@@ -1486,6 +1484,7 @@ void OBCameraNode::setAEModeCallback(const std::shared_ptr<SetString::Request>& 
         (request->data == "depthbased" || request->data == "colorbased")) {
       device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT,
                               request->data == "depthbased" ? 0 : 1);
+      ae_mode_ = request->data;
       response->success = true;
       response->message = "set AE mode success";
     } else {
