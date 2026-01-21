@@ -2126,10 +2126,11 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
+  setAndGetNodeParameter<std::string>(depth_work_mode_, "depth_work_mode", "");
   if (isDepthWorkModeDevices(device_->getDeviceInfo()->getPid())) {
-    setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "Default");
+    setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "");
   } else {
-    setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "Default");
+    setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
   }
   setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
   setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);
@@ -4324,9 +4325,7 @@ bool OBCameraNode::isPublishMetaData(uint32_t pid) {
   return isGemini335PID(pid) || isGemini435LePID(pid) || pid == GEMINI_305_PID;
 }
 
-bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) {
-  return pid == GEMINI_435Le_PID || pid == GEMINI2_PID;
-}
+bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 
 bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return pid == GEMINI_305_PID; }
 
