@@ -113,7 +113,7 @@ def generate_launch_description():
         DeclareLaunchArgument('color_width', default_value='0'),
         DeclareLaunchArgument('color_height', default_value='0'),
         DeclareLaunchArgument('color_fps', default_value='0'),
-        DeclareLaunchArgument('color_format', default_value='ANY'),
+        DeclareLaunchArgument('color_format', default_value='MJPG'),
         DeclareLaunchArgument('enable_color', default_value='true'),
         DeclareLaunchArgument('enable_left_color', default_value='true'),
         DeclareLaunchArgument('enable_right_color', default_value='true'),
