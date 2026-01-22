@@ -1445,19 +1445,19 @@ void OBCameraNode::setupProfiles() {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
-            conf.factor = depth_downscale_;
+            conf.factor = depth_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
           } else if (pid_ == GEMINI_305_PID && elem == INFRA1) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
-            conf.factor = left_ir_downscale_;
+            conf.factor = left_ir_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
           } else if (pid_ == GEMINI_305_PID && elem == INFRA2) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
-            conf.factor = right_ir_downscale_;
+            conf.factor = right_ir_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
           } else {
             selected_profile = profiles->getVideoStreamProfile(width_[elem], height_[elem],
@@ -2126,6 +2126,9 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
+  setAndGetNodeParameter<int>(depth_decimation_factor_, "depth_decimation_factor", 1);
+  setAndGetNodeParameter<int>(left_ir_decimation_factor_, "left_ir_decimation_factor", 1);
+  setAndGetNodeParameter<int>(right_ir_decimation_factor_, "right_ir_decimation_factor", 1);
   setAndGetNodeParameter<std::string>(depth_work_mode_, "depth_work_mode", "");
   if (isDepthWorkModeDevices(device_->getDeviceInfo()->getPid())) {
     setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "");
