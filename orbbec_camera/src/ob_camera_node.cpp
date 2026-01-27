@@ -1202,6 +1202,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
         {"ThresholdFilter", enable_threshold_filter_},
         {"SpatialFastFilter", enable_spatial_fast_filter_},
         {"SpatialModerateFilter", enable_spatial_moderate_filter_},
+        {"FalsePositiveFilter", enable_false_positive_filter_},
     };
     std::string filter_name = filter->type();
     RCLCPP_INFO_STREAM(logger_, "Setting " << filter_name << "......");
@@ -2147,6 +2148,8 @@ void OBCameraNode::getParameters() {
                                 -1.0);
   setAndGetNodeParameter<float>(temporal_filter_weight_, "temporal_filter_weight", -1.0);
   setAndGetNodeParameter<std::string>(hole_filling_filter_mode_, "hole_filling_filter_mode", "");
+  setAndGetNodeParameter<bool>(enable_false_positive_filter_, "enable_false_positive_filter",
+                               false);
   setAndGetNodeParameter<int>(hdr_merge_exposure_1_, "hdr_merge_exposure_1", -1);
   setAndGetNodeParameter<int>(hdr_merge_gain_1_, "hdr_merge_gain_1", -1);
   setAndGetNodeParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1);

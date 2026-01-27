@@ -192,6 +192,7 @@ def generate_launch_description():
         DeclareLaunchArgument('temporal_filter_diff_threshold', default_value='-1.0'),
         DeclareLaunchArgument('temporal_filter_weight', default_value='-1.0'),
         DeclareLaunchArgument('hole_filling_filter_mode', default_value=''),
+        DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
         DeclareLaunchArgument('hdr_merge_exposure_1', default_value='-1'),
         DeclareLaunchArgument('hdr_merge_gain_1', default_value='-1'),
         DeclareLaunchArgument('hdr_merge_exposure_2', default_value='-1'),

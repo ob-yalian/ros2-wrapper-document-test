@@ -775,6 +775,8 @@ class OBCameraNode {
   bool enable_hole_filling_filter_ = false;
   bool enable_spatial_fast_filter_ = false;
   bool enable_spatial_moderate_filter_ = false;
+  bool enable_false_positive_filter_ = false;
+
   // filter params
   int decimation_filter_scale_ = -1;
   int sequence_id_filter_id_ = -1;
