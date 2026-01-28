@@ -4570,6 +4570,10 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
             "The filter switch setting is successful, but the filter parameter setting fails";
         return;
       }
+    } else if (request->filter_name == "FalsePositiveFilter") {
+      auto false_positive_filter = std::make_shared<ob::FalsePositiveFilter>();
+      false_positive_filter->enable(request->filter_enable);
+      depth_filter_list_.push_back(false_positive_filter);
     } else {
       RCLCPP_INFO_STREAM(logger_,
                          request->filter_name
@@ -4577,7 +4581,8 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                              << "The filter_name value that can be set is "
                                 "DecimationFilter, HDRMerge, SequenceIdFilter, ThresholdFilter, "
                                 "NoiseRemovalFilter, HardwareNoiseRemoval, SpatialAdvancedFilter, "
-                                "SpatialFastFilter, SpatialModerateFilter and TemporalFilter");
+                                "SpatialFastFilter, SpatialModerateFilter, FalsePositiveFilter and "
+                                "TemporalFilter");
       return;
     }
     for (auto &filter : depth_filter_list_) {
