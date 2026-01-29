@@ -836,6 +836,9 @@ class OBCameraNode {
   // soft ware trigger
   rclcpp::TimerBase::SharedPtr software_trigger_timer_;
   rclcpp::TimerBase::SharedPtr diagnostic_timer_;
+  std::mutex diagnostic_mutex_;
+  std::condition_variable diagnostic_cv_;
+  bool diagnostic_running_ = false;
   std::chrono::milliseconds software_trigger_period_{33};
   bool enable_heartbeat_ = false;
   bool enable_color_undistortion_ = false;

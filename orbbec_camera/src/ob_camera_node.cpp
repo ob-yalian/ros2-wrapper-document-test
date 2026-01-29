@@ -169,7 +169,11 @@ void OBCameraNode::clean() noexcept {
     if (diagnostic_timer_) {
       diagnostic_timer_->cancel();
       // Wait for any currently executing timer callbacks to complete
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+      {
+        std::unique_lock<std::mutex> lk(diagnostic_mutex_);
+        diagnostic_cv_.wait_for(lk, std::chrono::milliseconds(100),
+                                [this]() { return !diagnostic_running_; });
+      }
       diagnostic_timer_.reset();
     }
     if (software_trigger_timer_) {
@@ -2406,8 +2410,24 @@ void OBCameraNode::setupDiagnosticUpdater() {
               // Device is busy or shutting down, skip this update
               return;
             }
-
-            diagnostic_updater_->force_update();
+            // Mark diagnostic as running to prevent concurrent reset/publish races
+            {
+              std::lock_guard<std::mutex> lk(diagnostic_mutex_);
+              diagnostic_running_ = true;
+            }
+            try {
+              diagnostic_updater_->force_update();
+            } catch (...) {
+              std::lock_guard<std::mutex> lk(diagnostic_mutex_);
+              diagnostic_running_ = false;
+              diagnostic_cv_.notify_all();
+              throw;
+            }
+            {
+              std::lock_guard<std::mutex> lk(diagnostic_mutex_);
+              diagnostic_running_ = false;
+            }
+            diagnostic_cv_.notify_all();
           } catch (const ob::Error &e) {
             RCLCPP_WARN_STREAM(logger_, "Diagnostic update failed: "
                                             << e.getMessage() << " - Device may be disconnected");
