@@ -582,6 +582,25 @@ void OBCameraNode::setupDevices() {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL,
                         enable_color_auto_white_balance_);
   }
+  if (!color_preset_.empty() &&
+      device_->isPropertySupported(OB_PROP_COLOR_PRESET_PRIORITY_INT, OB_PERMISSION_WRITE)) {
+    std::string preset_key = color_preset_;
+    std::transform(preset_key.begin(), preset_key.end(), preset_key.begin(), ::tolower);
+    int preset_value = -1;
+    if (preset_key == "default") {
+      preset_value = 0;
+    } else if (preset_key == "warm biased awb") {
+      preset_value = 1;
+    } else {
+      RCLCPP_WARN_STREAM(
+          logger_, "Unsupported color_preset: " << color_preset_
+                                                << ". Supported values: Default, Warm Biased AWB");
+    }
+    if (preset_value >= 0) {
+      RCLCPP_INFO_STREAM(logger_, "Setting color preset to " << color_preset_);
+      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_PRESET_PRIORITY_INT, preset_value);
+    }
+  }
   if (color_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
     auto range = device_->getIntPropertyRange(OB_PROP_COLOR_EXPOSURE_INT);
@@ -2053,6 +2072,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(color_backlight_compensation_, "color_backlight_compensation", -1);
   setAndGetNodeParameter<int>(color_denoising_level_, "color_denoising_level", -1);
   setAndGetNodeParameter<std::string>(color_powerline_freq_, "color_powerline_freq", "");
+  setAndGetNodeParameter<std::string>(color_preset_, "color_preset", "Default");
   setAndGetNodeParameter<bool>(enable_color_decimation_filter_, "enable_color_decimation_filter",
                                false);
   setAndGetNodeParameter<int>(color_decimation_filter_scale_, "color_decimation_filter_scale", -1);

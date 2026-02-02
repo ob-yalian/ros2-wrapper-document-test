@@ -91,6 +91,7 @@ def generate_launch_description():
         DeclareLaunchArgument('color_format', default_value='ANY'),
         DeclareLaunchArgument('enable_color', default_value='true'),
         DeclareLaunchArgument('color_qos', default_value='default'),
+        DeclareLaunchArgument('color_preset', default_value='default'),# color preset: default, Warm Biased AWB
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('color_rotation', default_value='-1'),#color rotation degree : 0, 90, 180, 270
