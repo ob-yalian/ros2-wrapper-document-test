@@ -358,6 +358,8 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
     }
 
     auto range = device_->getIntPropertyRange(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
+    int requested_mode_value = request->data;
+    int hw_mode_index = requested_mode_value;
     if (hw_mode_index < range.min || hw_mode_index > range.max) {
       response->success = false;
       response->message =
