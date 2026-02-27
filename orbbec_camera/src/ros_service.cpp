@@ -401,13 +401,26 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
     }
 
     auto range = device_->getIntPropertyRange(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
-    int requested_mode_value = request->data;
-    int hw_mode_index = requested_mode_value;
+    const int requested_mode_value = request->data;
+    int hw_mode_index = -1;
+    if (requested_mode_value == 64) {
+      hw_mode_index = 0;
+    } else if (requested_mode_value == 128) {
+      hw_mode_index = 1;
+    } else if (requested_mode_value == 256) {
+      hw_mode_index = 2;
+    }
+
     if (hw_mode_index < range.min || hw_mode_index > range.max) {
       response->success = false;
-      response->message =
-          "Invalid disparity range mode. Allowed values:" + std::to_string(range.min) + " to " +
-          std::to_string(range.max);
+      std::string supported_mode;
+      for (int i = range.min; i <= range.max; ++i) {
+        supported_mode += (i == 0)   ? "64/"
+                          : (i == 1) ? "128/"
+                          : (i == 2) ? "256"
+                                     : std::to_string(i);
+      }
+      response->message = "Invalid disparity range mode. Allowed values:" + supported_mode;
       return;
     }
 
