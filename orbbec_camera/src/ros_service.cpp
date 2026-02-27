@@ -288,6 +288,11 @@ void OBCameraNode::setupCameraCtrlServices() {
                                          std::shared_ptr<SetInt32::Response> response) {
         setDisparityRangeModeCallback(request, response);
       });
+  set_disparity_search_offset_srv_ = node_->create_service<SetInt32>(
+      "set_disparity_search_offset", [this](const std::shared_ptr<SetInt32::Request> request,
+                                            std::shared_ptr<SetInt32::Response> response) {
+        setDisparitySearchOffsetCallback(request, response);
+      });
 }
 
 void OBCameraNode::getPointCloudDecimationCallback(
@@ -374,6 +379,56 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
     RCLCPP_INFO_STREAM(logger_, "Set disparity_range_mode to " << requested_mode_value);
     response->success = true;
     response->message = "disparity_range_mode updated";
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = e.getMessage();
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
+}
+
+void OBCameraNode::setDisparitySearchOffsetCallback(
+    const std::shared_ptr<SetInt32::Request>& request,
+    std::shared_ptr<SetInt32::Response>& response) {
+  if (!request) {
+    response->success = false;
+    response->message = "Invalid request";
+    return;
+  }
+
+  try {
+    if (!device_->isPropertySupported(OB_PROP_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_WRITE)) {
+      response->success = false;
+      response->message = "OB_PROP_DISP_SEARCH_OFFSET_INT is not supported";
+      return;
+    }
+
+    const bool allow_set = isGemini435LePID(pid_) || enable_stream_[DEPTH];
+    if (!allow_set) {
+      response->success = false;
+      response->message = "Disparity search offset can only be set when depth stream is enabled";
+      return;
+    }
+
+    auto range = device_->getIntPropertyRange(OB_PROP_DISP_SEARCH_OFFSET_INT);
+    if (request->data < range.min || request->data > range.max) {
+      response->success = false;
+      response->message =
+          "Invalid disparity search offset. Allowed values:" + std::to_string(range.min) + " to " +
+          std::to_string(range.max);
+      return;
+    }
+
+    device_->setIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT, request->data);
+    disparity_search_offset_ = request->data;
+
+    RCLCPP_INFO_STREAM(logger_, "Set disparity_search_offset to " << disparity_search_offset_);
+    response->success = true;
+    response->message = "disparity_search_offset updated";
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = e.getMessage();
