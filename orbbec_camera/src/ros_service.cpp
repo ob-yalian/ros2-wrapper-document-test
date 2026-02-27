@@ -22,6 +22,35 @@
 #include "orbbec_camera/utils.h"
 namespace orbbec_camera {
 
+namespace {
+
+bool isGemini330SeriesForDisparity(uint32_t pid) {
+  return pid == GEMINI_335_PID || pid == GEMINI_336_PID || pid == GEMINI_330_PID ||
+         pid == GEMINI_335L_PID || pid == GEMINI_336L_PID || pid == GEMINI_330L_PID ||
+         pid == GEMINI_335LG_PID || pid == GEMINI_335LE_PID;
+}
+
+bool isSupportedDisparityResolutionForPid(uint32_t pid, int width, int height) {
+  if (pid == GEMINI_335LE_PID) {
+    return (width == 1280 && height == 800) || (width == 640 && height == 400) ||
+           (width == 424 && height == 266) || (width == 320 && height == 200);
+  }
+
+  return (width == 1280 && height == 800) || (width == 1280 && height == 720) ||
+         (width == 640 && height == 400) || (width == 424 && height == 266);
+}
+
+std::string getDisparityResolutionHintByPid(uint32_t pid) {
+  if (pid == GEMINI_335LE_PID) {
+    return "Supported resolutions for Gemini 335Le: 1280x800/640x400/424x266/320x200";
+  }
+
+  return "Supported resolutions for Gemini 335/336/330/335L/336L/335Lg/330L: "
+         "1280x800/1280x720/640x400/424x266";
+}
+
+}  // namespace
+
 void OBCameraNode::setupCameraCtrlServices() {
   using std_srvs::srv::SetBool;
   for (auto stream_index : IMAGE_STREAMS) {
@@ -362,6 +391,15 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
       return;
     }
 
+    if (isGemini330SeriesForDisparity(pid_) &&
+        !isSupportedDisparityResolutionForPid(pid_, width_[DEPTH], height_[DEPTH])) {
+      response->success = false;
+      response->message = "Current depth resolution " + std::to_string(width_[DEPTH]) + "x" +
+                          std::to_string(height_[DEPTH]) + " is not supported. " +
+                          getDisparityResolutionHintByPid(pid_);
+      return;
+    }
+
     auto range = device_->getIntPropertyRange(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
     int requested_mode_value = request->data;
     int hw_mode_index = requested_mode_value;
@@ -411,6 +449,15 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
     if (!allow_set) {
       response->success = false;
       response->message = "Disparity search offset can only be set when depth stream is enabled";
+      return;
+    }
+
+    if (isGemini330SeriesForDisparity(pid_) &&
+        !isSupportedDisparityResolutionForPid(pid_, width_[DEPTH], height_[DEPTH])) {
+      response->success = false;
+      response->message = "Current depth resolution " + std::to_string(width_[DEPTH]) + "x" +
+                          std::to_string(height_[DEPTH]) + " is not supported. " +
+                          getDisparityResolutionHintByPid(pid_);
       return;
     }
 
