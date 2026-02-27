@@ -375,6 +375,8 @@ class OBCameraNode {
                                        std::shared_ptr<SetInt32::Response>& response);
   void getPointCloudDecimationCallback(const std::shared_ptr<GetInt32::Request>& request,
                                        std::shared_ptr<GetInt32::Response>& response);
+  void setDisparityRangeModeCallback(const std::shared_ptr<SetInt32::Request>& request,
+                                     std::shared_ptr<SetInt32::Response>& response);
   void setSYNCHostimeCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
   void sendSoftwareTriggerCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
@@ -602,6 +604,7 @@ class OBCameraNode {
   rclcpp::Service<SetFilter>::SharedPtr set_filter_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_point_cloud_decimation_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_point_cloud_decimation_srv_;
+  rclcpp::Service<SetInt32>::SharedPtr set_disparity_range_mode_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_streams_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
