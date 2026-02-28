@@ -380,7 +380,7 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
   try {
     if (!device_->isPropertySupported(OB_PROP_DISP_SEARCH_RANGE_MODE_INT, OB_PERMISSION_WRITE)) {
       response->success = false;
-      response->message = "OB_PROP_DISP_SEARCH_RANGE_MODE_INT is not supported";
+      response->message = "Current device does not support disparity range mode";
       return;
     }
 
@@ -425,11 +425,13 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
     }
 
     device_->setIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT, hw_mode_index);
-    disparity_range_mode_ = requested_mode_value;
-
-    RCLCPP_INFO_STREAM(logger_, "Set disparity_range_mode to " << requested_mode_value);
+    auto current_mode_index = device_->getIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
+    auto current_mode_value = (current_mode_index == 0)   ? 64
+                              : (current_mode_index == 1) ? 128
+                              : (current_mode_index == 2) ? 256
+                                                          : current_mode_index;
     response->success = true;
-    response->message = "disparity_range_mode updated";
+    response->message = "disparity_range_mode updated to " + std::to_string(current_mode_value);
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = e.getMessage();
@@ -454,7 +456,7 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
   try {
     if (!device_->isPropertySupported(OB_PROP_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_WRITE)) {
       response->success = false;
-      response->message = "OB_PROP_DISP_SEARCH_OFFSET_INT is not supported";
+      response->message = "Current device does not support disparity search offset";
       return;
     }
 
@@ -484,11 +486,10 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
     }
 
     device_->setIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT, request->data);
-    disparity_search_offset_ = request->data;
-
-    RCLCPP_INFO_STREAM(logger_, "Set disparity_search_offset to " << disparity_search_offset_);
+    auto current_offset = device_->getIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT);
+    RCLCPP_INFO_STREAM(logger_, "Set disparity_search_offset to " << current_offset);
     response->success = true;
-    response->message = "disparity_search_offset updated";
+    response->message = "disparity_search_offset updated to " + std::to_string(current_offset);
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = e.getMessage();
