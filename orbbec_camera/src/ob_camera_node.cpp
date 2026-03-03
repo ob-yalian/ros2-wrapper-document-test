@@ -3460,6 +3460,9 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
   if (image_publishers_.count(stream_index) && image_publishers_[stream_index]) {
     has_subscriber = image_publishers_[stream_index]->get_subscription_count() > 0;
   }
+  if (stream_index == COLOR && enable_color_undistortion_ && color_undistortion_publisher_) {
+    has_subscriber = true;
+  }
 
   if (frame->getType() == OB_FRAME_COLOR && enable_colored_point_cloud_ &&
       depth_registration_cloud_pub_ &&
@@ -3569,7 +3572,11 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     return;
   }
   CHECK_NOTNULL(image_publishers_[stream_index]);
-  bool has_subscriber = image_publishers_[stream_index]->get_subscription_count() > 0;
+  const bool has_raw_image_subscriber =
+      image_publishers_[stream_index]->get_subscription_count() > 0;
+  const bool enable_undistortion_publish =
+      (stream_index == COLOR && enable_color_undistortion_ && color_undistortion_publisher_);
+  bool has_subscriber = has_raw_image_subscriber || enable_undistortion_publish;
   has_subscriber =
       has_subscriber || camera_info_publishers_[stream_index]->get_subscription_count() > 0;
   has_subscriber =
@@ -3659,23 +3666,6 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     camera_info.height = height;
   }
   auto &image = images_[stream_index];
-  if (stream_index == COLOR && enable_color_undistortion_) {
-    auto undistort_result = undistortImage(image, intrinsic, distortion);
-    sensor_msgs::msg::Image::UniquePtr undistorted_image_msg(new sensor_msgs::msg::Image());
-    cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], undistort_result.image)
-        .toImageMsg(*undistorted_image_msg);
-    CHECK_NOTNULL(undistorted_image_msg.get());
-    undistorted_image_msg->header.stamp = timestamp;
-    undistorted_image_msg->is_bigendian = false;
-    undistorted_image_msg->step = width * unit_step_size_[stream_index];
-    undistorted_image_msg->header.frame_id = frame_id;
-    color_undistortion_publisher_->publish(std::move(undistorted_image_msg));
-    // Update intrinsic with the new camera matrix from undistortion
-    camera_info.p.at(0) = undistort_result.new_intrinsic.fx;
-    camera_info.p.at(5) = undistort_result.new_intrinsic.fy;
-    camera_info.p.at(2) = undistort_result.new_intrinsic.cx;
-    camera_info.p.at(6) = undistort_result.new_intrinsic.cy;
-  }
   if (frame->getType() == OB_FRAME_IR_RIGHT && enable_stream_[INFRA1]) {
     auto stream_profile = frame->getStreamProfile();
     CHECK_NOTNULL(stream_profile);
@@ -3689,11 +3679,8 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     camera_info.p.at(3) = -fx * ex.trans[0] / 1000.0 + 0.0;
     camera_info.p.at(7) = -fy * ex.trans[1] / 1000.0 + 0.0;
   }
-  CHECK(camera_info_publishers_.count(stream_index) > 0);
-  camera_info_publishers_[stream_index]->publish(camera_info);
-  publishMetadata(frame, stream_index, camera_info.header);
   CHECK_NOTNULL(image_publishers_[stream_index]);
-  if (image_publishers_[stream_index]->get_subscription_count() == 0) {
+  if (!has_raw_image_subscriber && !enable_undistortion_publish) {
     return;
   }
   if (image.empty() || image.cols != width || image.rows != height) {
@@ -3713,21 +3700,41 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if (frame->getType() == OB_FRAME_COLOR && frame->format() != OB_FORMAT_Y8 &&
       frame->format() != OB_FORMAT_Y16 && frame->format() != OB_FORMAT_BGRA &&
-      frame->format() != OB_FORMAT_RGBA && image_publishers_[COLOR]->get_subscription_count() > 0) {
+      frame->format() != OB_FORMAT_RGBA && has_subscriber) {
     memcpy(image.data, rgb_buffer_, video_frame->getWidth() * video_frame->getHeight() * 3);
   } else if (frame->getType() == OB_FRAME_COLOR_LEFT && frame->format() != OB_FORMAT_Y8 &&
              frame->format() != OB_FORMAT_Y16 && frame->format() != OB_FORMAT_BGRA &&
-             frame->format() != OB_FORMAT_RGBA &&
-             image_publishers_[COLOR_LEFT]->get_subscription_count() > 0) {
+             frame->format() != OB_FORMAT_RGBA && has_subscriber) {
     memcpy(image.data, rgb_buffer_left_, video_frame->getWidth() * video_frame->getHeight() * 3);
   } else if (frame->getType() == OB_FRAME_COLOR_RIGHT && frame->format() != OB_FORMAT_Y8 &&
              frame->format() != OB_FORMAT_Y16 && frame->format() != OB_FORMAT_BGRA &&
-             frame->format() != OB_FORMAT_RGBA &&
-             image_publishers_[COLOR_RIGHT]->get_subscription_count() > 0) {
+             frame->format() != OB_FORMAT_RGBA && has_subscriber) {
     memcpy(image.data, rgb_buffer_right_, video_frame->getWidth() * video_frame->getHeight() * 3);
   } else {
     memcpy(image.data, video_frame->getData(), video_frame->getDataSize());
   }
+
+  if (enable_undistortion_publish) {
+    auto undistort_result = undistortImage(image, intrinsic, distortion);
+    sensor_msgs::msg::Image::UniquePtr undistorted_image_msg(new sensor_msgs::msg::Image());
+    cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], undistort_result.image)
+        .toImageMsg(*undistorted_image_msg);
+    CHECK_NOTNULL(undistorted_image_msg.get());
+    undistorted_image_msg->header.stamp = timestamp;
+    undistorted_image_msg->is_bigendian = false;
+    undistorted_image_msg->step = width * unit_step_size_[stream_index];
+    undistorted_image_msg->header.frame_id = frame_id;
+    color_undistortion_publisher_->publish(std::move(undistorted_image_msg));
+    // Update intrinsic with the new camera matrix from undistortion
+    camera_info.p.at(0) = undistort_result.new_intrinsic.fx;
+    camera_info.p.at(5) = undistort_result.new_intrinsic.fy;
+    camera_info.p.at(2) = undistort_result.new_intrinsic.cx;
+    camera_info.p.at(6) = undistort_result.new_intrinsic.cy;
+  }
+
+  CHECK(camera_info_publishers_.count(stream_index) > 0);
+  camera_info_publishers_[stream_index]->publish(camera_info);
+  publishMetadata(frame, stream_index, camera_info.header);
 
   if (stream_index == DEPTH) {
     auto depth_scale = video_frame->as<ob::DepthFrame>()->getValueScale();
@@ -3749,7 +3756,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   } else if (stream_index == DEPTH) {
     fps_delay_status_depth_->tick(frame_timestamp);
   }
-  image_publishers_[stream_index]->publish(std::move(image_msg));
+  if (has_raw_image_subscriber) {
+    image_publishers_[stream_index]->publish(std::move(image_msg));
+  }
 }
 
 void OBCameraNode::publishMetadata(const std::shared_ptr<ob::Frame> &frame,
