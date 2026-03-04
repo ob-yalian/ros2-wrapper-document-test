@@ -18,6 +18,23 @@
 #include <orbbec_camera/ob_camera_node_driver.h>
 #include <orbbec_camera/utils.h>
 
+namespace {
+std::string ipSourceTypeToString(int ip_source_type) {
+  switch (ip_source_type) {
+    case 0:
+      return "NONE";
+    case 1:
+      return "LLA";
+    case 2:
+      return "DHCP";
+    case 3:
+      return "PERSISTENT";
+    default:
+      return std::string("UNKNOWN(") + std::to_string(ip_source_type) + ")";
+  }
+}
+}  // namespace
+
 int main() {
   try {
     ob::Context::setLoggerSeverity(OBLogSeverity::OB_LOG_SEVERITY_OFF);
@@ -60,12 +77,18 @@ int main() {
                            "subnet mask: " << list->getSubnetMask(i));
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                            "gateway: " << list->getGateway(i));
+        RCLCPP_INFO_STREAM(
+            rclcpp::get_logger("list_device_node"),
+            "local net interface: " << list->getLocalNetInterfaceName(static_cast<uint32_t>(i)));
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                           "ip source type: " << ipSourceTypeToString(
+                               static_cast<int>(list->getIpSourceType(static_cast<uint32_t>(i)))));
         std::cout << std::endl;
       }
     }
-  } catch (ob::Error &e) {
+  } catch (ob::Error& e) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), e.getMessage());
-  } catch (const std::exception &e) {
+  } catch (const std::exception& e) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), e.what());
   } catch (...) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), "unknown error");
