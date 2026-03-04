@@ -415,10 +415,10 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
       response->success = false;
       std::string supported_mode;
       for (int i = range.min; i <= range.max; ++i) {
-        supported_mode += (i == 0)   ? "64/"
-                          : (i == 1) ? "128/"
-                          : (i == 2) ? "256"
-                                     : std::to_string(i);
+        supported_mode += (i == 0)   ? "64"
+                          : (i == 1) ? "/128"
+                          : (i == 2) ? "/256"
+                                     : "/" + std::to_string(i);
       }
       response->message = "Invalid disparity range mode. Allowed values:" + supported_mode;
       return;
