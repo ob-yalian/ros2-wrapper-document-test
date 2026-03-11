@@ -223,6 +223,10 @@ void OBCameraNode::clean() noexcept {
   try {
     stopStreams();
     stopIMU();
+    {
+      std::lock_guard<std::mutex> lk(frame_info_logged_mutex_);
+      frame_info_logged_.clear();
+    }
   } catch (...) {
     RCLCPP_WARN_STREAM(logger_, "Exception while stopping streams");
   }
@@ -3189,97 +3193,32 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       setDepthAutoExposureROI();
       depth_frame = processDepthFrameFilter(depth_frame);
       frame_set->pushFrame(depth_frame);
-      static bool depth_frame_info_printed = false;
-      if (!depth_frame_info_printed) {
-        auto profile = depth_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(logger_, "Depth Frame - Width: " << profile->getWidth()
-                                                            << " Height: " << profile->getHeight()
-                                                            << " fps: " << profile->getFps()
-                                                            << " Format: " << profile->getFormat());
-        depth_frame_info_printed = true;
-      }
       fps_counter_depth_->tick();
     }
     if (color_frame) {
       setColorAutoExposureROI();
       color_frame = processColorFrameFilter(color_frame);
       frame_set->pushFrame(color_frame);
-      static bool color_frame_info_printed = false;
-      if (!color_frame_info_printed) {
-        auto profile = color_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(logger_, "Color Frame - Width: " << profile->getWidth()
-                                                            << " Height: " << profile->getHeight()
-                                                            << " fps: " << profile->getFps()
-                                                            << " Format: " << profile->getFormat());
-        color_frame_info_printed = true;
-      }
       fps_counter_color_->tick();
     }
     if (left_color_frame) {
       setColorAutoExposureROI();
       left_color_frame = processColorFrameFilter(left_color_frame);
       frame_set->pushFrame(left_color_frame);
-      static bool left_color_frame_info_printed = false;
-      if (!left_color_frame_info_printed) {
-        auto profile = left_color_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(
-            logger_, "Left Color Frame - Width: "
-                         << profile->getWidth() << " Height: " << profile->getHeight()
-                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
-        left_color_frame_info_printed = true;
-      }
     }
     if (right_color_frame) {
       right_color_frame = processColorFrameFilter(right_color_frame);
       frame_set->pushFrame(right_color_frame);
-      static bool right_color_frame_info_printed = false;
-      if (!right_color_frame_info_printed) {
-        auto profile = right_color_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(
-            logger_, "Right Color Frame - Width: "
-                         << profile->getWidth() << " Height: " << profile->getHeight()
-                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
-        right_color_frame_info_printed = true;
-      }
     }
     if (left_ir_frame) {
       left_ir_frame = processLeftIrFrameFilter(left_ir_frame);
       frame_set->pushFrame(left_ir_frame);
-      static bool left_ir_frame_info_printed = false;
-      if (!left_ir_frame_info_printed) {
-        auto profile = left_ir_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(
-            logger_, "Left IR Frame - Width: "
-                         << profile->getWidth() << " Height: " << profile->getHeight()
-                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
-        left_ir_frame_info_printed = true;
-      }
       fps_counter_left_ir_->tick();
     }
     if (right_ir_frame) {
       right_ir_frame = processRightIrFrameFilter(right_ir_frame);
       frame_set->pushFrame(right_ir_frame);
-      static bool right_ir_frame_info_printed = false;
-      if (!right_ir_frame_info_printed) {
-        auto profile = right_ir_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(
-            logger_, "Right IR Frame - Width: "
-                         << profile->getWidth() << " Height: " << profile->getHeight()
-                         << " fps: " << profile->getFps() << " Format: " << profile->getFormat());
-        right_ir_frame_info_printed = true;
-      }
       fps_counter_right_ir_->tick();
-    }
-    if (ir_frame) {
-      static bool ir_frame_info_printed = false;
-      if (!ir_frame_info_printed) {
-        auto profile = ir_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
-        RCLCPP_INFO_STREAM(logger_, "IR Frame - Width: " << profile->getWidth()
-                                                         << " Height: " << profile->getHeight()
-                                                         << " fps: " << profile->getFps()
-                                                         << " Format: " << profile->getFormat());
-        ir_frame_info_printed = true;
-      }
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
       if (auto new_frame = align_filter_->process(frame_set)) {
@@ -3294,6 +3233,35 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       RCLCPP_DEBUG(logger_,
                    "Depth registration is disabled or align filter is null or depth frame is "
                    "null or color frame is null");
+    }
+
+    // Refresh frame from current frameset before logging to reflect post-filter/alignment output.
+    for (const auto &stream_index : IMAGE_STREAMS) {
+      if (!enable_stream_[stream_index]) {
+        continue;
+      }
+      auto frame_type = STREAM_TYPE_TO_FRAME_TYPE.at(stream_index.first);
+      auto updated_frame = frame_set->getFrame(frame_type);
+      if (!updated_frame || !updated_frame->is<ob::VideoFrame>()) {
+        continue;
+      }
+      auto updated_video = updated_frame->as<ob::VideoFrame>();
+
+      // For D2C, avoid logging an early unaligned depth frame before align target is available.
+      if (stream_index == DEPTH && depth_registration_) {
+        auto align_target_frame_type = STREAM_TYPE_TO_FRAME_TYPE.at(align_target_stream_);
+        auto align_target_frame = frame_set->getFrame(align_target_frame_type);
+        if (!align_target_frame || !align_target_frame->is<ob::VideoFrame>()) {
+          continue;
+        }
+        auto target_video = align_target_frame->as<ob::VideoFrame>();
+        if (updated_video->getWidth() != target_video->getWidth() ||
+            updated_video->getHeight() != target_video->getHeight()) {
+          continue;
+        }
+      }
+
+      logFrameInfoOnce(stream_index, updated_video);
     }
 
     if (enable_stream_[COLOR] && color_frame) {
@@ -3337,6 +3305,27 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: unknown error");
   }
+}
+
+void OBCameraNode::logFrameInfoOnce(const stream_index_pair &stream_index,
+                                    const std::shared_ptr<ob::VideoFrame> &video_frame) {
+  if (!video_frame) {
+    return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(frame_info_logged_mutex_);
+    auto iter = frame_info_logged_.find(stream_index);
+    if (iter != frame_info_logged_.end() && iter->second) {
+      return;
+    }
+    frame_info_logged_[stream_index] = true;
+  }
+
+  RCLCPP_INFO_STREAM(logger_, stream_name_[stream_index]
+                                  << " Frame - Width: " << video_frame->getWidth() << " Height: "
+                                  << video_frame->getHeight() << " fps: " << fps_[stream_index]
+                                  << " Format: " << video_frame->getFormat());
 }
 
 void OBCameraNode::onNewColorFrameCallback() {

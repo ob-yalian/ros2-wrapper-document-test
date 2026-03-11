@@ -448,6 +448,9 @@ class OBCameraNode {
   void onNewFrameCallback(const std::shared_ptr<ob::Frame>& frame,
                           const stream_index_pair& stream_index);
 
+  void logFrameInfoOnce(const stream_index_pair& stream_index,
+                        const std::shared_ptr<ob::VideoFrame>& video_frame);
+
   void publishMetadata(const std::shared_ptr<ob::Frame>& frame,
                        const stream_index_pair& stream_index, const std_msgs::msg::Header& header);
 
@@ -567,6 +570,8 @@ class OBCameraNode {
   std::map<stream_index_pair, std::shared_ptr<image_publisher>> image_publishers_;
   std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr>
       camera_info_publishers_;
+  std::map<stream_index_pair, bool> frame_info_logged_;
+  std::mutex frame_info_logged_mutex_;
 
   std::map<stream_index_pair, rclcpp::Service<GetInt32>::SharedPtr> get_exposure_srv_;
   std::map<stream_index_pair, rclcpp::Service<SetInt32>::SharedPtr> set_exposure_srv_;
