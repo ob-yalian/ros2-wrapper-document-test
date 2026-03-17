@@ -190,7 +190,7 @@ add_orbbec_executable(list_camera_profile_mode_node tools/list_camera_profile.cp
 add_orbbec_executable(set_device_ip tools/set_device_ip.cpp)
 add_orbbec_executable(topic_statistics_node tools/topic_statistics.cpp)
 add_orbbec_executable(ob_benchmark_node tools/ob_benchmark.cpp)
-add_orbbec_executable(435le_example_node examples/435le_new_interface/camera_example_node.cpp)
+add_orbbec_executable(435le_example_node examples/Gemini_435Le_example_node/camera_example_node.cpp)
 add_orbbec_executable(service_benchmark_node scripts/service_benchmark_node.cpp)
 add_orbbec_executable(image_sync_example_node examples/multi_camera_time_sync/image_sync_example_node.cpp)
 
