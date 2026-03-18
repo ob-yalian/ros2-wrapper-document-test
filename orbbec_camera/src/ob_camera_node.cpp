@@ -2606,10 +2606,13 @@ void OBCameraNode::setupPublishers() {
     if (use_intra_process_) {
       depth_image_qos_profile = rmw_qos_profile_default;
     }
-    depth_raw_image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>(
-        "depth/image_raw/unaligned",
-        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(depth_image_qos_profile),
-                    depth_image_qos_profile));
+    if (use_intra_process_) {
+      depth_unaligned_publisher_ = std::make_shared<image_rcl_publisher>(
+          *node_, "depth/image_unaligned", depth_image_qos_profile);
+    } else {
+      depth_unaligned_publisher_ = std::make_shared<image_transport_publisher>(
+          *node_, "depth/image_unaligned", depth_image_qos_profile);
+    }
   }
 
   if (enable_sync_output_accel_gyro_) {
@@ -2712,8 +2715,8 @@ void OBCameraNode::publishPointCloud(const std::shared_ptr<ob::FrameSet> &frame_
 }
 
 void OBCameraNode::publishRawDepthImage(const std::shared_ptr<ob::Frame> &depth_frame) {
-  if (!depth_frame || !depth_raw_image_pub_ || !depth_registration_ ||
-      depth_raw_image_pub_->get_subscription_count() == 0) {
+  if (!depth_frame || !depth_unaligned_publisher_ || !depth_registration_ ||
+      depth_unaligned_publisher_->get_subscription_count() == 0) {
     return;
   }
 
@@ -2742,7 +2745,7 @@ void OBCameraNode::publishRawDepthImage(const std::shared_ptr<ob::Frame> &depth_
   image_msg->step = width * unit_step_size_[DEPTH];
   image_msg->header.frame_id = frame_id;
 
-  depth_raw_image_pub_->publish(std::move(image_msg));
+  depth_unaligned_publisher_->publish(std::move(image_msg));
 }
 
 void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {

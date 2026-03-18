@@ -574,7 +574,7 @@ class OBCameraNode {
       camera_info_publishers_;
   std::map<stream_index_pair, bool> frame_info_logged_;
   std::mutex frame_info_logged_mutex_;
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_raw_image_pub_;
+  std::shared_ptr<image_publisher> depth_unaligned_publisher_;
 
   std::map<stream_index_pair, rclcpp::Service<GetInt32>::SharedPtr> get_exposure_srv_;
   std::map<stream_index_pair, rclcpp::Service<SetInt32>::SharedPtr> set_exposure_srv_;
