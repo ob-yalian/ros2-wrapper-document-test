@@ -426,6 +426,8 @@ class OBCameraNode {
 
   void publishColoredPointCloud(const std::shared_ptr<ob::FrameSet>& frame_set);
 
+  void publishRawDepthImage(const std::shared_ptr<ob::Frame>& depth_frame);
+
   std::shared_ptr<ob::Frame> processDepthFrameFilter(std::shared_ptr<ob::Frame>& frame);
 
   std::shared_ptr<ob::Frame> processColorFrameFilter(std::shared_ptr<ob::Frame>& frame);
@@ -572,6 +574,7 @@ class OBCameraNode {
       camera_info_publishers_;
   std::map<stream_index_pair, bool> frame_info_logged_;
   std::mutex frame_info_logged_mutex_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_raw_image_pub_;
 
   std::map<stream_index_pair, rclcpp::Service<GetInt32>::SharedPtr> get_exposure_srv_;
   std::map<stream_index_pair, rclcpp::Service<SetInt32>::SharedPtr> set_exposure_srv_;

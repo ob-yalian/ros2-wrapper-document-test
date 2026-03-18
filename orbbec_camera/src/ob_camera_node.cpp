@@ -2601,6 +2601,17 @@ void OBCameraNode::setupPublishers() {
     }
   }
 
+  if (depth_registration_ && align_mode_ == "SW") {
+    auto depth_image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
+    if (use_intra_process_) {
+      depth_image_qos_profile = rmw_qos_profile_default;
+    }
+    depth_raw_image_pub_ = node_->create_publisher<sensor_msgs::msg::Image>(
+        "depth/image_raw/unaligned",
+        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(depth_image_qos_profile),
+                    depth_image_qos_profile));
+  }
+
   if (enable_sync_output_accel_gyro_) {
     std::string topic_name = stream_name_[GYRO] + "_" + stream_name_[ACCEL] + "/sample";
     auto data_qos = getRMWQosProfileFromString(imu_qos_[GYRO]);
@@ -2698,6 +2709,40 @@ void OBCameraNode::publishPointCloud(const std::shared_ptr<ob::FrameSet> &frame_
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "publishPointCloud with unknown error");
   }
+}
+
+void OBCameraNode::publishRawDepthImage(const std::shared_ptr<ob::Frame> &depth_frame) {
+  if (!depth_frame || !depth_raw_image_pub_ || !depth_registration_ ||
+      depth_raw_image_pub_->get_subscription_count() == 0) {
+    return;
+  }
+
+  auto video_frame = depth_frame->as<ob::DepthFrame>();
+  if (!video_frame) {
+    return;
+  }
+
+  int width = static_cast<int>(video_frame->getWidth());
+  int height = static_cast<int>(video_frame->getHeight());
+  auto frame_timestamp = getFrameTimestampUs(depth_frame);
+  auto timestamp = fromUsToROSTime(frame_timestamp);
+
+  std::string frame_id = optical_frame_id_[DEPTH];
+
+  cv::Mat depth_image(height, width, image_format_[DEPTH]);
+  memcpy(depth_image.data, video_frame->getData(), video_frame->getDataSize());
+
+  auto depth_scale = video_frame->getValueScale();
+  depth_image.convertTo(depth_image, depth_image.type(), depth_scale);
+
+  sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
+  cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[DEPTH], depth_image).toImageMsg(*image_msg);
+  image_msg->header.stamp = timestamp;
+  image_msg->is_bigendian = false;
+  image_msg->step = width * unit_step_size_[DEPTH];
+  image_msg->header.frame_id = frame_id;
+
+  depth_raw_image_pub_->publish(std::move(image_msg));
 }
 
 void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {
@@ -3221,6 +3266,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       fps_counter_right_ir_->tick();
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
+      publishRawDepthImage(depth_frame);
       if (auto new_frame = align_filter_->process(frame_set)) {
         auto new_frame_set = new_frame->as<ob::FrameSet>();
         CHECK_NOTNULL(new_frame_set.get());
