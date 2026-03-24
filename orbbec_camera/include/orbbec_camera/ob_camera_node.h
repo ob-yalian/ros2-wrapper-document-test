@@ -684,6 +684,7 @@ class OBCameraNode {
   int color_contrast_ = -1;
   int color_hue_ = -1;
   int color_backlight_compensation_ = -1;
+  bool color_anti_flicker_ = false;
   std::string color_powerline_freq_;
   std::string color_preset_;
   int color_denoising_level_ = -1;
