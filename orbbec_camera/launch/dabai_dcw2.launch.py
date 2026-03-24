@@ -78,6 +78,8 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_ldp', default_value='true'),
         DeclareLaunchArgument('soft_filter_max_diff', default_value='-1'),
         DeclareLaunchArgument('soft_filter_speckle_size', default_value='-1'),
+        DeclareLaunchArgument('enable_mgc_noise_removal_filter', default_value='false'),
+        DeclareLaunchArgument('enable_lut_noise_removal_filter', default_value='false'),
         DeclareLaunchArgument('ordered_pc', default_value='false'),
         DeclareLaunchArgument('use_hardware_time', default_value='false'),
         DeclareLaunchArgument('enable_depth_scale', default_value='true'),
