@@ -33,6 +33,8 @@
 
 namespace {
 
+constexpr int kProgressLogBucketPercent = 25;
+
 struct CliArgs {
   std::string serial_number;
   std::string usb_port;
@@ -521,13 +523,27 @@ bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob
   }
 
   OBFwUpdateState final_state = STAT_START;
+  OBFwUpdateState last_logged_state = STAT_START;
+  int last_logged_bucket = -1;
   RCLCPP_INFO(logger, "Start updating optional depth presets...");
 
   device->updateOptionalDepthPresets(
       file_paths, count,
-      [&final_state](OBFwUpdateState state, const char *message, uint8_t percent) {
+      [&final_state, &last_logged_state, &last_logged_bucket](OBFwUpdateState state,
+                                                               const char *message, uint8_t percent) {
         final_state = state;
-        printUpdateProgress("preset", state, message, percent);
+
+        const int bucket = static_cast<int>(percent) / kProgressLogBucketPercent;
+        const bool first_log = (last_logged_bucket < 0);
+        const bool state_changed = (!first_log && state != last_logged_state);
+        const bool bucket_changed = (!first_log && bucket != last_logged_bucket);
+        const bool is_boundary = (percent == 0 || percent == 100);
+
+        if (first_log || state_changed || bucket_changed || is_boundary) {
+          printUpdateProgress("preset", state, message, percent);
+          last_logged_state = state;
+          last_logged_bucket = bucket;
+        }
       });
 
   if (final_state == STAT_DONE || final_state == STAT_DONE_WITH_DUPLICATES) {
@@ -564,7 +580,7 @@ FirmwareUpdateResult updateFirmware(const rclcpp::Logger &logger,
                                                          uint8_t percent) {
         result.final_state = state;
 
-        const int bucket = static_cast<int>(percent) / 10;
+        const int bucket = static_cast<int>(percent) / kProgressLogBucketPercent;
         const bool first_log = (last_logged_bucket < 0);
         const bool state_changed = (!first_log && state != last_logged_state);
         const bool bucket_changed = (!first_log && bucket != last_logged_bucket);
