@@ -184,7 +184,12 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'enable_heartbeat',
             default_value='false',
-            description='Send heartbeat to device. Enable when hardware logging/online monitoring is needed.'
+            description='Send heartbeat to device.'
+        ),
+        DeclareLaunchArgument(
+            'enable_firmware_log',
+            default_value='false',
+            description='Enable device firmware log output.'
         ),
         DeclareLaunchArgument(
             'enable_imu',

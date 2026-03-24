@@ -364,6 +364,9 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Setting heartbeat to " << (enable_heartbeat_ ? "ON" : "OFF"));
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
   }
+  RCLCPP_INFO_STREAM(logger_, "Setting firmware log to "
+                                  << (enable_firmware_log_ ? "ON" : "OFF"));
+  device_->enableFirmwareLog(enable_firmware_log_);
   if (max_depth_limit_ > 0 &&
       device_->isPropertySupported(OB_PROP_MAX_DEPTH_INT, OB_PERMISSION_READ_WRITE)) {
     RCLCPP_INFO_STREAM(logger_, "Setting max depth limit to " << max_depth_limit_);
@@ -2194,6 +2197,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(min_depth_limit_, "min_depth_limit", 0);
   setAndGetNodeParameter<int>(max_depth_limit_, "max_depth_limit", 0);
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
+  setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
   setAndGetNodeParameter<bool>(enable_color_undistortion_, "enable_color_undistortion", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
   setAndGetNodeParameter<std::string>(exposure_range_mode_, "exposure_range_mode", "default");

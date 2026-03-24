@@ -164,6 +164,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('config_file_path', default_value=''),
         DeclareLaunchArgument('enable_heartbeat', default_value='false'),
+        DeclareLaunchArgument('enable_firmware_log', default_value='false'),
         DeclareLaunchArgument('topic_type', default_value='points'),
         DeclareLaunchArgument('topic_name', default_value='/camera/depth_registered/points'),
         DeclareLaunchArgument('use_intra_process_comms', default_value='true'),
