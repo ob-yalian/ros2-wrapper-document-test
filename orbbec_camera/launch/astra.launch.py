@@ -102,6 +102,8 @@ def generate_launch_description():
         DeclareLaunchArgument('temporal_filter_weight', default_value='-1.0'),
         DeclareLaunchArgument('enable_hole_filling_filter', default_value='false'),
         DeclareLaunchArgument('hole_filling_filter_mode', default_value=''),
+        DeclareLaunchArgument('enable_mgc_noise_removal_filter', default_value='false'),
+        DeclareLaunchArgument('enable_lut_noise_removal_filter', default_value='false'),
     ]
 
     # Node configuration

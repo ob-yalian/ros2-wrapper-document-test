@@ -19,6 +19,7 @@
 #include <thread>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sstream>
+#include <algorithm>
 
 #include "orbbec_camera/utils.h"
 #include <filesystem>
@@ -1219,21 +1220,24 @@ void OBCameraNode::setupDepthPostProcessFilter() {
     RCLCPP_WARN_STREAM(logger_, "Failed to get depth sensor filter list");
     return;
   }
+  std::map<std::string, bool> filter_params = {
+      {"DecimationFilter", enable_decimation_filter_},
+      {"HDRMerge", enable_hdr_merge_},
+      {"SequenceIdFilter", enable_sequence_id_filter_},
+      {"SpatialAdvancedFilter", enable_spatial_filter_},
+      {"TemporalFilter", enable_temporal_filter_},
+      {"HoleFillingFilter", enable_hole_filling_filter_},
+      {"DisparityTransform", enable_disparity_to_depth_},
+      {"ThresholdFilter", enable_threshold_filter_},
+      {"SpatialFastFilter", enable_spatial_fast_filter_},
+      {"SpatialModerateFilter", enable_spatial_moderate_filter_},
+      {"FalsePositiveFilter", enable_false_positive_filter_},
+      {"MgcNoiseRemovalFilter", enable_mgc_noise_removal_filter_},
+      {"LutNoiseRemovalFilter", enable_lut_noise_removal_filter_},
+  };
+
   for (size_t i = 0; i < depth_filter_list_.size(); i++) {
     auto filter = depth_filter_list_[i];
-    std::map<std::string, bool> filter_params = {
-        {"DecimationFilter", enable_decimation_filter_},
-        {"HDRMerge", enable_hdr_merge_},
-        {"SequenceIdFilter", enable_sequence_id_filter_},
-        {"SpatialAdvancedFilter", enable_spatial_filter_},
-        {"TemporalFilter", enable_temporal_filter_},
-        {"HoleFillingFilter", enable_hole_filling_filter_},
-        {"DisparityTransform", enable_disparity_to_depth_},
-        {"ThresholdFilter", enable_threshold_filter_},
-        {"SpatialFastFilter", enable_spatial_fast_filter_},
-        {"SpatialModerateFilter", enable_spatial_moderate_filter_},
-        {"FalsePositiveFilter", enable_false_positive_filter_},
-    };
     std::string filter_name = filter->type();
     RCLCPP_INFO_STREAM(logger_, "Setting " << filter_name << "......");
     if (filter_params.find(filter_name) != filter_params.end()) {
@@ -1332,8 +1336,9 @@ void OBCameraNode::setupDepthPostProcessFilter() {
         params.radius = spatial_moderate_filter_radius_;
         params.disp_diff = spatial_moderate_filter_diff_threshold_;
         RCLCPP_INFO_STREAM(logger_, "Set SpatialModerateFilter params: "
-                                        << "magnitude=" << params.magnitude << ", radius="
-                                        << params.radius << ", disp_diff=" << params.disp_diff);
+                                        << "magnitude=" << static_cast<int>(params.magnitude)
+                                        << ", radius=" << static_cast<int>(params.radius)
+                                        << ", disp_diff=" << params.disp_diff);
         spatial_moderate_filter->setFilterParams(params);
       }
 
@@ -2162,6 +2167,10 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_hole_filling_filter_, "enable_hole_filling_filter", false);
   setAndGetNodeParameter<bool>(enable_spatial_fast_filter_, "enable_spatial_fast_filter", false);
   setAndGetNodeParameter<bool>(enable_spatial_moderate_filter_, "enable_spatial_moderate_filter",
+                               false);
+  setAndGetNodeParameter<bool>(enable_mgc_noise_removal_filter_, "enable_mgc_noise_removal_filter",
+                               false);
+  setAndGetNodeParameter<bool>(enable_lut_noise_removal_filter_, "enable_lut_noise_removal_filter",
                                false);
   setAndGetNodeParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1);
   setAndGetNodeParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1);
@@ -4458,6 +4467,15 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
+    if (std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                     [&request](const auto &filter) {
+                       return filter->type() == request->filter_name;
+                     }) == depth_filter_list_.end()) {
+      response->success = false;
+      response->message = "Filter '" + request->filter_name + "' is not supported by this device";
+      return;
+    }
+
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
     auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
@@ -4605,9 +4623,11 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         params.magnitude = request->filter_param[2];
         params.radius = request->filter_param[3];
         spatial_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_, "Set spatial filter params: "
-                                        << "\nalpha:" << params.alpha << "\nradius:"
-                                        << params.radius << "\ndisp_diff:" << params.disp_diff);
+        RCLCPP_INFO_STREAM(logger_, "Set SpatialAdvancedFilter params: "
+                                        << "\nalpha:" << params.alpha
+                                        << "\ndisp_diff:" << params.disp_diff
+                                        << "\nmagnitude:" << static_cast<int>(params.magnitude)
+                                        << "\nradius:" << params.radius);
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4620,9 +4640,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       if (request->filter_param.size() > 1) {
         temporal_filter->setDiffScale(request->filter_param[0]);
         temporal_filter->setWeight(request->filter_param[1]);
-        RCLCPP_INFO_STREAM(logger_, "Set temporal filter value to " << request->filter_param[0]
-                                                                    << " - "
-                                                                    << request->filter_param[1]);
+        RCLCPP_INFO_STREAM(logger_, "Set TemporalFilter params: "
+                                        << "\ndiff_scale:" << request->filter_param[0]
+                                        << "\nweight:" << request->filter_param[1]);
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4636,7 +4656,8 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         OBSpatialFastFilterParams params{};
         params.radius = request->filter_param[0];
         spatial_fast_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_, "Set SpatialFastFilter radius to " << params.radius);
+        RCLCPP_INFO_STREAM(logger_,
+                           "Set SpatialFastFilter radius to " << static_cast<int>(params.radius));
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4654,8 +4675,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         params.radius = request->filter_param[2];
         spatial_moderate_filter->setFilterParams(params);
         RCLCPP_INFO_STREAM(logger_, "Set SpatialModerateFilter params: "
-                                        << "\ndisp_diff:" << params.disp_diff << "\nmagnitude:"
-                                        << params.magnitude << "\nradius:" << params.radius);
+                                        << "\ndisp_diff:" << params.disp_diff
+                                        << "\nmagnitude:" << static_cast<int>(params.magnitude)
+                                        << "\nradius:" << static_cast<int>(params.radius));
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4665,6 +4687,14 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       auto false_positive_filter = std::make_shared<ob::FalsePositiveFilter>();
       false_positive_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(false_positive_filter);
+    } else if (request->filter_name == "MgcNoiseRemovalFilter") {
+      auto mgc_filter = std::make_shared<ob::MgcNoiseRemovalFilter>();
+      mgc_filter->enable(request->filter_enable);
+      depth_filter_list_.push_back(mgc_filter);
+    } else if (request->filter_name == "LutNoiseRemovalFilter") {
+      auto lut_filter = std::make_shared<ob::LutNoiseRemovalFilter>();
+      lut_filter->enable(request->filter_enable);
+      depth_filter_list_.push_back(lut_filter);
     } else {
       RCLCPP_INFO_STREAM(logger_,
                          request->filter_name
@@ -4673,7 +4703,8 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                                 "DecimationFilter, HDRMerge, SequenceIdFilter, ThresholdFilter, "
                                 "NoiseRemovalFilter, HardwareNoiseRemoval, SpatialAdvancedFilter, "
                                 "SpatialFastFilter, SpatialModerateFilter, FalsePositiveFilter and "
-                                "TemporalFilter");
+                                "TemporalFilter, MgcNoiseRemovalFilter and "
+                                "LutNoiseRemovalFilter");
       return;
     }
     for (auto &filter : depth_filter_list_) {

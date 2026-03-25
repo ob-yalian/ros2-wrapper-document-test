@@ -791,6 +791,8 @@ class OBCameraNode {
   bool enable_spatial_fast_filter_ = false;
   bool enable_spatial_moderate_filter_ = false;
   bool enable_false_positive_filter_ = false;
+  bool enable_mgc_noise_removal_filter_ = false;
+  bool enable_lut_noise_removal_filter_ = false;
 
   // filter params
   int decimation_filter_scale_ = -1;
