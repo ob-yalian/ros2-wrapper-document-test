@@ -38,18 +38,6 @@
 namespace orbbec_camera {
 using namespace std::chrono_literals;
 
-namespace {
-constexpr uint32_t ASTRA_MINI_PRO_UVC_PID = 0x065b;
-constexpr uint32_t ASTRA_MINI_S_PRO_UVC_PID = 0x0698;
-constexpr uint32_t DABAI_DCW2_UVC_PID = 0x06a0;
-constexpr uint32_t DABAI_MAX_PRO_UVC_PID = 0x069e;
-
-bool isOpenNIUvcMgcLutSupportedDevice(uint32_t pid) {
-  return pid == ASTRA_MINI_PRO_UVC_PID || pid == ASTRA_MINI_S_PRO_UVC_PID ||
-         pid == DABAI_DCW2_UVC_PID || pid == DABAI_MAX_PRO_UVC_PID;
-}
-}  // namespace
-
 OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> device,
                            std::shared_ptr<Parameters> parameters, bool use_intra_process)
     : node_(node),
@@ -1229,27 +1217,24 @@ void OBCameraNode::setupDepthPostProcessFilter() {
     RCLCPP_WARN_STREAM(logger_, "Failed to get depth sensor filter list");
     return;
   }
+  std::map<std::string, bool> filter_params = {
+      {"DecimationFilter", enable_decimation_filter_},
+      {"HDRMerge", enable_hdr_merge_},
+      {"SequenceIdFilter", enable_sequence_id_filter_},
+      {"SpatialAdvancedFilter", enable_spatial_filter_},
+      {"TemporalFilter", enable_temporal_filter_},
+      {"HoleFillingFilter", enable_hole_filling_filter_},
+      {"DisparityTransform", enable_disparity_to_depth_},
+      {"ThresholdFilter", enable_threshold_filter_},
+      {"SpatialFastFilter", enable_spatial_fast_filter_},
+      {"SpatialModerateFilter", enable_spatial_moderate_filter_},
+      {"FalsePositiveFilter", enable_false_positive_filter_},
+      {"MgcNoiseRemovalFilter", enable_mgc_noise_removal_filter_},
+      {"LutNoiseRemovalFilter", enable_lut_noise_removal_filter_},
+  };
+
   for (size_t i = 0; i < depth_filter_list_.size(); i++) {
     auto filter = depth_filter_list_[i];
-    const bool enable_openni_uvc_mgc_filter =
-        isOpenNIUvcMgcLutSupportedDevice(pid_) && enable_mgc_noise_removal_filter_;
-    const bool enable_openni_uvc_lut_filter =
-        isOpenNIUvcMgcLutSupportedDevice(pid_) && enable_lut_noise_removal_filter_;
-    std::map<std::string, bool> filter_params = {
-        {"DecimationFilter", enable_decimation_filter_},
-        {"HDRMerge", enable_hdr_merge_},
-        {"SequenceIdFilter", enable_sequence_id_filter_},
-        {"SpatialAdvancedFilter", enable_spatial_filter_},
-        {"TemporalFilter", enable_temporal_filter_},
-        {"HoleFillingFilter", enable_hole_filling_filter_},
-        {"DisparityTransform", enable_disparity_to_depth_},
-        {"ThresholdFilter", enable_threshold_filter_},
-        {"SpatialFastFilter", enable_spatial_fast_filter_},
-        {"SpatialModerateFilter", enable_spatial_moderate_filter_},
-        {"FalsePositiveFilter", enable_false_positive_filter_},
-        {"MgcNoiseRemovalFilter", enable_openni_uvc_mgc_filter},
-        {"LutNoiseRemovalFilter", enable_openni_uvc_lut_filter},
-    };
     std::string filter_name = filter->type();
     RCLCPP_INFO_STREAM(logger_, "Setting " << filter_name << "......");
     if (filter_params.find(filter_name) != filter_params.end()) {
@@ -4685,24 +4670,10 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       false_positive_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(false_positive_filter);
     } else if (request->filter_name == "MgcNoiseRemovalFilter") {
-      if (!isOpenNIUvcMgcLutSupportedDevice(pid_)) {
-        response->success = false;
-        response->message =
-            "MgcNoiseRemovalFilter only supports OpenNI UVC devices: "
-            "0x065b/0x0698/0x06a0/0x069e";
-        return;
-      }
       auto mgc_filter = std::make_shared<ob::MgcNoiseRemovalFilter>();
       mgc_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(mgc_filter);
     } else if (request->filter_name == "LutNoiseRemovalFilter") {
-      if (!isOpenNIUvcMgcLutSupportedDevice(pid_)) {
-        response->success = false;
-        response->message =
-            "LutNoiseRemovalFilter only supports OpenNI UVC devices: "
-            "0x065b/0x0698/0x06a0/0x069e";
-        return;
-      }
       auto lut_filter = std::make_shared<ob::LutNoiseRemovalFilter>();
       lut_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(lut_filter);
