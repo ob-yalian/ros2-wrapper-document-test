@@ -66,17 +66,19 @@ int main(int argc, char **argv) {
   ob_net_ip_config ip_config{};
   ip_config.dhcp = dhcp ? 1 : 0;
 
-  if (!parseIpString(new_ip_str, ip_config.address)) {
-    RCLCPP_ERROR(logger, "Invalid new_ip format: %s", new_ip_str.c_str());
-    return 1;
-  }
-  if (!parseIpString(mask_str, ip_config.mask)) {
-    RCLCPP_ERROR(logger, "Invalid mask format: %s", mask_str.c_str());
-    return 1;
-  }
-  if (!parseIpString(gateway_str, ip_config.gateway)) {
-    RCLCPP_ERROR(logger, "Invalid gateway format: %s", gateway_str.c_str());
-    return 1;
+  if (!dhcp) {
+    if (!parseIpString(new_ip_str, ip_config.address)) {
+      RCLCPP_ERROR(logger, "Invalid new_ip format: %s", new_ip_str.c_str());
+      return 1;
+    }
+    if (!parseIpString(mask_str, ip_config.mask)) {
+      RCLCPP_ERROR(logger, "Invalid mask format: %s", mask_str.c_str());
+      return 1;
+    }
+    if (!parseIpString(gateway_str, ip_config.gateway)) {
+      RCLCPP_ERROR(logger, "Invalid gateway format: %s", gateway_str.c_str());
+      return 1;
+    }
   }
 
   try {
@@ -85,16 +87,16 @@ int main(int argc, char **argv) {
     auto context = std::make_shared<ob::Context>();
     auto device = context->createNetDevice(device_ip_str.c_str(), port);
 
-    RCLCPP_INFO(logger, "Setting new IP configuration...");
-    device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
-                              reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
-
     if (device->isPropertySupported(OB_PROP_DEVICE_NETWORK_LLA_BOOL, OB_PERMISSION_READ_WRITE)) {
       device->setBoolProperty(OB_PROP_DEVICE_NETWORK_LLA_BOOL, lla);
       RCLCPP_INFO(logger, "LLA mode %s.", lla ? "enabled" : "disabled");
     } else {
       RCLCPP_WARN(logger, "LLA property is not supported on this device.");
     }
+
+    RCLCPP_INFO(logger, "Setting IP configuration...");
+    device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
+                              reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
 
     RCLCPP_INFO(logger, "IP configuration applied successfully.");
     if (dhcp) {
