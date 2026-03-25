@@ -856,6 +856,7 @@ class OBCameraNode {
   bool diagnostic_running_ = false;
   std::chrono::milliseconds software_trigger_period_{33};
   bool enable_heartbeat_ = false;
+  bool enable_firmware_log_ = false;
   bool enable_color_undistortion_ = false;
   std::shared_ptr<image_publisher> color_undistortion_publisher_;
   bool has_first_color_frame_ = false;

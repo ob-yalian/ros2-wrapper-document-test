@@ -276,6 +276,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('config_file_path', default_value=''),
         DeclareLaunchArgument('enable_heartbeat', default_value='false'),
+        DeclareLaunchArgument('enable_firmware_log', default_value='false'),
         DeclareLaunchArgument('disparity_range_mode', default_value='-1'),
         DeclareLaunchArgument('disparity_search_offset', default_value='-1'),
         DeclareLaunchArgument('disparity_offset_config', default_value='false'),

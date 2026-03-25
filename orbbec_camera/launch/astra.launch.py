@@ -72,6 +72,7 @@ def generate_launch_description():
         DeclareLaunchArgument('align_mode', default_value='HW'),
         DeclareLaunchArgument('laser_energy_level', default_value='-1'),
         DeclareLaunchArgument('enable_heartbeat', default_value='false'),
+        DeclareLaunchArgument('enable_firmware_log', default_value='false'),
 
         DeclareLaunchArgument('color_mirror', default_value='false'),
         DeclareLaunchArgument('color_rotation', default_value='-1'),
