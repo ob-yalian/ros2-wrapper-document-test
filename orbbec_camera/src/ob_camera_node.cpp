@@ -760,6 +760,12 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Setting color denoising level to " << color_denoising_level_);
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_DENOISING_LEVEL_INT, color_denoising_level_);
   }
+  if (isGemini335PID(pid_) &&
+      device_->isPropertySupported(OB_PROP_COLOR_ANTI_FLICKER_BOOL, OB_PERMISSION_WRITE)) {
+    RCLCPP_INFO_STREAM(logger_,
+                       "Setting color anti-flicker to " << (color_anti_flicker_ ? "ON" : "OFF"));
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_ANTI_FLICKER_BOOL, color_anti_flicker_);
+  }
   if (!color_powerline_freq_.empty() &&
       device_->isPropertySupported(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, OB_PERMISSION_WRITE)) {
     if (color_powerline_freq_ == "disable") {
@@ -2082,6 +2088,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(color_contrast_, "color_contrast", -1);
   setAndGetNodeParameter<int>(color_hue_, "color_hue", -1);
   setAndGetNodeParameter<int>(color_backlight_compensation_, "color_backlight_compensation", -1);
+  setAndGetNodeParameter<bool>(color_anti_flicker_, "color_anti_flicker", false);
   setAndGetNodeParameter<int>(color_denoising_level_, "color_denoising_level", -1);
   setAndGetNodeParameter<std::string>(color_powerline_freq_, "color_powerline_freq", "");
   setAndGetNodeParameter<std::string>(color_preset_, "color_preset", "Default");
