@@ -37,7 +37,8 @@ bool isParamProvided(int argc, char **argv, const std::string &key) {
 
 void printHelp() {
   std::cout << "Usage:\n"
-            << "  ros2 run orbbec_camera set_device_ip --ros-args [params]\n\n"
+            << "  ros2 run orbbec_camera ip_config_tool --ros-args [params]\n"
+            << "  (legacy alias: set_device_ip)\n\n"
             << "Parameters:\n"
             << "  -p old_ip:=<ip>            Current device IP (default: 192.168.1.10)\n"
             << "  -p port:=<port>            Device port (default: 8090)\n"
@@ -53,18 +54,18 @@ void printHelp() {
             << "Examples:\n"
             << "\n"
             << "  [LLA]\n"
-            << "    enable:  ros2 run orbbec_camera set_device_ip --ros-args -p old_ip:=192.168.1.10 -p enable_lla:=true\n"
-            << "    disable: ros2 run orbbec_camera set_device_ip --ros-args -p old_ip:=192.168.1.10 -p enable_lla:=false\n"
+            << "    enable:  ros2 run orbbec_camera ip_config_tool --ros-args -p old_ip:=192.168.1.10 -p enable_lla:=true\n"
+            << "    disable: ros2 run orbbec_camera ip_config_tool --ros-args -p old_ip:=192.168.1.10 -p enable_lla:=false\n"
             << "\n"
             << "  [Set IP]\n"
-            << "    DHCP:    ros2 run orbbec_camera set_device_ip --ros-args \\\n"
+            << "    DHCP:    ros2 run orbbec_camera ip_config_tool --ros-args \\\n"
             << "             -p old_ip:=192.168.1.10 -p enable_set_ip:=true -p dhcp:=true\n"
-            << "    Static:  ros2 run orbbec_camera set_device_ip --ros-args \\\n"
+            << "    Static:  ros2 run orbbec_camera ip_config_tool --ros-args \\\n"
             << "             -p old_ip:=192.168.1.10 -p enable_set_ip:=true -p dhcp:=false \\\n"
             << "             -p new_ip:=192.168.1.200 -p mask:=255.255.255.0 -p gateway:=192.168.1.1\n"
             << "\n"
             << "  [Force IP]\n"
-            << "    by MAC:  ros2 run orbbec_camera set_device_ip --ros-args \\\n"
+            << "    by MAC:  ros2 run orbbec_camera ip_config_tool --ros-args \\\n"
             << "             -p enable_force_ip:=true \\\n"
             << "             -p force_ip_mac:=54:14:FD:06:07:DA -p dhcp:=false \\\n"
             << "             -p new_ip:=192.168.1.200 -p mask:=255.255.255.0 -p gateway:=192.168.1.1\n";
@@ -80,7 +81,7 @@ int main(int argc, char **argv) {
   }
 
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<rclcpp::Node>("set_device_ip");
+  auto node = std::make_shared<rclcpp::Node>("ip_config_tool");
   auto logger = node->get_logger();
 
   std::string device_ip_str = node->declare_parameter<std::string>("old_ip", "192.168.1.10");
@@ -223,15 +224,15 @@ int main(int argc, char **argv) {
     }
 
   } catch (ob::Error &e) {
-    RCLCPP_ERROR(logger, "set_device_ip: %s", e.getMessage());
+    RCLCPP_ERROR(logger, "ip_config_tool: %s", e.getMessage());
     rclcpp::shutdown();
     return 1;
   } catch (const std::exception &e) {
-    RCLCPP_ERROR(logger, "set_device_ip: %s", e.what());
+    RCLCPP_ERROR(logger, "ip_config_tool: %s", e.what());
     rclcpp::shutdown();
     return 1;
   } catch (...) {
-    RCLCPP_ERROR(logger, "set_device_ip: unknown error");
+    RCLCPP_ERROR(logger, "ip_config_tool: unknown error");
     rclcpp::shutdown();
     return 1;
   }
