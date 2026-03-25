@@ -4462,6 +4462,15 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
+    if (std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                     [&request](const auto &filter) {
+                       return filter->type() == request->filter_name;
+                     }) == depth_filter_list_.end()) {
+      response->success = false;
+      response->message = "Filter '" + request->filter_name + "' is not supported by this device";
+      return;
+    }
+
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
     auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
