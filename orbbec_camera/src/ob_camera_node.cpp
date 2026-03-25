@@ -1333,8 +1333,9 @@ void OBCameraNode::setupDepthPostProcessFilter() {
         params.radius = spatial_moderate_filter_radius_;
         params.disp_diff = spatial_moderate_filter_diff_threshold_;
         RCLCPP_INFO_STREAM(logger_, "Set SpatialModerateFilter params: "
-                                        << "magnitude=" << params.magnitude << ", radius="
-                                        << params.radius << ", disp_diff=" << params.disp_diff);
+                                        << "magnitude=" << static_cast<int>(params.magnitude)
+                                        << ", radius=" << static_cast<int>(params.radius)
+                                        << ", disp_diff=" << params.disp_diff);
         spatial_moderate_filter->setFilterParams(params);
       }
 
@@ -4618,9 +4619,11 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         params.magnitude = request->filter_param[2];
         params.radius = request->filter_param[3];
         spatial_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_, "Set spatial filter params: "
-                                        << "\nalpha:" << params.alpha << "\nradius:"
-                                        << params.radius << "\ndisp_diff:" << params.disp_diff);
+        RCLCPP_INFO_STREAM(logger_, "Set SpatialAdvancedFilter params: "
+                                        << "\nalpha:" << params.alpha
+                                        << "\ndisp_diff:" << params.disp_diff
+                                        << "\nmagnitude:" << static_cast<int>(params.magnitude)
+                                        << "\nradius:" << params.radius);
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4633,9 +4636,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       if (request->filter_param.size() > 1) {
         temporal_filter->setDiffScale(request->filter_param[0]);
         temporal_filter->setWeight(request->filter_param[1]);
-        RCLCPP_INFO_STREAM(logger_, "Set temporal filter value to " << request->filter_param[0]
-                                                                    << " - "
-                                                                    << request->filter_param[1]);
+        RCLCPP_INFO_STREAM(logger_, "Set TemporalFilter params: "
+                                        << "\ndiff_scale:" << request->filter_param[0]
+                                        << "\nweight:" << request->filter_param[1]);
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4649,7 +4652,8 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         OBSpatialFastFilterParams params{};
         params.radius = request->filter_param[0];
         spatial_fast_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_, "Set SpatialFastFilter radius to " << params.radius);
+        RCLCPP_INFO_STREAM(logger_,
+                           "Set SpatialFastFilter radius to " << static_cast<int>(params.radius));
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
@@ -4667,8 +4671,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         params.radius = request->filter_param[2];
         spatial_moderate_filter->setFilterParams(params);
         RCLCPP_INFO_STREAM(logger_, "Set SpatialModerateFilter params: "
-                                        << "\ndisp_diff:" << params.disp_diff << "\nmagnitude:"
-                                        << params.magnitude << "\nradius:" << params.radius);
+                                        << "\ndisp_diff:" << params.disp_diff
+                                        << "\nmagnitude:" << static_cast<int>(params.magnitude)
+                                        << "\nradius:" << static_cast<int>(params.radius));
       } else {
         response->message =
             "The filter switch setting is successful, but the filter parameter setting fails";
