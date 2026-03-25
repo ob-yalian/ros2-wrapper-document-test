@@ -100,6 +100,12 @@ void printUsage(const char *program) {
       << "      [--firmware_path /path/to/firmware.bin]\\\n"
       << "      [--preset_path /path/a.bin,/path/b.bin]\\\n"
       << "      [--continue_on_error]\n\n"
+      << "Parameters:\n"
+      << "  --serial_number SN[,SN2...]   Target serial number(s). Supports comma-separated "
+         "values.\n"
+      << "  --firmware_path PATH          Firmware image file path for firmware update.\n"
+      << "  --preset_path PATH[,PATH2...] Preset file path(s), comma-separated.\n"
+      << "  --continue_on_error           Continue with next target if one device update fails.\n"
       << "Notes:\n"
       << "  1) At least one of --firmware_path / --preset_path must be provided.\n"
       << "  2) If multiple devices are connected, specify target by serial/usb/ip to avoid wrong "
@@ -420,7 +426,8 @@ std::shared_ptr<ob::Device> connectDevice(const rclcpp::Logger &logger,
                                           const std::shared_ptr<ob::Context> &ctx,
                                           const CliArgs &args) {
   if (!args.device_ip.empty()) {
-    RCLCPP_INFO(logger, "Connecting network device %s:%d", args.device_ip.c_str(), args.device_port);
+    RCLCPP_INFO(logger, "Connecting network device %s:%d", args.device_ip.c_str(),
+                args.device_port);
     return ctx->createNetDevice(args.device_ip.c_str(), static_cast<uint16_t>(args.device_port),
                                 OB_DEVICE_DEFAULT_ACCESS);
   }
@@ -529,8 +536,8 @@ bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob
 
   device->updateOptionalDepthPresets(
       file_paths, count,
-      [&final_state, &last_logged_state, &last_logged_bucket](OBFwUpdateState state,
-                                                               const char *message, uint8_t percent) {
+      [&final_state, &last_logged_state, &last_logged_bucket](
+          OBFwUpdateState state, const char *message, uint8_t percent) {
         final_state = state;
 
         const int bucket = static_cast<int>(percent) / kProgressLogBucketPercent;
@@ -638,10 +645,13 @@ int main(int argc, char **argv) {
     }
 
     if (args.used_deprecated_upgrade_firmware) {
-      RCLCPP_WARN(logger, "Argument --upgrade_firmware is deprecated, please use --firmware_path instead.");
+      RCLCPP_WARN(logger,
+                  "Argument --upgrade_firmware is deprecated, please use --firmware_path instead.");
     }
     if (args.used_deprecated_preset_firmware_path) {
-      RCLCPP_WARN(logger, "Argument --preset_firmware_path is deprecated, please use --preset_path instead.");
+      RCLCPP_WARN(
+          logger,
+          "Argument --preset_firmware_path is deprecated, please use --preset_path instead.");
     }
 
     size_t success_count = 0;
@@ -683,10 +693,11 @@ int main(int argc, char **argv) {
           }
 
           if (first_update.need_reupdate) {
-            RCLCPP_INFO(logger,
-                        "Firmware requires reboot and second update. Waiting for device reconnect...");
-            const auto second_deadline =
-                std::chrono::steady_clock::now() + std::chrono::seconds(run_args.reconnect_timeout_sec);
+            RCLCPP_INFO(
+                logger,
+                "Firmware requires reboot and second update. Waiting for device reconnect...");
+            const auto second_deadline = std::chrono::steady_clock::now() +
+                                         std::chrono::seconds(run_args.reconnect_timeout_sec);
             device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
             bool second_ok = false;
             while (std::chrono::steady_clock::now() < second_deadline) {
@@ -708,14 +719,16 @@ int main(int argc, char **argv) {
                   continue;
                 }
                 if (second_update.need_reupdate) {
-                  RCLCPP_WARN(logger, "Second attempt still requires reupdate, waiting and retrying...");
+                  RCLCPP_WARN(logger,
+                              "Second attempt still requires reupdate, waiting and retrying...");
                   device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
                   continue;
                 }
                 second_ok = true;
                 break;
               } catch (const ob::Error &e) {
-                RCLCPP_WARN(logger, "Second update transient error: %s, retrying...", e.getMessage());
+                RCLCPP_WARN(logger, "Second update transient error: %s, retrying...",
+                            e.getMessage());
                 device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
               }
             }
