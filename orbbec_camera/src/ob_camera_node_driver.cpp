@@ -22,6 +22,7 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <ament_index_cpp/get_package_prefix.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
+#include <rcutils/logging.h>
 #include <csignal>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -96,6 +97,24 @@ void signalHandler(int sig) {
 
 namespace orbbec_camera {
 backward::SignalHandling OBCameraNodeDriver::sh;
+
+namespace {
+int rosLogSeverityFromString(const std::string_view &log_level) {
+  if (log_level == "debug") {
+    return RCUTILS_LOG_SEVERITY_DEBUG;
+  } else if (log_level == "info") {
+    return RCUTILS_LOG_SEVERITY_INFO;
+  } else if (log_level == "warn") {
+    return RCUTILS_LOG_SEVERITY_WARN;
+  } else if (log_level == "error") {
+    return RCUTILS_LOG_SEVERITY_ERROR;
+  } else if (log_level == "fatal") {
+    return RCUTILS_LOG_SEVERITY_FATAL;
+  }
+  return RCUTILS_LOG_SEVERITY_UNSET;
+}
+}  // namespace
+
 OBCameraNodeDriver::OBCameraNodeDriver(const rclcpp::NodeOptions &node_options)
     : Node("orbbec_camera_node", "/", node_options),
       node_options_(node_options),
@@ -204,13 +223,21 @@ void OBCameraNodeDriver::init() {
   ob::Context::setExtensionsDirectory(extension_path_.c_str());
   g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name);
   auto log_level_str = declare_parameter<std::string>("log_level", "none");
+  auto ros_log_level_str = declare_parameter<std::string>("ros_log_level", "info");
   auto log_level = obLogSeverityFromString(log_level_str);
+  auto ros_log_level = rosLogSeverityFromString(ros_log_level_str);
   auto log_file_name = declare_parameter<std::string>("log_file_name", "");
   std::string pwd_dir = std::getenv("PWD") ? std::getenv("PWD") : std::getenv("HOME");
   std::string log_path = pwd_dir + "/Log/" + g_camera_name;
   // Set logger to console
   ob::Context::setLoggerToConsole(log_level);
   ob::Context::setLoggerToFile(log_level, log_path.c_str());
+  if (ros_log_level != RCUTILS_LOG_SEVERITY_UNSET) {
+    auto ret = rcutils_logging_set_logger_level(this->get_logger().get_name(), ros_log_level);
+    if (ret != RCUTILS_RET_OK) {
+      RCLCPP_WARN_STREAM(logger_, "Failed to set ROS log level to " << ros_log_level_str);
+    }
+  }
   // Set custom log file name if specified
   if (!log_file_name.empty()) {
     try {
@@ -289,7 +316,8 @@ void OBCameraNodeDriver::init() {
     RCLCPP_INFO_STREAM(logger_, "setUvcBackendType:" << uvc_backend_);
   } else {
     ctx_->setUvcBackendType(OB_UVC_BACKEND_TYPE_LIBUVC);
-    RCLCPP_INFO_STREAM(logger_, "setUvcBackendType:" << uvc_backend_);
+    RCLCPP_INFO_STREAM(logger_,
+                       "not support uvc_backend:" << uvc_backend_ << ", set to default libuvc");
   }
   ctx_->enableNetDeviceEnumeration(enumerate_net_device_);
   device_changed_callback_id_ = ctx_->registerDeviceChangedCallback(
@@ -1267,7 +1295,7 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
       // success get lock,break
       break;
     } else if (try_lock_result == EBUSY) {
-      RCLCPP_INFO_STREAM(logger_, "Device lock is held by another process, waiting 100ms");
+      RCLCPP_WARN_STREAM(logger_, "Device lock is held by another process, waiting 100ms");
       std::this_thread::sleep_for(std::chrono::milliseconds(100));
     } else {
       RCLCPP_ERROR_STREAM(logger_, "Failed to lock orb_device_lock_");
@@ -1293,7 +1321,7 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     auto time_cost = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    RCLCPP_INFO_STREAM(logger_, "Select device cost " << time_cost.count() << " ms");
+    RCLCPP_DEBUG_STREAM(logger_, "Select device cost " << time_cost.count() << " ms");
     start_time = std::chrono::high_resolution_clock::now();
     initializeDevice(device);
     end_time = std::chrono::high_resolution_clock::now();
