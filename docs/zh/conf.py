@@ -57,6 +57,7 @@ extensions = ['recommonmark',
   'sphinx_copybutton',
   'sphinx.ext.autosectionlabel',
   'language_switch',
+  'section_search',
 #   'myst_parser',
 ]
 

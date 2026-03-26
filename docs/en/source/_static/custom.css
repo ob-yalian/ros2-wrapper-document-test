@@ -147,6 +147,15 @@
     color: #0550ae !important;
 }
 
+.wy-nav-content .rst-content .search mark,
+.wy-nav-content .rst-content mark.section-search-match,
+.wy-nav-content .rst-content mark.section-search-hit {
+    background: #fff3a3 !important;
+    color: inherit !important;
+    border-radius: 3px !important;
+    padding: 0 0.12em !important;
+}
+
 .wy-nav-content .rst-content code,
 .wy-nav-content .rst-content tt,
 .wy-nav-content .rst-content .literal {
