@@ -190,19 +190,19 @@ void OBCameraNode::clean() noexcept {
 
   // Now acquire the device lock for the rest of the cleanup
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  RCLCPP_WARN_STREAM(logger_, "Do OBCameraNode clean");
+  RCLCPP_DEBUG_STREAM(logger_, "Do OBCameraNode clean");
 
-  RCLCPP_WARN_STREAM(logger_, "Stop tf thread");
+  RCLCPP_DEBUG_STREAM(logger_, "Stop tf thread");
   try {
     if (tf_thread_ && tf_thread_->joinable()) {
       tf_cv_.notify_all();  // Wake up tf thread if it's waiting
       tf_thread_->join();
     }
   } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while stopping tf thread");
+    RCLCPP_DEBUG_STREAM(logger_, "Exception while stopping tf thread");
   }
 
-  RCLCPP_WARN_STREAM(logger_, "Stop color frame thread");
+  RCLCPP_DEBUG_STREAM(logger_, "Stop color frame thread");
   try {
     if (colorFrameThread_ && colorFrameThread_->joinable()) {
       color_frame_queue_cv_.notify_all();
@@ -217,10 +217,10 @@ void OBCameraNode::clean() noexcept {
       rightColorFrameThread_->join();
     }
   } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while stopping color frame thread");
+    RCLCPP_DEBUG_STREAM(logger_, "Exception while stopping color frame thread");
   }
 
-  RCLCPP_WARN_STREAM(logger_, "stop streams");
+  RCLCPP_DEBUG_STREAM(logger_, "stop streams");
   try {
     stopStreams();
     stopIMU();
@@ -229,20 +229,20 @@ void OBCameraNode::clean() noexcept {
       frame_info_logged_.clear();
     }
   } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while stopping streams");
+    RCLCPP_DEBUG_STREAM(logger_, "Exception while stopping streams");
   }
 
   // Clean up d2c_viewer_ before cleaning buffers
-  RCLCPP_WARN_STREAM(logger_, "Clean d2c_viewer");
+  RCLCPP_DEBUG_STREAM(logger_, "Clean d2c_viewer");
   try {
     if (d2c_viewer_) {
       d2c_viewer_.reset();
     }
   } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while cleaning up d2c_viewer");
+    RCLCPP_DEBUG_STREAM(logger_, "Exception while cleaning up d2c_viewer");
   }
 
-  RCLCPP_WARN_STREAM(logger_, "Clean up buffers");
+  RCLCPP_DEBUG_STREAM(logger_, "Clean up buffers");
   try {
     delete[] rgb_buffer_;
     rgb_buffer_ = nullptr;
@@ -261,7 +261,7 @@ void OBCameraNode::clean() noexcept {
       jpeg_decoder_right_.reset();
     }
   } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while cleaning up buffers");
+    RCLCPP_DEBUG_STREAM(logger_, "Exception while cleaning up buffers");
   }
 
   RCLCPP_WARN_STREAM(logger_, "Do OBCameraNode clean DONE");
@@ -1754,11 +1754,11 @@ void OBCameraNode::startStreams() {
   }
   // enable interleave frame
   if ((interleave_ae_mode_ == "hdr") || (interleave_ae_mode_ == "laser")) {
-    RCLCPP_INFO_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
+    RCLCPP_DEBUG_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
     if (device_->isPropertySupported(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL, OB_PERMISSION_WRITE)) {
       TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                           interleave_frame_enable_);
-      RCLCPP_INFO_STREAM(
+      RCLCPP_DEBUG_STREAM(
           logger_,
           "Enable enable_interleave_depth_frame to "
               << (device_->getBoolProperty(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL) ? "true"
@@ -1854,7 +1854,7 @@ void OBCameraNode::stopStreams() {
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
 
   if (!pipeline_started_ || !pipeline_) {
-    RCLCPP_INFO_STREAM(logger_, "pipeline not started or not exist, skip stop pipeline");
+    RCLCPP_DEBUG_STREAM(logger_, "pipeline not started or not exist, skip stop pipeline");
     return;
   }
 
@@ -1882,12 +1882,12 @@ void OBCameraNode::stopStreams() {
       // disable interleave frame only if device is still connected
       if ((interleave_ae_mode_ == "hdr") || (interleave_ae_mode_ == "laser")) {
         try {
-          RCLCPP_INFO_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
+          RCLCPP_DEBUG_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
           if (device_->isPropertySupported(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                                            OB_PERMISSION_WRITE)) {
             interleave_frame_enable_ = false;
-            RCLCPP_INFO_STREAM(logger_, "Enable enable_interleave_depth_frame to "
-                                            << (interleave_frame_enable_ ? "true" : "false"));
+            RCLCPP_DEBUG_STREAM(logger_, "Enable enable_interleave_depth_frame to "
+                                             << (interleave_frame_enable_ ? "true" : "false"));
             TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                                 interleave_frame_enable_);
           }
@@ -2580,7 +2580,7 @@ void OBCameraNode::setupPipelineConfig() {
   }
   for (const auto &stream_index : IMAGE_STREAMS) {
     if (enable_stream_[stream_index]) {
-      RCLCPP_INFO_STREAM(logger_, "Enable " << stream_name_[stream_index] << " stream");
+      RCLCPP_DEBUG_STREAM(logger_, "Enable " << stream_name_[stream_index] << " stream");
       auto profile = stream_profile_[stream_index]->as<ob::VideoStreamProfile>();
 
       if (stream_index == COLOR && align_target_stream_ == OB_STREAM_COLOR && align_filter_) {
