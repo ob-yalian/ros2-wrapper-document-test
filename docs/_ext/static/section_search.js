@@ -6,7 +6,9 @@
   const SEARCH_APP_ID = "section-search-app";
   const SEARCH_RESULTS_ID = "section-search-results";
   const SEARCH_STATUS_ID = "section-search-status";
+  const SEARCH_HISTORY_ID = "section-search-history";
   const HIT_CLASS = "section-search-hit";
+  const HISTORY_LIMIT = 8;
 
   let searchIndexPromise = null;
 
@@ -26,10 +28,13 @@
     const input = form ? form.querySelector('input[name="q"]') : null;
     const resultsRoot = document.getElementById(SEARCH_RESULTS_ID);
     const statusRoot = document.getElementById(SEARCH_STATUS_ID);
+    const historyRoot = document.getElementById(SEARCH_HISTORY_ID);
 
     if (input) {
       input.value = query;
     }
+
+    initSearchHistory(app, form, input, historyRoot, query);
 
     if (!query) {
       if (statusRoot) {
@@ -45,6 +50,8 @@
     loadSearchIndex()
       .then((payload) => {
         const results = searchEntries(payload.entries || [], query);
+        saveSearchHistory(query);
+        renderSearchHistory(app, historyRoot, query, input ? input.value.trim() : "");
         renderResults(resultsRoot, statusRoot, app, query, results);
       })
       .catch((error) => {
@@ -229,26 +236,118 @@
     root.appendChild(list);
   }
 
+  function initSearchHistory(app, form, input, historyRoot, query) {
+    if (!form || !input || !historyRoot) {
+      return;
+    }
+
+    renderSearchHistory(app, historyRoot, query, input.value.trim());
+
+    form.addEventListener("submit", () => {
+      saveSearchHistory(input.value);
+    });
+
+    input.addEventListener("focus", () => {
+      renderSearchHistory(app, historyRoot, query, input.value.trim());
+      toggleHistoryVisibility(historyRoot, true);
+    });
+
+    input.addEventListener("input", () => {
+      renderSearchHistory(app, historyRoot, query, input.value.trim());
+      toggleHistoryVisibility(historyRoot, true);
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!historyRoot.contains(event.target) && !form.contains(event.target)) {
+        toggleHistoryVisibility(historyRoot, false);
+      }
+    });
+  }
+
+  function renderSearchHistory(app, historyRoot, currentQuery, draftQuery) {
+    if (!historyRoot) {
+      return;
+    }
+
+    const history = getSearchHistory();
+    const keyword = normalizeText(draftQuery || "");
+    const filtered = keyword
+      ? history.filter((item) => normalizeText(item).includes(keyword))
+      : history.slice();
+
+    historyRoot.replaceChildren();
+
+    const header = document.createElement("div");
+    header.className = "section-search-history__header";
+
+    const title = document.createElement("div");
+    title.className = "section-search-history__title";
+    title.textContent = app.dataset.historyTitle || "Recent searches";
+    header.appendChild(title);
+
+    if (history.length) {
+      const clearButton = document.createElement("button");
+      clearButton.type = "button";
+      clearButton.className = "section-search-history__clear";
+      clearButton.textContent = app.dataset.clearHistory || "Clear history";
+      clearButton.addEventListener("click", () => {
+        clearSearchHistory();
+        renderSearchHistory(app, historyRoot, currentQuery, draftQuery);
+        toggleHistoryVisibility(historyRoot, true);
+      });
+      header.appendChild(clearButton);
+    }
+
+    historyRoot.appendChild(header);
+
+    const list = document.createElement("div");
+    list.className = "section-search-history__list";
+
+    if (!filtered.length) {
+      const empty = document.createElement("div");
+      empty.className = "section-search-history__empty";
+      empty.textContent = keyword ? app.dataset.noResults || "" : app.dataset.historyEmpty || "";
+      list.appendChild(empty);
+    } else {
+      filtered.forEach((item) => {
+        const link = document.createElement("a");
+        link.className = "section-search-history__item";
+        link.href = "?q=" + encodeURIComponent(item);
+        link.textContent = item;
+        if (normalizeText(item) === normalizeText(currentQuery)) {
+          link.setAttribute("aria-current", "true");
+        }
+        list.appendChild(link);
+      });
+    }
+
+    historyRoot.appendChild(list);
+    toggleHistoryVisibility(historyRoot, Boolean(history.length || keyword));
+  }
+
   function renderResultItem(result, query, highlightTerms) {
     const item = document.createElement("li");
-    item.className = "kind-text";
+    item.className = "kind-text section-search-result";
 
+    const header = document.createElement("div");
+    header.className = "section-search-result__header";
     const link = document.createElement("a");
+    link.className = "section-search-result__title";
     link.href = buildResultUrl(result.entry.url, query);
     appendHighlightedText(link, result.entry.title || result.entry.page_title || "", highlightTerms);
-    item.appendChild(link);
+    header.appendChild(link);
+    item.appendChild(header);
 
     if (result.entry.page_title && result.entry.page_title !== result.entry.title) {
-      const context = document.createElement("span");
-      context.appendChild(document.createTextNode(" ("));
+      const context = document.createElement("div");
+      context.className = "section-search-result__meta";
       context.appendChild(createHighlightedFragment(result.entry.page_title, highlightTerms));
-      context.appendChild(document.createTextNode(")"));
       item.appendChild(context);
     }
 
     if (result.snippet) {
       const summary = document.createElement("p");
-      summary.className = "search-snippet";
+      summary.className = "search-snippet section-search-result__snippet";
       summary.appendChild(createHighlightedFragment(result.snippet, highlightTerms));
       item.appendChild(summary);
     }
@@ -400,8 +499,60 @@
     return new URLSearchParams(window.location.search).get(name) || "";
   }
 
+  function getSearchHistory() {
+    try {
+      const raw = window.localStorage.getItem(getHistoryStorageKey());
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.map((item) => collapseWhitespace(String(item))).filter(Boolean).slice(0, HISTORY_LIMIT)
+        : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function saveSearchHistory(query) {
+    const normalized = collapseWhitespace(query);
+    if (!normalized) {
+      return;
+    }
+
+    const history = getSearchHistory().filter((item) => item !== normalized);
+    history.unshift(normalized);
+
+    try {
+      window.localStorage.setItem(getHistoryStorageKey(), JSON.stringify(history.slice(0, HISTORY_LIMIT)));
+    } catch (error) {
+      console.warn("Failed to save search history.", error);
+    }
+  }
+
+  function clearSearchHistory() {
+    try {
+      window.localStorage.removeItem(getHistoryStorageKey());
+    } catch (error) {
+      console.warn("Failed to clear search history.", error);
+    }
+  }
+
+  function getHistoryStorageKey() {
+    const scope =
+      window.location.pathname.replace(/search\.html$/i, "").replace(/index\.html$/i, "") ||
+      getUrlRoot() ||
+      "default";
+    return "section_search_recent_queries::" + scope;
+  }
+
   function getUrlRoot() {
     return (window.DOCUMENTATION_OPTIONS && window.DOCUMENTATION_OPTIONS.URL_ROOT) || "";
+  }
+
+  function toggleHistoryVisibility(historyRoot, visible) {
+    if (!historyRoot) {
+      return;
+    }
+
+    historyRoot.hidden = !visible;
   }
 
   function containsAny(text, terms) {
