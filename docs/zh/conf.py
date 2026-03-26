@@ -54,6 +54,7 @@ master_doc = 'index'
 # ones.
 extensions = ['recommonmark',
   'sphinx_markdown_tables',
+  'sphinx_copybutton',
   'sphinx.ext.autosectionlabel',
   'language_switch',
 #   'myst_parser',
@@ -180,6 +181,10 @@ html_last_updated_fmt = "%Y年%m月%d日 %H:%M:%S"
 
 # 是否显示页面下方的由sphinx创建, 默认为True
 html_show_sphinx = False
+
+copybutton_exclude = '.linenos, .gp, .go'
+copybutton_prompt_text = r'>>> |\.\.\. |\$ |# '
+copybutton_prompt_is_regexp = True
 
 # Function to copy video files to output directory
 def setup(app):
