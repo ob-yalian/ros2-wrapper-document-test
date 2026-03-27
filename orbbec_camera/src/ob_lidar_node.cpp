@@ -80,7 +80,7 @@ void OBLidarNode::clean() noexcept {
   if (tf_thread_ && tf_thread_->joinable()) {
     tf_thread_->join();
   }
-  RCLCPP_DEBUG_STREAM(logger_, "Stop color frame thread");
+  RCLCPP_DEBUG_STREAM(logger_, "Stop streams");
   stopStreams();
   stopIMU();
   RCLCPP_DEBUG_STREAM(logger_, "OBLidarNode cleanup complete");
