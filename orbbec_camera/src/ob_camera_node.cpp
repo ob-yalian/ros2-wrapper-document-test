@@ -144,17 +144,17 @@ void OBCameraNode::setAndGetNodeParameter(
 OBCameraNode::~OBCameraNode() noexcept { clean(); }
 
 void OBCameraNode::rebootDevice() {
-  RCLCPP_INFO_STREAM(logger_, "Do clean before rebooting device");
+  RCLCPP_DEBUG_STREAM(logger_, "Cleaning before rebooting device");
   malloc_trim(0);
   clean();
   malloc_trim(0);
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  RCLCPP_INFO_STREAM(logger_, "Reboot device");
+  RCLCPP_INFO_STREAM(logger_, "Rebooting device");
   if (device_) {
     device_->reboot();
   }
   malloc_trim(0);
-  RCLCPP_INFO_STREAM(logger_, "Reboot device DONE");
+  RCLCPP_DEBUG_STREAM(logger_, "Reboot device complete");
 }
 
 void OBCameraNode::clean() noexcept {
@@ -264,7 +264,7 @@ void OBCameraNode::clean() noexcept {
     RCLCPP_DEBUG_STREAM(logger_, "Exception while cleaning up buffers");
   }
 
-  RCLCPP_WARN_STREAM(logger_, "Do OBCameraNode clean DONE");
+  RCLCPP_DEBUG_STREAM(logger_, "OBCameraNode cleanup complete");
   cleaning_.store(false);
 }
 
@@ -318,11 +318,11 @@ void OBCameraNode::setupDevices() {
     }
 
     RCLCPP_INFO_STREAM(
-        logger_, "Setting preset resolution config to "
-                     << "width: " << presetResolutionConfig.width
-                     << ", height: " << presetResolutionConfig.height << ", ir decimation factor: "
-                     << presetResolutionConfig.irDecimationFactor << ", depth decimation factor: "
-                     << presetResolutionConfig.depthDecimationFactor);
+        logger_, "Set preset resolution config: "
+                     << "width=" << presetResolutionConfig.width
+                     << ", height=" << presetResolutionConfig.height
+                     << ", ir_decimation=" << presetResolutionConfig.irDecimationFactor
+                     << ", depth_decimation=" << presetResolutionConfig.depthDecimationFactor);
 
     TRY_EXECUTE_BLOCK(device_->setStructuredData(OB_STRUCT_PRESET_RESOLUTION_CONFIG,
                                                  (uint8_t *)&presetResolutionConfig,
@@ -345,9 +345,8 @@ void OBCameraNode::setupDevices() {
 
   for (const auto &[stream_index, enable] : enable_stream_) {
     if (enable && sensors_.find(stream_index) == sensors_.end()) {
-      RCLCPP_INFO_STREAM(logger_,
-                         magic_enum::enum_name(stream_index.first)
-                             << "sensor isn't supported by current device! -- Skipping...");
+      RCLCPP_WARN_STREAM(logger_, magic_enum::enum_name(stream_index.first)
+                                      << " sensor not supported by current device, skipping");
       enable_stream_[stream_index] = false;
     }
   }
@@ -366,9 +365,8 @@ void OBCameraNode::setupDevices() {
         logger_,
         "Current heartbeat: " << (device_->getBoolProperty(OB_PROP_HEARTBEAT_BOOL) ? "ON" : "OFF"));
   }
-  RCLCPP_INFO_STREAM(logger_, "Setting firmware log to "
-                                  << (enable_firmware_log_ ? "ON" : "OFF"));
   device_->enableFirmwareLog(enable_firmware_log_);
+  RCLCPP_INFO_STREAM(logger_, "Set firmware log to " << (enable_firmware_log_ ? "ON" : "OFF"));
   if (max_depth_limit_ > 0 &&
       device_->isPropertySupported(OB_PROP_MAX_DEPTH_INT, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_MAX_DEPTH_INT, max_depth_limit_);
@@ -394,7 +392,7 @@ void OBCameraNode::setupDevices() {
     }
   }
   if (depth_registration_ && align_mode_ == "SW") {
-    RCLCPP_INFO_STREAM(logger_, "Create align filter");
+    RCLCPP_DEBUG_STREAM(logger_, "Create align filter");
     align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
   }
   if (sensors_.find(DEPTH) != sensors_.end() &&
@@ -403,17 +401,18 @@ void OBCameraNode::setupDevices() {
     if (disparity_to_depth_mode_ == "HW") {
       device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, 1);
       device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
-      RCLCPP_INFO_STREAM(logger_, "Depth process is HW");
+      RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: HW");
     } else if (disparity_to_depth_mode_ == "SW") {
       device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
       device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 1);
-      RCLCPP_INFO_STREAM(logger_, "Depth process is SW");
+      RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: SW");
     } else if (disparity_to_depth_mode_ == "disable") {
       device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
       device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
-      RCLCPP_INFO_STREAM(logger_, "Depth process is disable");
+      RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: disabled");
     } else {
-      RCLCPP_ERROR_STREAM(logger_, "Depth process is keep default");
+      RCLCPP_WARN_STREAM(logger_, "Unknown disparity to depth mode '%s', keeping default settings"
+                                      << disparity_to_depth_mode_.c_str());
     }
   }
   if (device_->isPropertySupported(OB_PROP_LDP_BOOL, OB_PERMISSION_READ_WRITE)) {
@@ -794,9 +793,10 @@ void OBCameraNode::setupDevices() {
   }
   if (isGemini335PID(pid_) &&
       device_->isPropertySupported(OB_PROP_COLOR_ANTI_FLICKER_BOOL, OB_PERMISSION_WRITE)) {
-    RCLCPP_INFO_STREAM(logger_,
-                       "Setting color anti-flicker to " << (color_anti_flicker_ ? "ON" : "OFF"));
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_ANTI_FLICKER_BOOL, color_anti_flicker_);
+    RCLCPP_INFO_STREAM(
+        logger_, "Current color anti-flicker to "
+                     << (device_->getBoolProperty(OB_PROP_COLOR_ANTI_FLICKER_BOOL) ? "ON" : "OFF"));
   }
   if (!color_powerline_freq_.empty() &&
       device_->isPropertySupported(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, OB_PERMISSION_WRITE)) {
@@ -1750,7 +1750,7 @@ void OBCameraNode::startStreams() {
     device_->loadFrameInterleave("Laser On-Off");
     init_interleave_laser_param();
   } else {
-    RCLCPP_INFO_STREAM(logger_, "Set interleave mode to nothing");
+    RCLCPP_DEBUG_STREAM(logger_, "Set interleave mode to nothing");
   }
   // enable interleave frame
   if ((interleave_ae_mode_ == "hdr") || (interleave_ae_mode_ == "laser")) {
@@ -3236,9 +3236,9 @@ void OBCameraNode::setDepthAutoExposureROI() {
                                sizeof(config));
     device_->getStructuredData(OB_STRUCT_DEPTH_AE_ROI, reinterpret_cast<uint8_t *>(&config),
                                &data_size);
-    RCLCPP_INFO_STREAM(logger_, "Setting depth AE ROI to "
-                                    << config.x0_left << ", " << config.x1_right << ", "
-                                    << config.y0_top << ", " << config.y1_bottom);
+    RCLCPP_INFO_STREAM(logger_, "Set depth AE ROI to " << config.x0_left << ", " << config.x1_right
+                                                       << ", " << config.y0_top << ", "
+                                                       << config.y1_bottom);
   }
   depth_roi_has_run = true;
 }
@@ -3276,9 +3276,9 @@ void OBCameraNode::setColorAutoExposureROI() {
                                sizeof(config));
     device_->getStructuredData(OB_STRUCT_COLOR_AE_ROI, reinterpret_cast<uint8_t *>(&config),
                                &data_size);
-    RCLCPP_INFO_STREAM(logger_, "Setting color AE ROI to "
-                                    << config.x0_left << ", " << config.x1_right << ", "
-                                    << config.y0_top << ", " << config.y1_bottom);
+    RCLCPP_INFO_STREAM(logger_, "Set color AE ROI to " << config.x0_left << ", " << config.x1_right
+                                                       << ", " << config.y0_top << ", "
+                                                       << config.y1_bottom);
   }
   color_roi_has_run = true;
 }
@@ -3477,7 +3477,7 @@ void OBCameraNode::onNewColorFrameCallback() {
     color_frame_queue_.pop();
   }
 
-  RCLCPP_INFO_STREAM(logger_, "Color frame thread exit!");
+  RCLCPP_DEBUG_STREAM(logger_, "Color frame thread exit!");
 }
 
 void OBCameraNode::onNewLeftColorFrameCallback() {
@@ -3495,7 +3495,7 @@ void OBCameraNode::onNewLeftColorFrameCallback() {
     onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_LEFT), COLOR_LEFT);
     left_color_frame_queue_.pop();
   }
-  RCLCPP_INFO_STREAM(logger_, "Left Color frame thread exit!");
+  RCLCPP_DEBUG_STREAM(logger_, "Left Color frame thread exit!");
 }
 
 void OBCameraNode::onNewRightColorFrameCallback() {
@@ -3513,7 +3513,7 @@ void OBCameraNode::onNewRightColorFrameCallback() {
     onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_RIGHT), COLOR_RIGHT);
     right_color_frame_queue_.pop();
   }
-  RCLCPP_INFO_STREAM(logger_, "Right Color frame thread exit!");
+  RCLCPP_DEBUG_STREAM(logger_, "Right Color frame thread exit!");
 }
 
 std::shared_ptr<ob::Frame> OBCameraNode::softwareDecodeColorFrame(

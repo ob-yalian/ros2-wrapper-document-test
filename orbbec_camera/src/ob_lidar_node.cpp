@@ -207,9 +207,8 @@ void OBLidarNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Setting heartbeat to " << (enable_heartbeat_ ? "ON" : "OFF"));
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
   }
-  RCLCPP_INFO_STREAM(logger_, "Setting firmware log to "
-                                  << (enable_firmware_log_ ? "ON" : "OFF"));
   device_->enableFirmwareLog(enable_firmware_log_);
+  RCLCPP_INFO_STREAM(logger_, "Set firmware log to " << (enable_firmware_log_ ? "ON" : "OFF"));
   if (!echo_mode_.empty() &&
       device_->isPropertySupported(OB_PROP_LIDAR_SPECIFIC_MODE_INT, OB_PERMISSION_READ_WRITE)) {
     if (echo_mode_ == "Last Echo") {
