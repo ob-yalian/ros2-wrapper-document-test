@@ -252,7 +252,6 @@ class OBLidarNode {
   std::string time_domain_ = "device";  // device, system, global
   bool enable_scan_to_point_ = false;
   bool enable_heartbeat_ = false;
-  bool enable_firmware_log_ = false;
   bool use_intra_process_ = false;
 
   // lidar

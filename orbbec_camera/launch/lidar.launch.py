@@ -187,11 +187,6 @@ def generate_launch_description():
             description='Send heartbeat to device.'
         ),
         DeclareLaunchArgument(
-            'enable_firmware_log',
-            default_value='false',
-            description='Enable device firmware log output.'
-        ),
-        DeclareLaunchArgument(
             'enable_imu',
             default_value='false',
             description='Enable IMU (accelerometer and gyroscope) data publishing.'
