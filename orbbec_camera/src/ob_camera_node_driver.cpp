@@ -913,11 +913,11 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByUSBPort(
 
 std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByNetIP(
     const std::shared_ptr<ob::DeviceList> &list, const std::string &net_ip) {
-  RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                              "Before lock: Select device net ip: " << net_ip);
+  RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
+                               "Before lock: Select device net ip: " << net_ip);
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                              "After lock: Select device net ip: " << net_ip);
+  RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
+                               "After lock: Select device net ip: " << net_ip);
   std::shared_ptr<ob::Device> device = nullptr;
   for (size_t i = 0; i < list->getCount(); i++) {
     try {
@@ -927,8 +927,8 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByNetIP(
       if (list->getIpAddress(i) == nullptr) {
         continue;
       }
-      RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                                  "FindDeviceByNetIP device net ip " << list->getIpAddress(i));
+      RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
+                                   "FindDeviceByNetIP device net ip " << list->getIpAddress(i));
       if (std::string(list->getIpAddress(i)) == net_ip) {
         RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
                                     "getDeviceByNetIP device net ip " << net_ip << " done");
@@ -965,7 +965,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   constexpr int max_retries = 3;
   bool initialized = false;
   device_info_ = device_->getDeviceInfo();
-  RCLCPP_INFO_STREAM(logger_, "Try to connect device via " << device_info_->connectionType());
+  RCLCPP_DEBUG_STREAM(logger_, "Try to connect device via " << device_info_->connectionType());
 
   while (retry_count < max_retries && !initialized) {
     try {
