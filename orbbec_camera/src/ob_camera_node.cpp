@@ -3103,7 +3103,7 @@ std::shared_ptr<ob::Frame> OBCameraNode::processDepthFrameFilter(
     if (filter->isEnabled() && frame != nullptr) {
       frame = filter->process(frame);
       if (frame == nullptr) {
-        RCLCPP_ERROR_STREAM(logger_, "Depth filter process failed");
+        RCLCPP_WARN_STREAM(logger_, "Depth filter process failed, frame is null");
         break;
       }
     }
@@ -3259,8 +3259,10 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       setDisparitySearchOffset();
       setDepthAutoExposureROI();
       depth_frame = processDepthFrameFilter(depth_frame);
-      frame_set->pushFrame(depth_frame);
-      fps_counter_depth_->tick();
+      if (depth_frame) {
+        frame_set->pushFrame(depth_frame);
+        fps_counter_depth_->tick();
+      }
     }
     if (color_frame) {
       setColorAutoExposureROI();
