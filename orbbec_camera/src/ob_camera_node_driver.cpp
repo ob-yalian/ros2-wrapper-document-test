@@ -1041,6 +1041,20 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
     RCLCPP_INFO_STREAM(logger_, "ROS Wrapper version: " << OB_ROS_VERSION_STR);
     RCLCPP_INFO_STREAM(logger_, "SDK version: " << getObSDKVersion());
     RCLCPP_INFO_STREAM(logger_, "Hardware version: " << device_info_->getHardwareVersion());
+    try {
+      std::string isp_fw_version = device_->getExtensionInfo("IspFwVer");
+      if (!isp_fw_version.empty()) {
+        RCLCPP_INFO_STREAM(logger_, "ISP firmware version: " << isp_fw_version);
+      }
+      std::string isp_need_version = device_->getExtensionInfo("IspNeedVer");
+      if (!isp_need_version.empty()) {
+        RCLCPP_INFO_STREAM(logger_, "ISP needed version: " << isp_need_version);
+      }
+    } catch (ob::Error &e) {
+      // Some devices don't support ISP firmware version query
+      RCLCPP_DEBUG_STREAM(
+          logger_, "Current device not support ISP firmware version query: " << e.getMessage());
+    }
     RCLCPP_INFO_STREAM(logger_, "usb connect type: " << device_info_->getConnectionType());
   });
   RCLCPP_INFO_STREAM(logger_, "device unique id: " << device_unique_id_);
