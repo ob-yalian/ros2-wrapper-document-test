@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "libobsensor/ObSensor.hpp"
+#include "orbbec_camera/utils.h"
 
 namespace {
 
@@ -381,7 +382,8 @@ void logCurrentPresetList(const rclcpp::Logger &logger, const std::shared_ptr<ob
       RCLCPP_INFO(logger, "[%s] Preset[%u]: %s", stage, i, preset_list->getName(i));
     }
   } catch (const ob::Error &e) {
-    RCLCPP_WARN(logger, "[%s] Failed to query preset list: %s", stage, e.getMessage());
+    RCLCPP_WARN(logger, "[%s] Failed to query preset list: %s", stage,
+                orbbec_camera::formatObErrorWithStatus(e).c_str());
   } catch (const std::exception &e) {
     RCLCPP_WARN(logger, "[%s] Failed to query preset list: %s", stage, e.what());
   }
@@ -458,7 +460,8 @@ std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,
         return device;
       }
     } catch (const ob::Error &e) {
-      RCLCPP_WARN(logger, "Reconnect attempt failed (SDK): %s", e.getMessage());
+      RCLCPP_WARN(logger, "Reconnect attempt failed (SDK): %s",
+                  orbbec_camera::formatObErrorWithStatus(e).c_str());
     } catch (const std::exception &e) {
       RCLCPP_WARN(logger, "Reconnect attempt failed: %s", e.what());
     } catch (...) {
@@ -728,7 +731,7 @@ int main(int argc, char **argv) {
                 break;
               } catch (const ob::Error &e) {
                 RCLCPP_WARN(logger, "Second update transient error: %s, retrying...",
-                            e.getMessage());
+                            orbbec_camera::formatObErrorWithStatus(e).c_str());
                 device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
               }
             }
@@ -742,7 +745,8 @@ int main(int argc, char **argv) {
       } catch (const ob::Error &e) {
         const std::string target =
             run_args.serial_number.empty() ? "<default>" : run_args.serial_number;
-        RCLCPP_ERROR(logger, "Target %s failed: %s", target.c_str(), e.getMessage());
+        RCLCPP_ERROR(logger, "Target %s failed: %s", target.c_str(),
+                     orbbec_camera::formatObErrorWithStatus(e).c_str());
         failed_targets.push_back(target);
         if (!args.continue_on_error) {
           throw;
@@ -776,7 +780,7 @@ int main(int argc, char **argv) {
     rclcpp::shutdown();
     return 0;
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR(logger, "ob::Error: %s", e.getMessage());
+    RCLCPP_ERROR(logger, "ob::Error: %s", orbbec_camera::formatObErrorWithStatus(e).c_str());
   } catch (const std::exception &e) {
     RCLCPP_ERROR(logger, "Exception: %s", e.what());
   } catch (...) {
