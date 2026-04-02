@@ -365,8 +365,7 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Setting heartbeat to " << (enable_heartbeat_ ? "ON" : "OFF"));
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
   }
-  RCLCPP_INFO_STREAM(logger_, "Setting firmware log to "
-                                  << (enable_firmware_log_ ? "ON" : "OFF"));
+  RCLCPP_INFO_STREAM(logger_, "Setting firmware log to " << (enable_firmware_log_ ? "ON" : "OFF"));
   device_->enableFirmwareLog(enable_firmware_log_);
   if (max_depth_limit_ > 0 &&
       device_->isPropertySupported(OB_PROP_MAX_DEPTH_INT, OB_PERMISSION_READ_WRITE)) {
@@ -2770,7 +2769,6 @@ void OBCameraNode::publishRawDepthImage(const std::shared_ptr<ob::Frame> &depth_
 }
 
 void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {
-  (void)frame_set;
   if (!depth_cloud_pub_ || depth_cloud_pub_->get_subscription_count() == 0 ||
       !enable_point_cloud_) {
     return;
@@ -3105,7 +3103,7 @@ std::shared_ptr<ob::Frame> OBCameraNode::processDepthFrameFilter(
     if (filter->isEnabled() && frame != nullptr) {
       frame = filter->process(frame);
       if (frame == nullptr) {
-        RCLCPP_ERROR_STREAM(logger_, "Depth filter process failed");
+        RCLCPP_WARN_STREAM(logger_, "Depth filter process failed, frame is null");
         break;
       }
     }
@@ -3261,8 +3259,10 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       setDisparitySearchOffset();
       setDepthAutoExposureROI();
       depth_frame = processDepthFrameFilter(depth_frame);
-      frame_set->pushFrame(depth_frame);
-      fps_counter_depth_->tick();
+      if (depth_frame) {
+        frame_set->pushFrame(depth_frame);
+        fps_counter_depth_->tick();
+      }
     }
     if (color_frame) {
       setColorAutoExposureROI();
@@ -3750,9 +3750,6 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     camera_info.p.at(7) = -fy * ex.trans[1] / 1000.0 + 0.0;
   }
   CHECK_NOTNULL(image_publishers_[stream_index]);
-  if (!has_raw_image_subscriber && !enable_undistortion_publish) {
-    return;
-  }
   if (image.empty() || image.cols != width || image.rows != height) {
     image.create(height, width, image_format_[stream_index]);
   }
