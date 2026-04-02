@@ -3749,9 +3749,6 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     camera_info.p.at(7) = -fy * ex.trans[1] / 1000.0 + 0.0;
   }
   CHECK_NOTNULL(image_publishers_[stream_index]);
-  if (!has_raw_image_subscriber && !enable_undistortion_publish && !has_subscriber) {
-    return;
-  }
   if (image.empty() || image.cols != width || image.rows != height) {
     image.create(height, width, image_format_[stream_index]);
   }
