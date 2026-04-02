@@ -981,6 +981,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   if (enable_sync_host_time_ && !isOpenNIDevice(device_info_->pid()) && device_type_ == "camera") {
     TRY_EXECUTE_BLOCK(device_->timerSyncWithHost());
     if (g_time_domain != "global") {
+      device_->enableGlobalTimestamp(false);
       sync_host_time_timer_ = this->create_wall_timer(time_sync_period_, [this]() {
         // Multiple safety checks before attempting time sync
         if (!device_) {
@@ -1027,9 +1028,10 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
           return;
         }
 
-        RCLCPP_INFO_STREAM(logger_, "Sync device time with host");
         TRY_EXECUTE_BLOCK(device_->timerSyncWithHost());
       });
+      RCLCPP_INFO_STREAM(logger_, "Enabled timer sync with host with period "
+                                      << time_sync_period_.count() << " ms");
     }
   }
 
