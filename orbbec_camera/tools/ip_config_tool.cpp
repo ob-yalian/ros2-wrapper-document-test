@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
     }
 
   } catch (ob::Error &e) {
-    RCLCPP_ERROR(logger, "ip_config_tool: %s", e.getMessage());
+    RCLCPP_ERROR(logger, "ip_config_tool: %s", orbbec_camera::formatObErrorWithStatus(e).c_str());
     rclcpp::shutdown();
     return 1;
   } catch (const std::exception &e) {

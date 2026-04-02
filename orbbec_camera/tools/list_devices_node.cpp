@@ -95,7 +95,8 @@ int main() {
       }
     }
   } catch (ob::Error& e) {
-    RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), e.getMessage());
+    RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"),
+                        orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception& e) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), e.what());
   } catch (...) {

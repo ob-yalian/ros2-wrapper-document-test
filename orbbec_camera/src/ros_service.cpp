@@ -434,7 +434,7 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
     response->message = "disparity_range_mode updated to " + std::to_string(current_mode_value);
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -492,7 +492,7 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
     response->message = "disparity_search_offset updated to " + std::to_string(current_offset);
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -517,7 +517,7 @@ void OBCameraNode::setStreamsEnableCallback(
     }
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -566,7 +566,7 @@ void OBCameraNode::setExposureCallback(const std::shared_ptr<SetInt32::Request>&
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -604,7 +604,7 @@ void OBCameraNode::getGainCallback(const std::shared_ptr<GetInt32::Request>& req
     response->success = true;
   } catch (ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -651,7 +651,7 @@ void OBCameraNode::setGainCallback(const std::shared_ptr<SetInt32 ::Request>& re
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -763,7 +763,7 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -781,7 +781,7 @@ void OBCameraNode::getWhiteBalanceCallback(const std::shared_ptr<GetInt32::Reque
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -811,7 +811,7 @@ void OBCameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Requ
     device_->setIntProperty(OB_PROP_COLOR_WHITE_BALANCE_INT, request->data);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->message = e.what();
     response->success = false;
@@ -829,7 +829,7 @@ void OBCameraNode::getAutoWhiteBalanceCallback(const std::shared_ptr<GetInt32::R
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->message = e.what();
   } catch (...) {
@@ -845,7 +845,7 @@ void OBCameraNode::setAutoWhiteBalanceCallback(const std::shared_ptr<SetBool::Re
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->message = e.what();
   } catch (...) {
@@ -892,7 +892,7 @@ void OBCameraNode::setAutoExposureCallback(
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->message = e.what();
   } catch (...) {
@@ -910,7 +910,7 @@ void OBCameraNode::setFanWorkModeCallback(const std::shared_ptr<SetInt32::Reques
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -932,7 +932,7 @@ void OBCameraNode::setFloorEnableCallback(
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -957,7 +957,7 @@ void OBCameraNode::setLaserEnableCallback(
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -993,7 +993,7 @@ void OBCameraNode::setLdpEnableCallback(
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -1029,7 +1029,7 @@ void OBCameraNode::getExposureCallback(const std::shared_ptr<GetInt32::Request>&
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1054,7 +1054,7 @@ void OBCameraNode::getDeviceInfoCallback(const std::shared_ptr<GetDeviceInfo::Re
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -1078,7 +1078,7 @@ void OBCameraNode::getSDKVersion(const std::shared_ptr<GetString::Request>& requ
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -1120,7 +1120,7 @@ void OBCameraNode::setMirrorCallback(const std::shared_ptr<SetBool::Request>& re
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1165,7 +1165,7 @@ void OBCameraNode::setFlipCallback(const std::shared_ptr<SetBool::Request>& requ
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1210,7 +1210,7 @@ void OBCameraNode::setRotationCallback(const std::shared_ptr<SetInt32::Request>&
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1228,7 +1228,7 @@ void OBCameraNode::getLdpStatusCallback(const std::shared_ptr<GetBool::Request>&
     response->data = device_->getBoolProperty(OB_PROP_LDP_STATUS_BOOL);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1250,7 +1250,7 @@ void OBCameraNode::getLaserStatusCallback(const std::shared_ptr<GetBool::Request
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1278,7 +1278,7 @@ void OBCameraNode::setPtpConfigCallback(
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
     response->message = e.what();
@@ -1295,7 +1295,7 @@ void OBCameraNode::getPtpConfigCallback(const std::shared_ptr<GetBool::Request>&
     response->data = device_->getBoolProperty(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1313,7 +1313,7 @@ void OBCameraNode::getLrmMeasureDistanceCallback(const std::shared_ptr<GetInt32:
     response->data = device_->getIntProperty(OB_PROP_LDP_MEASURE_DISTANCE_INT);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1359,7 +1359,7 @@ bool OBCameraNode::toggleSensor(const stream_index_pair& stream_index, bool enab
     startStreams();
     return true;
   } catch (const ob::Error& e) {
-    msg = e.getMessage();
+    msg = orbbec_camera::formatObErrorWithStatus(e);
     return false;
   } catch (const std::exception& e) {
     msg = e.what();
@@ -1408,7 +1408,7 @@ void OBCameraNode::switchIRCameraCallback(const std::shared_ptr<SetString::Reque
     response->success = true;
     return;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1425,7 +1425,7 @@ void OBCameraNode::setIRLongExposureCallback(
     device_->setBoolProperty(OB_PROP_IR_LONG_EXPOSURE_BOOL, request->data);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1445,7 +1445,7 @@ void OBCameraNode::setRESETTimestampCallback(
     device_->setBoolProperty(OB_PROP_TIMER_RESET_SIGNAL_BOOL, true);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1463,7 +1463,7 @@ void OBCameraNode::setSYNCInterleaveLaserCallback(
     device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT, request->data);
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1481,7 +1481,7 @@ void OBCameraNode::setSYNCHostimeCallback(
     device_->timerSyncWithHost();
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();
@@ -1501,7 +1501,7 @@ void OBCameraNode::sendSoftwareTriggerCallback(
     }
     response->success = true;
   } catch (const ob::Error& e) {
-    response->message = e.getMessage();
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
   } catch (const std::exception& e) {
     response->message = e.what();

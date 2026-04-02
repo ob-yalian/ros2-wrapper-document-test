@@ -95,8 +95,8 @@ void OBLidarNode::setupTopics() {
     setupProfiles();
     setupPublishers();
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << e.getMessage());
-    throw std::runtime_error(e.getMessage());
+    RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
+    throw std::runtime_error(orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << e.what());
     throw std::runtime_error(e.what());
@@ -363,7 +363,7 @@ void OBLidarNode::setupProfiles() {
                                             << " sample rate " << imu_rate_);
     } catch (const ob::Error &e) {
       RCLCPP_INFO_STREAM(logger_, "Failed to setup << " << stream_name_[stream_index]
-                                                        << " profile: " << e.getMessage());
+                                                        << " profile: " << orbbec_camera::formatObErrorWithStatus(e));
       enable_stream_[stream_index] = false;
       stream_profile_[stream_index] = nullptr;
     }
@@ -438,7 +438,7 @@ void OBLidarNode::startStreams() {
       onNewFrameSetCallback(frame_set);
     });
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to start pipeline: " << e.getMessage());
+    RCLCPP_ERROR_STREAM(logger_, "Failed to start pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
     setupPipelineConfig();
     pipeline_->start(pipeline_config_, [this](const std::shared_ptr<ob::FrameSet> &frame_set) {
       onNewFrameSetCallback(frame_set);
@@ -509,7 +509,7 @@ void OBLidarNode::stopStreams() {
   try {
     pipeline_->stop();
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline: " << e.getMessage());
+    RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline");
   }
@@ -528,7 +528,7 @@ void OBLidarNode::stopIMU() {
     imuPipeline_->stop();
     imu_sync_output_start_ = false;
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to stop IMU pipeline: " << e.getMessage());
+    RCLCPP_ERROR_STREAM(logger_, "Failed to stop IMU pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to stop IMU pipeline");
   }
@@ -654,7 +654,7 @@ void OBLidarNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set)
       }
     }
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << e.getMessage());
+    RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << e.what());
   } catch (...) {
@@ -1249,11 +1249,11 @@ void OBLidarNode::calcAndPublishStaticTransform() {
         }
       } catch (const ob::Error &e) {
         RCLCPP_WARN_STREAM(logger_,
-                           "Could not get GYRO extrinsic for verification: " << e.getMessage());
+                           "Could not get GYRO extrinsic for verification: " << orbbec_camera::formatObErrorWithStatus(e));
       }
 
     } catch (const ob::Error &e) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to get ACCEL extrinsic, trying GYRO: " << e.getMessage());
+      RCLCPP_WARN_STREAM(logger_, "Failed to get ACCEL extrinsic, trying GYRO: " << orbbec_camera::formatObErrorWithStatus(e));
       try {
         ex = base_stream_profile->getExtrinsicTo(stream_profile_[GYRO]);
         RCLCPP_INFO_STREAM(logger_, "Using GYRO extrinsic for IMU");
