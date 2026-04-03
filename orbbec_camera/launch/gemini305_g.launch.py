@@ -109,7 +109,7 @@ def generate_launch_description():
         DeclareLaunchArgument('cloud_frame_id', default_value=''),
         DeclareLaunchArgument('connection_delay', default_value='10'),
         DeclareLaunchArgument('ae_reference_stream', default_value='depth'), # depth or color
-        DeclareLaunchArgument('enable_sports_mode', default_value='false'),
+        DeclareLaunchArgument('ae_strategy', default_value='motion'), # default or motion
         DeclareLaunchArgument('color_width', default_value='0'),
         DeclareLaunchArgument('color_height', default_value='0'),
         DeclareLaunchArgument('color_fps', default_value='0'),

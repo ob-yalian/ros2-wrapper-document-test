@@ -287,10 +287,10 @@ void OBCameraNode::setupCameraCtrlServices() {
                             std::shared_ptr<SetString::Response> response) {
         setAEReferenceStreamCallback(request, response);
       });
-  set_sports_mode_srv_ = node_->create_service<SetBool>(
-      "set_sports_mode", [this](const std::shared_ptr<SetBool::Request> request,
-                                std::shared_ptr<SetBool::Response> response) {
-        setSportsModeCallback(request, response);
+  set_ae_strategy_srv_ = node_->create_service<SetString>(
+      "set_ae_strategy", [this](const std::shared_ptr<SetString::Request> request,
+                                std::shared_ptr<SetString::Response> response) {
+        setAEStrategyCallback(request, response);
       });
   set_streams_enable_srv_ = node_->create_service<SetBool>(
       "set_streams_enable", [this](const std::shared_ptr<SetBool::Request> request,
@@ -1668,16 +1668,18 @@ void OBCameraNode::setAEReferenceStreamCallback(const std::shared_ptr<SetString:
     response->message = "exception occurred";
   }
 }
-void OBCameraNode::setSportsModeCallback(const std::shared_ptr<SetBool::Request>& request,
-                                         std::shared_ptr<SetBool::Response>& response) {
+void OBCameraNode::setAEStrategyCallback(const std::shared_ptr<SetString::Request>& request,
+                                         std::shared_ptr<SetString::Response>& response) {
   try {
-    if (device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE)) {
-      device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, request->data ? 1 : 0);
+    if (device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE) &&
+        (request->data == "default" || request->data == "motion")) {
+      device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, request->data == "motion" ? 1 : 0);
+      ae_strategy_ = request->data;
       response->success = true;
-      response->message = "set sports mode success";
+      response->message = "set AE strategy success";
     } else {
       response->success = false;
-      response->message = "set sports mode failed";
+      response->message = "set AE strategy failed";
     }
   } catch (...) {
     response->success = false;
