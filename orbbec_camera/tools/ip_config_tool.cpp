@@ -312,12 +312,18 @@ int main(int argc, char **argv) {
           device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
       if (v2_supported) {
         OBNetIpConfigV2 ip_config_v2{};
+        uint32_t data_size = sizeof(ip_config_v2);
+        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
+                                  reinterpret_cast<uint8_t *>(&ip_config_v2), &data_size);
+
         if (args.dhcp) {
-          ip_config_v2.flags = OB_NET_IP_FLAG_DHCP;
-          // Some devices reject all-zero IP payload when enabling DHCP.
-          std::memcpy(ip_config_v2.address, old_ip_bytes, sizeof(old_ip_bytes));
+          // Enable DHCP, keep current IP settings payload.
+          ip_config_v2.flags = static_cast<uint16_t>(
+              (ip_config_v2.flags & ~OB_NET_IP_FLAG_PERSISTENT) | OB_NET_IP_FLAG_DHCP);
         } else {
-          ip_config_v2.flags = OB_NET_IP_FLAG_PERSISTENT;
+          // Disable DHCP and enable persistent mode, keep existing static IP settings.
+          ip_config_v2.flags = static_cast<uint16_t>(
+              (ip_config_v2.flags & ~OB_NET_IP_FLAG_DHCP) | OB_NET_IP_FLAG_PERSISTENT);
         }
 
         RCLCPP_INFO(logger, "Applying dhcp configuration with V2 property (1088)...");
@@ -372,7 +378,13 @@ int main(int argc, char **argv) {
         }
 
         OBNetIpConfigV2 ip_config_v2{};
-        ip_config_v2.flags = OB_NET_IP_FLAG_PERSISTENT;
+        // Preserve current addressing mode flags (DHCP/PERSISTENT/LLA), only update static IP values.
+        uint32_t data_size = sizeof(ip_config_v2);
+        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
+                                  reinterpret_cast<uint8_t *>(&ip_config_v2), &data_size);
+        // Ensure persistent profile is enabled so updated static fields can be used,
+        // while keeping DHCP bit unchanged.
+        ip_config_v2.flags = static_cast<uint16_t>(ip_config_v2.flags | OB_NET_IP_FLAG_PERSISTENT);
         std::memcpy(ip_config_v2.address, address, sizeof(address));
         std::memcpy(ip_config_v2.mask, mask, sizeof(mask));
         std::memcpy(ip_config_v2.gateway, gateway, sizeof(gateway));
@@ -383,7 +395,7 @@ int main(int argc, char **argv) {
                                   sizeof(ip_config_v2));
 
         RCLCPP_INFO(logger, "Set-ip configuration applied successfully (V2).");
-        RCLCPP_INFO(logger, "Set-ip target mode: static.");
+        RCLCPP_INFO(logger, "Set-ip target mode: unchanged (flags=%u).", ip_config_v2.flags);
         RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config_v2.address[0],
                     ip_config_v2.address[1], ip_config_v2.address[2], ip_config_v2.address[3]);
         RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config_v2.mask[0],
@@ -392,7 +404,10 @@ int main(int argc, char **argv) {
                     ip_config_v2.gateway[1], ip_config_v2.gateway[2], ip_config_v2.gateway[3]);
       } else {
         OBNetIpConfig ip_config{};
-        ip_config.dhcp = 0;
+        // Preserve current DHCP mode on legacy property as well.
+        uint32_t data_size = sizeof(ip_config);
+        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG, reinterpret_cast<uint8_t *>(&ip_config),
+                                  &data_size);
         uint8_t address[4] = {0};
         uint8_t mask[4] = {0};
         uint8_t gateway[4] = {0};
@@ -423,7 +438,7 @@ int main(int argc, char **argv) {
                                   reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
 
         RCLCPP_INFO(logger, "Set-ip configuration applied successfully.");
-        RCLCPP_INFO(logger, "Set-ip target mode: static.");
+        RCLCPP_INFO(logger, "Set-ip target mode: unchanged (dhcp=%u).", ip_config.dhcp);
         RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config.address[0],
                     ip_config.address[1], ip_config.address[2], ip_config.address[3]);
         RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config.mask[0], ip_config.mask[1],
