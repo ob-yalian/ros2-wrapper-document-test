@@ -26,17 +26,6 @@ bool parseIpString(const std::string &ip_str, uint8_t ip[4]) {
   return i == 4;
 }
 
-bool isParamProvided(int argc, char **argv, const std::string &key) {
-  const std::string pattern = key + ":=";
-  for (int i = 1; i < argc; ++i) {
-    const std::string arg(argv[i]);
-    if (arg.find(pattern) != std::string::npos) {
-      return true;
-    }
-  }
-  return false;
-}
-
 void printHelp() {
   std::cout
       << "Usage:\n"
@@ -45,10 +34,6 @@ void printHelp() {
       << "Parameters:\n"
       << "  -p old_ip:=<ip>            Current device IP (default: 192.168.1.10)\n"
       << "  -p port:=<port>            Device port (default: 8090)\n"
-      << "  -p enable_lla:=<bool>      Set LLA switch directly (true: enable, false: disable, "
-         "default: false)\n"
-      << "                              Note: LLA is applied only when this parameter is "
-         "explicitly provided.\n"
       << "  -p enable_set_ip:=<bool>   Enable set-ip operation (default: false)\n"
       << "  -p dhcp:=<bool>            DHCP flag for set-ip/force-ip config (default: false)\n"
       << "  -p new_ip:=<ip>            Static IP for set-ip/force-ip (default: 192.168.1.200)\n"
@@ -58,12 +43,6 @@ void printHelp() {
       << "  -p force_ip_mac:=<mac>     Target MAC for force-ip (required, e.g. "
          "54:14:FD:06:07:DA)\n\n"
       << "Examples:\n"
-      << "\n"
-      << "  [LLA]\n"
-      << "    enable:  ros2 run orbbec_camera ip_config_tool --ros-args -p old_ip:=192.168.1.10 -p "
-         "enable_lla:=true\n"
-      << "    disable: ros2 run orbbec_camera ip_config_tool --ros-args -p old_ip:=192.168.1.10 -p "
-         "enable_lla:=false\n"
       << "\n"
       << "  [Set IP]\n"
       << "    DHCP:    ros2 run orbbec_camera ip_config_tool --ros-args \\\n"
@@ -95,9 +74,6 @@ int main(int argc, char **argv) {
   std::string device_ip_str = node->declare_parameter<std::string>("old_ip", "192.168.1.10");
   int port = node->declare_parameter<int>("port", 8090);
 
-  bool enable_lla = node->declare_parameter<bool>("enable_lla", false);
-  bool do_lla = isParamProvided(argc, argv, "enable_lla");
-
   bool enable_set_ip = node->declare_parameter<bool>("enable_set_ip", false);
   bool dhcp = node->declare_parameter<bool>("dhcp", false);
   std::string new_ip_str = node->declare_parameter<std::string>("new_ip", "192.168.1.200");
@@ -107,9 +83,9 @@ int main(int argc, char **argv) {
   bool enable_force_ip = node->declare_parameter<bool>("enable_force_ip", false);
   std::string force_ip_mac = node->declare_parameter<std::string>("force_ip_mac", "");
 
-  if (!do_lla && !enable_set_ip && !enable_force_ip) {
+  if (!enable_set_ip && !enable_force_ip) {
     RCLCPP_ERROR(logger,
-                 "No operation enabled. Please enable at least one of: enable_lla, enable_set_ip, "
+                 "No operation enabled. Please enable at least one of: enable_set_ip, "
                  "enable_force_ip.");
     rclcpp::shutdown();
     return 1;
@@ -140,41 +116,24 @@ int main(int argc, char **argv) {
     ob::Context::setLoggerSeverity(OBLogSeverity::OB_LOG_SEVERITY_OFF);
     auto context = std::make_shared<ob::Context>();
 
-    if (do_lla || enable_set_ip) {
+    if (enable_set_ip) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", device_ip_str.c_str(), port);
       auto device = context->createNetDevice(device_ip_str.c_str(), port);
 
-      if (do_lla) {
-        if (device->isPropertySupported(OB_PROP_DEVICE_NETWORK_LLA_BOOL,
-                                        OB_PERMISSION_READ_WRITE)) {
-          device->setBoolProperty(OB_PROP_DEVICE_NETWORK_LLA_BOOL, enable_lla);
-          RCLCPP_INFO(logger, "LLA set successfully. target=%s",
-                      enable_lla ? "enabled" : "disabled");
-        } else {
-          RCLCPP_WARN(logger, "LLA property is not supported on this device.");
-        }
-      } else {
-        RCLCPP_INFO(logger, "LLA operation skipped (enable_lla not explicitly provided).");
-      }
+      RCLCPP_INFO(logger, "Applying set-ip configuration...");
+      device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
+                                reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
 
-      if (enable_set_ip) {
-        RCLCPP_INFO(logger, "Applying set-ip configuration...");
-        device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
-                                  reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
-
-        RCLCPP_INFO(logger, "Set-ip configuration applied successfully.");
-        if (dhcp) {
-          RCLCPP_INFO(logger, "Set-ip target mode: DHCP.");
-        } else {
-          RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config.address[0],
-                      ip_config.address[1], ip_config.address[2], ip_config.address[3]);
-          RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config.mask[0],
-                      ip_config.mask[1], ip_config.mask[2], ip_config.mask[3]);
-          RCLCPP_INFO(logger, "Set-ip target gateway: %d.%d.%d.%d", ip_config.gateway[0],
-                      ip_config.gateway[1], ip_config.gateway[2], ip_config.gateway[3]);
-        }
+      RCLCPP_INFO(logger, "Set-ip configuration applied successfully.");
+      if (dhcp) {
+        RCLCPP_INFO(logger, "Set-ip target mode: DHCP.");
       } else {
-        RCLCPP_INFO(logger, "Set-ip operation skipped (enable_set_ip=false).");
+        RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config.address[0],
+                    ip_config.address[1], ip_config.address[2], ip_config.address[3]);
+        RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config.mask[0],
+                    ip_config.mask[1], ip_config.mask[2], ip_config.mask[3]);
+        RCLCPP_INFO(logger, "Set-ip target gateway: %d.%d.%d.%d", ip_config.gateway[0],
+                    ip_config.gateway[1], ip_config.gateway[2], ip_config.gateway[3]);
       }
     }
 
