@@ -408,7 +408,7 @@ class OBCameraNode {
   void getUserCalibParamsCallback(const std::shared_ptr<GetUserCalibParams::Request>& request,
                                   std::shared_ptr<GetUserCalibParams::Response>& response);
 
-  void setAEModeCallback(const std::shared_ptr<SetString::Request>& request,
+  void setAEReferenceStreamCallback(const std::shared_ptr<SetString::Request>& request,
                          std::shared_ptr<SetString::Response>& response);
 
   void setSportsModeCallback(const std::shared_ptr<SetBool::Request>& request,
@@ -620,7 +620,7 @@ class OBCameraNode {
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
   rclcpp::Service<SetUserCalibParams>::SharedPtr set_user_calib_params_srv_;
-  rclcpp::Service<SetString>::SharedPtr set_ae_mode_srv_;
+  rclcpp::Service<SetString>::SharedPtr set_ae_reference_stream_srv_;
   rclcpp::Service<SetBool>::SharedPtr set_sports_mode_srv_;
 
   bool enable_sync_output_accel_gyro_ = false;
@@ -920,7 +920,7 @@ class OBCameraNode {
   std::unique_ptr<FpsDelayStatus> fps_delay_status_depth_{nullptr};
 
   std::string intra_camera_sync_reference_ = "";
-  std::string ae_mode_;
+  std::string ae_reference_stream_;
   bool enable_sports_mode_;
   int pid_ = 0;
 };

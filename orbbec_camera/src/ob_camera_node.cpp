@@ -1009,12 +1009,12 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Setting Sports Mode to " << (enable_sports_mode_ ? "ON" : "OFF"));
   }
 
-  if ((ae_mode_ == "depthbased" || ae_mode_ == "colorbased") &&
+  if ((ae_reference_stream_ == "depth" || ae_reference_stream_ == "color") &&
       device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE)) {
     if (device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE)) {
-      auto ae_mode = ae_mode_ == "depthbased" ? 0 : 1;
-      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT, ae_mode);
-      RCLCPP_INFO_STREAM(logger_, "Setting AE Mode to " << ae_mode_);
+      auto ae_reference = ae_reference_stream_ == "depth" ? 0 : 1;
+      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT, ae_reference);
+      RCLCPP_INFO_STREAM(logger_, "Setting AE Reference Stream to " << ae_reference_stream_);
     }
   }
 }
@@ -2307,7 +2307,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
   setAndGetNodeParameter<std::string>(intra_camera_sync_reference_, "intra_camera_sync_reference",
                                       "Middle");
-  setAndGetNodeParameter<std::string>(ae_mode_, "ae_mode", "depthbased");
+  setAndGetNodeParameter<std::string>(ae_reference_stream_, "ae_reference_stream", "depth");
   setAndGetNodeParameter<bool>(enable_sports_mode_, "enable_sports_mode", false);
 
   RCLCPP_INFO_STREAM(logger_, "current time domain: " << time_domain_);
