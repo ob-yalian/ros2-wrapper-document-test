@@ -301,12 +301,21 @@ int main(int argc, char **argv) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.old_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.old_ip.c_str(), args.port);
 
+      uint8_t old_ip_bytes[4] = {0};
+      if (args.dhcp && !parseIpString(args.old_ip, old_ip_bytes)) {
+        RCLCPP_ERROR(logger, "Invalid old_ip format: %s", args.old_ip.c_str());
+        rclcpp::shutdown();
+        return 1;
+      }
+
       const bool v2_supported =
           device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
       if (v2_supported) {
         OBNetIpConfigV2 ip_config_v2{};
         if (args.dhcp) {
           ip_config_v2.flags = OB_NET_IP_FLAG_DHCP;
+          // Some devices reject all-zero IP payload when enabling DHCP.
+          std::memcpy(ip_config_v2.address, old_ip_bytes, sizeof(old_ip_bytes));
         } else {
           ip_config_v2.flags = OB_NET_IP_FLAG_PERSISTENT;
         }
@@ -319,6 +328,10 @@ int main(int argc, char **argv) {
       } else {
         OBNetIpConfig ip_config{};
         ip_config.dhcp = args.dhcp ? 1 : 0;
+        if (args.dhcp) {
+          // Some devices reject all-zero IP payload when enabling DHCP.
+          std::memcpy(ip_config.address, old_ip_bytes, sizeof(old_ip_bytes));
+        }
 
         RCLCPP_WARN(logger,
                     "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
