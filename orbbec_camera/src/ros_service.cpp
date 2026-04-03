@@ -665,13 +665,13 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
                                     std::shared_ptr<SetArrays::Response>& response,
                                     const stream_index_pair& stream_index) {
   auto stream = stream_index.first;
-  if (device_->getDeviceInfo()->getPid() == GEMINI_305_PID &&
+  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
       (stream != OB_STREAM_COLOR && ae_mode_ == "colorbased")) {
     response->success = false;
     response->message = "AE MODE is colorbased, other sensors setting is not supported";
     return;
   }
-  if (device_->getDeviceInfo()->getPid() == GEMINI_305_PID &&
+  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
       (stream != OB_STREAM_DEPTH && ae_mode_ == "depthbased")) {
     response->success = false;
     response->message = "AE MODE is depthbased, other sensors sensor setting is not supported";

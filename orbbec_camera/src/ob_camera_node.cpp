@@ -1465,19 +1465,19 @@ void OBCameraNode::setupProfiles() {
             format_[elem] == OB_FORMAT_UNKNOWN) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
-          if (pid_ == GEMINI_305_PID && elem == DEPTH) {
+          if (isGemini305SeriesPID(pid_) && elem == DEPTH) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.factor = depth_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
-          } else if (pid_ == GEMINI_305_PID && elem == INFRA1) {
+          } else if (isGemini305SeriesPID(pid_) && elem == INFRA1) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.factor = left_ir_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
-          } else if (pid_ == GEMINI_305_PID && elem == INFRA2) {
+          } else if (isGemini305SeriesPID(pid_) && elem == INFRA2) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
@@ -4428,12 +4428,12 @@ bool OBCameraNode::isGemini335PID(uint32_t pid) {
 
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 bool OBCameraNode::isPublishMetaData(uint32_t pid) {
-  return isGemini335PID(pid) || isGemini435LePID(pid) || pid == GEMINI_305_PID;
+  return isGemini335PID(pid) || isGemini435LePID(pid) || isGemini305SeriesPID(pid);
 }
 
 bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 
-bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return pid == GEMINI_305_PID; }
+bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return isGemini305SeriesPID(pid); }
 
 orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
     const stream_index_pair &stream_index) {
