@@ -1331,8 +1331,8 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     if (GEMINI_335LG_PID == pid) {
       ob_camera_node_->startGmslTrigger();
     }
-    if (pid == GEMINI_305_PID) {
-      // Fixing 305 hot-swap not outputting power
+    if (isGemini305SeriesPID(pid)) {
+      // Fixing 305 series hot-swap not outputting power
       ob_camera_node_->startStreams();
     }
   } catch (ob::Error &e) {

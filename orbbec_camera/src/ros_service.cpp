@@ -282,15 +282,15 @@ void OBCameraNode::setupCameraCtrlServices() {
           getUserCalibParamsCallback(request, response);
         });
   }
-  set_ae_mode_srv_ = node_->create_service<SetString>(
-      "set_ae_mode", [this](const std::shared_ptr<SetString::Request> request,
-                            std::shared_ptr<SetString::Response> response) {
-        setAEModeCallback(request, response);
+  set_ae_reference_stream_srv_ = node_->create_service<SetString>(
+      "set_ae_reference_stream", [this](const std::shared_ptr<SetString::Request> request,
+                                        std::shared_ptr<SetString::Response> response) {
+        setAEReferenceStreamCallback(request, response);
       });
-  set_sports_mode_srv_ = node_->create_service<SetBool>(
-      "set_sports_mode", [this](const std::shared_ptr<SetBool::Request> request,
-                                std::shared_ptr<SetBool::Response> response) {
-        setSportsModeCallback(request, response);
+  set_ae_strategy_srv_ = node_->create_service<SetString>(
+      "set_ae_strategy", [this](const std::shared_ptr<SetString::Request> request,
+                                std::shared_ptr<SetString::Response> response) {
+        setAEStrategyCallback(request, response);
       });
   set_streams_enable_srv_ = node_->create_service<SetBool>(
       "set_streams_enable", [this](const std::shared_ptr<SetBool::Request> request,
@@ -665,16 +665,17 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
                                     std::shared_ptr<SetArrays::Response>& response,
                                     const stream_index_pair& stream_index) {
   auto stream = stream_index.first;
-  if (device_->getDeviceInfo()->getPid() == GEMINI_305_PID &&
-      (stream != OB_STREAM_COLOR && ae_mode_ == "colorbased")) {
+  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
+      (stream != OB_STREAM_COLOR && ae_reference_stream_ == "color")) {
     response->success = false;
-    response->message = "AE MODE is colorbased, other sensors setting is not supported";
+    response->message = "AE Reference Stream is color, other sensors setting is not supported";
     return;
   }
-  if (device_->getDeviceInfo()->getPid() == GEMINI_305_PID &&
-      (stream != OB_STREAM_DEPTH && ae_mode_ == "depthbased")) {
+  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
+      (stream != OB_STREAM_DEPTH && ae_reference_stream_ == "depth")) {
     response->success = false;
-    response->message = "AE MODE is depthbased, other sensors sensor setting is not supported";
+    response->message =
+        "AE Reference Stream is depth, other sensors sensor setting is not supported";
     return;
   }
   auto config = OBRegionOfInterest();
@@ -1649,35 +1650,36 @@ void OBCameraNode::getUserCalibParamsCallback(
     response->message = "exception occurred";
   }
 }
-void OBCameraNode::setAEModeCallback(const std::shared_ptr<SetString::Request>& request,
-                                     std::shared_ptr<SetString::Response>& response) {
+void OBCameraNode::setAEReferenceStreamCallback(const std::shared_ptr<SetString::Request>& request,
+                                                std::shared_ptr<SetString::Response>& response) {
   try {
     if (device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE) &&
-        (request->data == "depthbased" || request->data == "colorbased")) {
-      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT,
-                              request->data == "depthbased" ? 0 : 1);
-      ae_mode_ = request->data;
+        (request->data == "depth" || request->data == "color")) {
+      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT, request->data == "depth" ? 0 : 1);
+      ae_reference_stream_ = request->data;
       response->success = true;
-      response->message = "set AE mode success";
+      response->message = "set AE reference stream success";
     } else {
       response->success = false;
-      response->message = "set AE mode failed";
+      response->message = "set AE reference stream failed";
     }
   } catch (...) {
     response->success = false;
     response->message = "exception occurred";
   }
 }
-void OBCameraNode::setSportsModeCallback(const std::shared_ptr<SetBool::Request>& request,
-                                         std::shared_ptr<SetBool::Response>& response) {
+void OBCameraNode::setAEStrategyCallback(const std::shared_ptr<SetString::Request>& request,
+                                         std::shared_ptr<SetString::Response>& response) {
   try {
-    if (device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE)) {
-      device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, request->data ? 1 : 0);
+    if (device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE) &&
+        (request->data == "default" || request->data == "motion")) {
+      device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, request->data == "motion" ? 1 : 0);
+      ae_strategy_ = request->data;
       response->success = true;
-      response->message = "set sports mode success";
+      response->message = "set AE strategy success";
     } else {
       response->success = false;
-      response->message = "set sports mode failed";
+      response->message = "set AE strategy failed";
     }
   } catch (...) {
     response->success = false;
