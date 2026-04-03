@@ -288,7 +288,8 @@ void OBCameraNode::setupDevices() {
       TRY_EXECUTE_BLOCK(device_->loadPreset(device_preset_.c_str()));
       RCLCPP_INFO_STREAM(logger_, "Device preset " << device_->getCurrentPresetName() << " loaded");
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_, "Failed to load device preset: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(
+          logger_, "Failed to load device preset: " << orbbec_camera::formatObErrorWithStatus(e));
     } catch (const std::exception &e) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to load device preset: " << e.what());
     } catch (...) {
@@ -1567,8 +1568,9 @@ void OBCameraNode::setupProfiles() {
                                             << imu_range_[stream_index] << " sample rate "
                                             << imu_rate_[stream_index]);
     } catch (const ob::Error &e) {
-      RCLCPP_INFO_STREAM(logger_, "Failed to setup << " << stream_name_[stream_index]
-                                                        << " profile: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_INFO_STREAM(logger_, "Failed to setup << "
+                                      << stream_name_[stream_index]
+                                      << " profile: " << orbbec_camera::formatObErrorWithStatus(e));
       enable_stream_[stream_index] = false;
       stream_profile_[stream_index] = nullptr;
     }
@@ -1652,7 +1654,8 @@ void OBCameraNode::startStreams() {
       onNewFrameSetCallback(frame_set);
     });
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to start pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to start pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
     RCLCPP_INFO_STREAM(logger_, "try to disable ir stream and try again");
     enable_stream_[INFRA0] = false;
     setupPipelineConfig();
@@ -1759,7 +1762,8 @@ void OBCameraNode::startIMUSyncStream() {
                                                    << fullGyroScaleRangeToString(gyro_range)
                                                    << ",rate:" << sampleRateToString(gyro_rate));
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to start IMU sync stream: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(
+        logger_, "Failed to start IMU sync stream: " << orbbec_camera::formatObErrorWithStatus(e));
     imu_sync_output_start_ = false;
   } catch (...) {
     RCLCPP_ERROR_STREAM(
@@ -1829,8 +1833,8 @@ void OBCameraNode::stopStreams() {
                                 interleave_frame_enable_);
           }
         } catch (const ob::Error &e) {
-          RCLCPP_WARN_STREAM(
-              logger_, "Failed to disable interleave frame during shutdown: " << orbbec_camera::formatObErrorWithStatus(e));
+          RCLCPP_WARN_STREAM(logger_, "Failed to disable interleave frame during shutdown: "
+                                          << orbbec_camera::formatObErrorWithStatus(e));
         } catch (...) {
           RCLCPP_WARN_STREAM(logger_, "Failed to disable interleave frame during shutdown");
         }
@@ -1840,7 +1844,8 @@ void OBCameraNode::stopStreams() {
                          "Device or pipeline not available during stop - likely disconnected");
     }
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to stop pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline");
   }
@@ -1857,7 +1862,8 @@ void OBCameraNode::stopIMU() {
     try {
       imuPipeline_->stop();
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_, "Failed to stop imu pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(
+          logger_, "Failed to stop imu pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
     } catch (...) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to stop imu pipeline");
     }
@@ -1870,8 +1876,9 @@ void OBCameraNode::stopIMU() {
         try {
           sensors_[stream_index]->stop();
         } catch (const ob::Error &e) {
-          RCLCPP_ERROR_STREAM(logger_, "Failed to stop " << stream_name_[stream_index]
-                                                         << " stream: " << orbbec_camera::formatObErrorWithStatus(e));
+          RCLCPP_ERROR_STREAM(logger_, "Failed to stop "
+                                           << stream_name_[stream_index] << " stream: "
+                                           << orbbec_camera::formatObErrorWithStatus(e));
         }
         imu_started_[stream_index] = false;
       }
@@ -2355,7 +2362,8 @@ void OBCameraNode::setupTopics() {
     setupPublishers();
     setupDiagnosticUpdater();
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
     throw std::runtime_error(orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << e.what());
@@ -2416,7 +2424,8 @@ void OBCameraNode::onTemperatureUpdate(diagnostic_updater::DiagnosticStatusWrapp
     status.add("Chip Bottom Temperature", temperature.chipBottomTemp);
     status.summary(diagnostic_msgs::msg::DiagnosticStatus::OK, "Temperature is normal");
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to TemperatureUpdate1: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(
+        logger_, "Failed to TemperatureUpdate1: " << orbbec_camera::formatObErrorWithStatus(e));
     status.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR,
                    orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
@@ -2473,8 +2482,9 @@ void OBCameraNode::setupDiagnosticUpdater() {
             }
             diagnostic_cv_.notify_all();
           } catch (const ob::Error &e) {
-            RCLCPP_WARN_STREAM(logger_, "Diagnostic update failed: "
-                                            << orbbec_camera::formatObErrorWithStatus(e) << " - Device may be disconnected");
+            RCLCPP_WARN_STREAM(
+                logger_, "Diagnostic update failed: " << orbbec_camera::formatObErrorWithStatus(e)
+                                                      << " - Device may be disconnected");
             // Stop the diagnostic timer if device is having issues
             try {
               if (diagnostic_timer_) {
@@ -2491,7 +2501,8 @@ void OBCameraNode::setupDiagnosticUpdater() {
           }
         });
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to setup diagnostic updater: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_, "Failed to setup diagnostic updater: "
+                                     << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to setup diagnostic updater: " << e.what());
   } catch (...) {
@@ -3369,7 +3380,8 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       }
     }
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(
+        logger_, "onNewFrameSetCallback error: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << e.what());
   } catch (...) {
@@ -3484,7 +3496,8 @@ std::shared_ptr<ob::Frame> OBCameraNode::softwareDecodeColorFrame(
   try {
     color_frame = filter->process(frame);
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Format convert failed: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Format convert failed: " << orbbec_camera::formatObErrorWithStatus(e));
     return nullptr;
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "Format convert failed: " << e.what());
@@ -4137,8 +4150,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = stream_profile->getExtrinsicTo(base_stream_profile);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << stream_name_[stream_index]
-                                                    << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << stream_name_[stream_index] << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
 
@@ -4182,8 +4195,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = base_stream_profile->getExtrinsicTo(stream_profile_[COLOR]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     depth_to_other_extrinsics_[COLOR] = ex;
@@ -4198,8 +4211,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = base_stream_profile->getExtrinsicTo(stream_profile_[INFRA0]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     depth_to_other_extrinsics_[INFRA0] = ex;
@@ -4213,8 +4226,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = base_stream_profile->getExtrinsicTo(stream_profile_[INFRA1]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     depth_to_other_extrinsics_[INFRA1] = ex;
@@ -4228,8 +4241,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = base_stream_profile->getExtrinsicTo(stream_profile_[INFRA2]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     ex.trans[0] = -std::abs(ex.trans[0]);
@@ -4244,8 +4257,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = base_stream_profile->getExtrinsicTo(stream_profile_[ACCEL]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     depth_to_other_extrinsics_[ACCEL] = ex;
@@ -4259,8 +4272,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = base_stream_profile->getExtrinsicTo(stream_profile_[GYRO]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     depth_to_other_extrinsics_[GYRO] = ex;
@@ -4274,8 +4287,8 @@ void OBCameraNode::calcAndPublishStaticTransform() {
     try {
       ex = stream_profile_[COLOR_LEFT]->getExtrinsicTo(stream_profile_[COLOR_RIGHT]);
     } catch (const ob::Error &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to get " << frame_id << " extrinsic: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_ERROR_STREAM(logger_, "Failed to get " << frame_id << " extrinsic: "
+                                                    << orbbec_camera::formatObErrorWithStatus(e));
       ex = OBExtrinsic({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0, 0, 0}});
     }
     depth_to_other_extrinsics_[COLOR_LEFT] = ex;
@@ -4721,6 +4734,12 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                   << configSchema.min << ", " << configSchema.max << ", " << configSchema.step
                   << ", " << configSchema.def << ", " << configSchema.desc << "}" << std::endl;
       }
+    }
+    filter_status_[request->filter_name] = request->filter_enable;
+    if (filter_status_pub_) {
+      std_msgs::msg::String msg;
+      msg.data = filter_status_.dump(2);
+      filter_status_pub_->publish(msg);
     }
     response->success = true;
   } catch (const ob::Error &e) {
