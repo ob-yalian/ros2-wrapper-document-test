@@ -117,7 +117,6 @@ void printHelp() {
       << "    by MAC:  ros2 run orbbec_camera ip_config_tool -- \\\n"
       << "             force_ip \\\n"
       << "             --force_ip_mac 54:14:FD:06:07:DA \\\n"
-      << "             --enable_dhcp false \\\n"
       << "             --new_ip 192.168.1.200 \\\n"
       << "             --mask 255.255.255.0 \\\n"
       << "             --gateway 192.168.1.1\n";
@@ -322,8 +321,8 @@ int main(int argc, char **argv) {
               (ip_config_v2.flags & ~OB_NET_IP_FLAG_PERSISTENT) | OB_NET_IP_FLAG_DHCP);
         } else {
           // Disable DHCP and enable persistent mode, keep existing static IP settings.
-          ip_config_v2.flags = static_cast<uint16_t>(
-              (ip_config_v2.flags & ~OB_NET_IP_FLAG_DHCP) | OB_NET_IP_FLAG_PERSISTENT);
+          ip_config_v2.flags = static_cast<uint16_t>((ip_config_v2.flags & ~OB_NET_IP_FLAG_DHCP) |
+                                                     OB_NET_IP_FLAG_PERSISTENT);
         }
 
         RCLCPP_INFO(logger, "Applying dhcp configuration with V2 property (1088)...");
@@ -339,8 +338,9 @@ int main(int argc, char **argv) {
           std::memcpy(ip_config.address, old_ip_bytes, sizeof(old_ip_bytes));
         }
 
-        RCLCPP_WARN(logger,
-                    "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
+        RCLCPP_WARN(
+            logger,
+            "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
         RCLCPP_INFO(logger, "Applying dhcp configuration...");
         device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
                                   reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
@@ -378,7 +378,8 @@ int main(int argc, char **argv) {
         }
 
         OBNetIpConfigV2 ip_config_v2{};
-        // Preserve current addressing mode flags (DHCP/PERSISTENT/LLA), only update static IP values.
+        // Preserve current addressing mode flags (DHCP/PERSISTENT/LLA), only update static IP
+        // values.
         uint32_t data_size = sizeof(ip_config_v2);
         device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
                                   reinterpret_cast<uint8_t *>(&ip_config_v2), &data_size);
@@ -406,8 +407,8 @@ int main(int argc, char **argv) {
         OBNetIpConfig ip_config{};
         // Preserve current DHCP mode on legacy property as well.
         uint32_t data_size = sizeof(ip_config);
-        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG, reinterpret_cast<uint8_t *>(&ip_config),
-                                  &data_size);
+        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
+                                  reinterpret_cast<uint8_t *>(&ip_config), &data_size);
         uint8_t address[4] = {0};
         uint8_t mask[4] = {0};
         uint8_t gateway[4] = {0};
@@ -430,8 +431,9 @@ int main(int argc, char **argv) {
         std::memcpy(ip_config.mask, mask, sizeof(mask));
         std::memcpy(ip_config.gateway, gateway, sizeof(gateway));
 
-        RCLCPP_WARN(logger,
-                    "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
+        RCLCPP_WARN(
+            logger,
+            "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
 
         RCLCPP_INFO(logger, "Applying set-ip configuration...");
         device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
