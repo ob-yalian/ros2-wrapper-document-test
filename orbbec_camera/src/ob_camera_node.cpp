@@ -4485,10 +4485,27 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
-    if (std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+    const bool in_recommended_filter_list =
+        std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
                      [&request](const auto &filter) {
                        return filter->type() == request->filter_name;
-                     }) == depth_filter_list_.end()) {
+                     }) != depth_filter_list_.end();
+    const bool is_noise_removal_filter = request->filter_name == "NoiseRemovalFilter";
+    const bool is_hardware_noise_removal = request->filter_name == "HardwareNoiseRemoval";
+    const bool noise_removal_property_writable =
+        device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
+        device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
+        device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE);
+    const bool hardware_noise_removal_property_writable =
+        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                     OB_PERMISSION_READ_WRITE) ||
+        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                     OB_PERMISSION_READ_WRITE);
+    const bool supported_by_writable_property =
+        (is_noise_removal_filter && noise_removal_property_writable) ||
+        (is_hardware_noise_removal && hardware_noise_removal_property_writable);
+
+    if (!in_recommended_filter_list && !supported_by_writable_property) {
       response->success = false;
       response->message = "Filter '" + request->filter_name + "' is not supported by this device";
       return;
