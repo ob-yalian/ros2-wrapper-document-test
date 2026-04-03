@@ -270,27 +270,6 @@ int main(int argc, char **argv) {
   rclcpp::init(argc, argv);
   auto logger = rclcpp::get_logger("ip_config_tool");
 
-  OBNetIpConfig ip_config{};
-  ip_config.dhcp = args.dhcp ? 1 : 0;
-
-  if (!args.dhcp) {
-    if (!parseIpString(args.new_ip, ip_config.address)) {
-      RCLCPP_ERROR(logger, "Invalid new_ip format: %s", args.new_ip.c_str());
-      rclcpp::shutdown();
-      return 1;
-    }
-    if (!parseIpString(args.mask, ip_config.mask)) {
-      RCLCPP_ERROR(logger, "Invalid mask format: %s", args.mask.c_str());
-      rclcpp::shutdown();
-      return 1;
-    }
-    if (!parseIpString(args.gateway, ip_config.gateway)) {
-      RCLCPP_ERROR(logger, "Invalid gateway format: %s", args.gateway.c_str());
-      rclcpp::shutdown();
-      return 1;
-    }
-  }
-
   try {
     ob::Context::setLoggerSeverity(OBLogSeverity::OB_LOG_SEVERITY_OFF);
     auto context = std::make_shared<ob::Context>();
@@ -299,24 +278,128 @@ int main(int argc, char **argv) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.old_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.old_ip.c_str(), args.port);
 
-      RCLCPP_INFO(logger, "Applying set-ip configuration...");
-      device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
-                                reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
+      const bool v2_supported =
+          device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
 
-      RCLCPP_INFO(logger, "Set-ip configuration applied successfully.");
-      if (args.dhcp) {
-        RCLCPP_INFO(logger, "Set-ip target mode: DHCP.");
+      if (v2_supported) {
+        // V2 supports enabling DHCP and persistent(static) independently.
+        uint8_t address[4] = {0};
+        uint8_t mask[4] = {0};
+        uint8_t gateway[4] = {0};
+        if (!parseIpString(args.new_ip, address)) {
+          RCLCPP_ERROR(logger, "Invalid new_ip format: %s", args.new_ip.c_str());
+          rclcpp::shutdown();
+          return 1;
+        }
+        if (!parseIpString(args.mask, mask)) {
+          RCLCPP_ERROR(logger, "Invalid mask format: %s", args.mask.c_str());
+          rclcpp::shutdown();
+          return 1;
+        }
+        if (!parseIpString(args.gateway, gateway)) {
+          RCLCPP_ERROR(logger, "Invalid gateway format: %s", args.gateway.c_str());
+          rclcpp::shutdown();
+          return 1;
+        }
+
+        OBNetIpConfigV2 ip_config_v2{};
+        ip_config_v2.flags = OB_NET_IP_FLAG_PERSISTENT;
+        if (args.dhcp) {
+          ip_config_v2.flags = static_cast<uint16_t>(ip_config_v2.flags | OB_NET_IP_FLAG_DHCP);
+        }
+        std::memcpy(ip_config_v2.address, address, sizeof(address));
+        std::memcpy(ip_config_v2.mask, mask, sizeof(mask));
+        std::memcpy(ip_config_v2.gateway, gateway, sizeof(gateway));
+
+        RCLCPP_INFO(logger, "Applying set-ip configuration with V2 property (1088)...");
+        device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
+                                  reinterpret_cast<const uint8_t *>(&ip_config_v2),
+                                  sizeof(ip_config_v2));
+
+        RCLCPP_INFO(logger, "Set-ip configuration applied successfully (V2).");
+        RCLCPP_INFO(logger, "Set-ip target DHCP: %s", args.dhcp ? "enabled" : "disabled");
+        RCLCPP_INFO(logger, "Set-ip target persistent(static): enabled");
+        RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config_v2.address[0],
+                    ip_config_v2.address[1], ip_config_v2.address[2], ip_config_v2.address[3]);
+        RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config_v2.mask[0],
+                    ip_config_v2.mask[1], ip_config_v2.mask[2], ip_config_v2.mask[3]);
+        RCLCPP_INFO(logger, "Set-ip target gateway: %d.%d.%d.%d", ip_config_v2.gateway[0],
+                    ip_config_v2.gateway[1], ip_config_v2.gateway[2], ip_config_v2.gateway[3]);
       } else {
-        RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config.address[0],
-                    ip_config.address[1], ip_config.address[2], ip_config.address[3]);
-        RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config.mask[0], ip_config.mask[1],
-                    ip_config.mask[2], ip_config.mask[3]);
-        RCLCPP_INFO(logger, "Set-ip target gateway: %d.%d.%d.%d", ip_config.gateway[0],
-                    ip_config.gateway[1], ip_config.gateway[2], ip_config.gateway[3]);
+        OBNetIpConfig ip_config{};
+        ip_config.dhcp = args.dhcp ? 1 : 0;
+
+        if (!args.dhcp) {
+          uint8_t address[4] = {0};
+          uint8_t mask[4] = {0};
+          uint8_t gateway[4] = {0};
+          if (!parseIpString(args.new_ip, address)) {
+            RCLCPP_ERROR(logger, "Invalid new_ip format: %s", args.new_ip.c_str());
+            rclcpp::shutdown();
+            return 1;
+          }
+          if (!parseIpString(args.mask, mask)) {
+            RCLCPP_ERROR(logger, "Invalid mask format: %s", args.mask.c_str());
+            rclcpp::shutdown();
+            return 1;
+          }
+          if (!parseIpString(args.gateway, gateway)) {
+            RCLCPP_ERROR(logger, "Invalid gateway format: %s", args.gateway.c_str());
+            rclcpp::shutdown();
+            return 1;
+          }
+          std::memcpy(ip_config.address, address, sizeof(address));
+          std::memcpy(ip_config.mask, mask, sizeof(mask));
+          std::memcpy(ip_config.gateway, gateway, sizeof(gateway));
+        }
+
+        RCLCPP_WARN(logger,
+                    "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
+        if (args.dhcp) {
+          RCLCPP_WARN(logger,
+                      "Legacy IP config does not support DHCP and static IP simultaneously; static fields will be ignored.");
+        }
+
+        RCLCPP_INFO(logger, "Applying set-ip configuration...");
+        device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
+                                  reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
+
+        RCLCPP_INFO(logger, "Set-ip configuration applied successfully.");
+        if (args.dhcp) {
+          RCLCPP_INFO(logger, "Set-ip target mode: DHCP.");
+        } else {
+          RCLCPP_INFO(logger, "Set-ip target static IP: %d.%d.%d.%d", ip_config.address[0],
+                      ip_config.address[1], ip_config.address[2], ip_config.address[3]);
+          RCLCPP_INFO(logger, "Set-ip target mask: %d.%d.%d.%d", ip_config.mask[0], ip_config.mask[1],
+                      ip_config.mask[2], ip_config.mask[3]);
+          RCLCPP_INFO(logger, "Set-ip target gateway: %d.%d.%d.%d", ip_config.gateway[0],
+                      ip_config.gateway[1], ip_config.gateway[2], ip_config.gateway[3]);
+        }
       }
     }
 
     if (args.operation == CliArgs::Operation::FORCE_IP) {
+      OBNetIpConfig ip_config{};
+      ip_config.dhcp = args.dhcp ? 1 : 0;
+
+      if (!args.dhcp) {
+        if (!parseIpString(args.new_ip, ip_config.address)) {
+          RCLCPP_ERROR(logger, "Invalid new_ip format: %s", args.new_ip.c_str());
+          rclcpp::shutdown();
+          return 1;
+        }
+        if (!parseIpString(args.mask, ip_config.mask)) {
+          RCLCPP_ERROR(logger, "Invalid mask format: %s", args.mask.c_str());
+          rclcpp::shutdown();
+          return 1;
+        }
+        if (!parseIpString(args.gateway, ip_config.gateway)) {
+          RCLCPP_ERROR(logger, "Invalid gateway format: %s", args.gateway.c_str());
+          rclcpp::shutdown();
+          return 1;
+        }
+      }
+
       RCLCPP_INFO(logger, "Applying force-ip to MAC %s ...", args.force_ip_mac.c_str());
       if (context->forceIp(args.force_ip_mac.c_str(), ip_config)) {
         RCLCPP_INFO(logger, "Force-ip operation applied successfully.");
