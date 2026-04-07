@@ -94,7 +94,8 @@ void OBLidarNode::setupTopics() {
     setupProfiles();
     setupPublishers();
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
     throw std::runtime_error(orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << e.what());
@@ -303,20 +304,20 @@ void OBLidarNode::setupProfiles() {
                                                 << "Format:" << format_[elem]);
         RCLCPP_INFO_STREAM(logger_, "Available profiles:");
         printSensorProfiles(sensor);
-        RCLCPP_ERROR(logger_, "Because can not set this stream, so exit.");
+        RCLCPP_ERROR(logger_, "Failed to configure the requested stream profile, exiting.");
         exit(-1);
       }
       if (!selected_profile) {
-        RCLCPP_WARN_STREAM(logger_, "Given stream configuration is not supported by the device! "
-                                        << " Stream: " << magic_enum::enum_name(elem.first)
-                                        << ", Stream Index: " << elem.second
-                                        << ", Scan Rate: " << rate_[elem]);
+        RCLCPP_WARN_STREAM(
+            logger_, "Requested stream configuration is not supported by the device: "
+                         << "stream=" << magic_enum::enum_name(elem.first)
+                         << ", stream_index=" << elem.second << ", scan_rate=" << rate_[elem]);
         if (default_profile) {
-          RCLCPP_WARN_STREAM(logger_, "Using default profile instead.");
-          RCLCPP_WARN_STREAM(logger_, "default scan Rate "
-                                          << magic_enum::enum_name(default_profile->getScanRate())
-                                          << "default format:"
-                                          << magic_enum::enum_name(default_profile->getFormat()));
+          RCLCPP_WARN_STREAM(logger_, "Using the default profile instead");
+          RCLCPP_WARN_STREAM(
+              logger_, "Default profile: scan_rate="
+                           << magic_enum::enum_name(default_profile->getScanRate())
+                           << ", format=" << magic_enum::enum_name(default_profile->getFormat()));
           selected_profile = default_profile;
         } else {
           RCLCPP_ERROR_STREAM(
@@ -354,12 +355,12 @@ void OBLidarNode::setupProfiles() {
         auto profile = profile_list->getGyroStreamProfile(full_scale_range, sample_rate);
         stream_profile_[stream_index] = profile;
       }
-      RCLCPP_INFO_STREAM(logger_, "stream " << stream_name_[stream_index] << " full scale range "
+      RCLCPP_INFO_STREAM(logger_, "Stream " << stream_name_[stream_index] << " full scale range: "
                                             << (stream_index == ACCEL ? accel_range_ : gyro_range_)
-                                            << " sample rate " << imu_rate_);
+                                            << ", sample rate: " << imu_rate_);
     } catch (const ob::Error &e) {
-      RCLCPP_INFO_STREAM(logger_, "Failed to setup << " << stream_name_[stream_index]
-                                                        << " profile: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_INFO_STREAM(logger_, "Failed to set up " << stream_name_[stream_index] << " profile: "
+                                                      << orbbec_camera::formatObErrorWithStatus(e));
       enable_stream_[stream_index] = false;
       stream_profile_[stream_index] = nullptr;
     }
@@ -434,7 +435,8 @@ void OBLidarNode::startStreams() {
       onNewFrameSetCallback(frame_set);
     });
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to start pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to start pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
     setupPipelineConfig();
     pipeline_->start(pipeline_config_, [this](const std::shared_ptr<ob::FrameSet> &frame_set) {
       onNewFrameSetCallback(frame_set);
@@ -505,7 +507,8 @@ void OBLidarNode::stopStreams() {
   try {
     pipeline_->stop();
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to stop pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to stop pipeline");
   }
@@ -517,14 +520,16 @@ void OBLidarNode::stopIMU() {
   }
 
   if (!imu_sync_output_start_ || !imuPipeline_) {
-    RCLCPP_DEBUG_STREAM(logger_, "IMU pipeline not started or not exist, skip stop imu pipeline");
+    RCLCPP_DEBUG_STREAM(logger_,
+                        "IMU pipeline not started or unavailable, skip stopping IMU pipeline");
     return;
   }
   try {
     imuPipeline_->stop();
     imu_sync_output_start_ = false;
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to stop IMU pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(
+        logger_, "Failed to stop IMU pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to stop IMU pipeline");
   }
@@ -537,7 +542,7 @@ void OBLidarNode::setupPipelineConfig() {
   pipeline_config_ = std::make_shared<ob::Config>();
   for (const auto &stream_index : LIDAR_STREAMS) {
     if (enable_stream_[stream_index]) {
-      RCLCPP_INFO_STREAM(logger_, "Enable " << stream_name_[stream_index] << " stream");
+      RCLCPP_DEBUG_STREAM(logger_, "Enable " << stream_name_[stream_index] << " stream");
       auto profile = stream_profile_[stream_index]->as<ob::LiDARStreamProfile>();
 
       if (enable_stream_[stream_index]) {
@@ -650,7 +655,8 @@ void OBLidarNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set)
       }
     }
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(
+        logger_, "onNewFrameSetCallback error: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << e.what());
   } catch (...) {
@@ -1244,12 +1250,13 @@ void OBLidarNode::calcAndPublishStaticTransform() {
           RCLCPP_DEBUG_STREAM(logger_, "ACCEL and GYRO extrinsics are identical");
         }
       } catch (const ob::Error &e) {
-        RCLCPP_WARN_STREAM(logger_,
-                           "Could not get GYRO extrinsic for verification: " << orbbec_camera::formatObErrorWithStatus(e));
+        RCLCPP_WARN_STREAM(logger_, "Could not get GYRO extrinsic for verification: "
+                                        << orbbec_camera::formatObErrorWithStatus(e));
       }
 
     } catch (const ob::Error &e) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to get ACCEL extrinsic, trying GYRO: " << orbbec_camera::formatObErrorWithStatus(e));
+      RCLCPP_WARN_STREAM(logger_, "Failed to get ACCEL extrinsic, trying GYRO: "
+                                      << orbbec_camera::formatObErrorWithStatus(e));
       try {
         ex = base_stream_profile->getExtrinsicTo(stream_profile_[GYRO]);
         RCLCPP_INFO_STREAM(logger_, "Using GYRO extrinsic for IMU");

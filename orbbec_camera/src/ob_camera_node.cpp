@@ -412,8 +412,8 @@ void OBCameraNode::setupDevices() {
       device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
       RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: disabled");
     } else {
-      RCLCPP_WARN_STREAM(logger_, "Unknown disparity to depth mode '%s', keeping default settings"
-                                      << disparity_to_depth_mode_.c_str());
+      RCLCPP_WARN_STREAM(logger_, "Unknown disparity to depth mode '"
+                                      << disparity_to_depth_mode_ << "', keeping default settings");
     }
   }
   if (device_->isPropertySupported(OB_PROP_LDP_BOOL, OB_PERMISSION_READ_WRITE)) {
@@ -1058,7 +1058,7 @@ void OBCameraNode::setupDevices() {
                                     OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT));
   }
   if (device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE)) {
-    device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, (enable_sports_mode_ ? 0 : 1));
+    device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, (ae_strategy_ == "motion" ? 0 : 1));
     RCLCPP_INFO_STREAM(
         logger_, "Current Sports Mode: "
                      << (device_->getIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT) == 0 ? "ON"
@@ -1068,11 +1068,11 @@ void OBCameraNode::setupDevices() {
   if ((ae_reference_stream_ == "depth" || ae_reference_stream_ == "color") &&
       device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE)) {
     if (device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE)) {
-      auto ae_mode = ae_mode_ == "depthbased" ? 0 : 1;
-      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT, ae_mode);
-      auto current_ae_mode = device_->getIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT);
-      RCLCPP_INFO_STREAM(
-          logger_, "Current AE Mode: " << (current_ae_mode == 0 ? "depthbased" : "colorbased"));
+      auto ae_reference = ae_reference_stream_ == "depth" ? 0 : 1;
+      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT, ae_reference);
+      auto current_ae_reference = device_->getIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT);
+      RCLCPP_INFO_STREAM(logger_, "Current AE Reference: "
+                                      << (current_ae_reference == 0 ? "depthbased" : "colorbased"));
     }
   }
 }
@@ -1103,10 +1103,10 @@ void OBCameraNode::setupColorPostProcessFilter() {
         {"DecimationFilter", enable_color_decimation_filter_},
     };
     std::string filter_name = filter->type();
-    RCLCPP_DEBUG_STREAM(logger_, "Setting " << filter_name << "......");
+    RCLCPP_DEBUG_STREAM(logger_, "Configuring color filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end()) {
-      std::string value = filter_params[filter_name] ? "true" : "false";
-      RCLCPP_INFO_STREAM(logger_, "set color " << filter_name << " to " << value);
+      const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+      RCLCPP_INFO_STREAM(logger_, "Set color filter " << filter_name << " to " << value);
       filter->enable(filter_params[filter_name]);
     }
     if (filter_name == "DecimationFilter" && enable_color_decimation_filter_) {
@@ -1132,10 +1132,10 @@ void OBCameraNode::setupColorPostProcessFilter() {
         {"DecimationFilter", enable_left_color_decimation_filter_},
     };
     std::string filter_name = filter->type();
-    RCLCPP_DEBUG_STREAM(logger_, "Setting left " << filter_name << "......");
+    RCLCPP_DEBUG_STREAM(logger_, "Configuring left color filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end()) {
-      std::string value = filter_params[filter_name] ? "true" : "false";
-      RCLCPP_INFO_STREAM(logger_, "set left color " << filter_name << " to " << value);
+      const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+      RCLCPP_INFO_STREAM(logger_, "Set left color filter " << filter_name << " to " << value);
       filter->enable(filter_params[filter_name]);
     }
     if (filter_name == "DecimationFilter" && enable_left_color_decimation_filter_) {
@@ -1163,10 +1163,10 @@ void OBCameraNode::setupColorPostProcessFilter() {
         {"DecimationFilter", enable_right_color_decimation_filter_},
     };
     std::string filter_name = filter->type();
-    RCLCPP_DEBUG_STREAM(logger_, "Setting right " << filter_name << "......");
+    RCLCPP_DEBUG_STREAM(logger_, "Configuring right color filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end()) {
-      std::string value = filter_params[filter_name] ? "true" : "false";
-      RCLCPP_INFO_STREAM(logger_, "set right color " << filter_name << " to " << value);
+      const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+      RCLCPP_INFO_STREAM(logger_, "Set right color filter " << filter_name << " to " << value);
       filter->enable(filter_params[filter_name]);
     }
     if (filter_name == "DecimationFilter" && enable_right_color_decimation_filter_) {
@@ -1225,10 +1225,10 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
           {"SequenceIdFilter", enable_left_ir_sequence_id_filter_},
       };
       std::string filter_name = filter->type();
-      RCLCPP_DEBUG_STREAM(logger_, "Setting " << filter_name << "......");
+      RCLCPP_DEBUG_STREAM(logger_, "Configuring left IR filter: " << filter_name);
       if (filter_params.find(filter_name) != filter_params.end()) {
-        std::string value = filter_params[filter_name] ? "true" : "false";
-        RCLCPP_INFO_STREAM(logger_, "set left ir " << filter_name << " to " << value);
+        const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+        RCLCPP_INFO_STREAM(logger_, "Set left IR filter " << filter_name << " to " << value);
         filter->enable(filter_params[filter_name]);
       }
       if (filter_name == "SequenceIdFilter" && enable_left_ir_sequence_id_filter_) {
@@ -1259,10 +1259,10 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
           {"SequenceIdFilter", enable_right_ir_sequence_id_filter_},
       };
       std::string filter_name = filter->type();
-      RCLCPP_DEBUG_STREAM(logger_, "Setting " << filter_name << "......");
+      RCLCPP_DEBUG_STREAM(logger_, "Configuring right IR filter: " << filter_name);
       if (filter_params.find(filter_name) != filter_params.end()) {
-        std::string value = filter_params[filter_name] ? "true" : "false";
-        RCLCPP_INFO_STREAM(logger_, "set right ir " << filter_name << " to " << value);
+        const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+        RCLCPP_INFO_STREAM(logger_, "Set right IR filter " << filter_name << " to " << value);
         filter->enable(filter_params[filter_name]);
       }
       if (filter_name == "SequenceIdFilter" && enable_right_ir_sequence_id_filter_) {
@@ -1303,10 +1303,10 @@ void OBCameraNode::setupDepthPostProcessFilter() {
   for (size_t i = 0; i < depth_filter_list_.size(); i++) {
     auto filter = depth_filter_list_[i];
     std::string filter_name = filter->type();
-    RCLCPP_DEBUG_STREAM(logger_, "Setting " << filter_name << "......");
+    RCLCPP_DEBUG_STREAM(logger_, "Configuring depth filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end()) {
-      std::string value = filter_params[filter_name] ? "true" : "false";
-      RCLCPP_INFO_STREAM(logger_, "set " << filter_name << " to " << value);
+      const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+      RCLCPP_INFO_STREAM(logger_, "Set depth filter " << filter_name << " to " << value);
       filter->enable(filter_params[filter_name]);
       filter_status_[filter_name] = filter_params[filter_name];
     }
@@ -1560,25 +1560,24 @@ void OBCameraNode::setupProfiles() {
                      "configuration and try again. The current process will now exit.");
         RCLCPP_INFO_STREAM(logger_, "Available profiles:");
         printSensorProfiles(sensor);
-        RCLCPP_ERROR(logger_, "Because can not set this stream, so exit.");
+        RCLCPP_ERROR(logger_, "Failed to configure the requested stream profile, exiting.");
         exit(-1);
       }
 
       if (!selected_profile) {
-        RCLCPP_WARN_STREAM(logger_, "Given stream configuration is not supported by the device! "
-                                        << " Stream: " << magic_enum::enum_name(elem.first)
-                                        << ", Stream Index: " << elem.second
-                                        << ", Width: " << width_[elem]
-                                        << ", Height: " << height_[elem] << ", FPS: " << fps_[elem]
-                                        << ", Format: " << magic_enum::enum_name(format_[elem]));
+        RCLCPP_WARN_STREAM(logger_,
+                           "Requested stream configuration is not supported by the device: "
+                               << "stream=" << magic_enum::enum_name(elem.first)
+                               << ", stream_index=" << elem.second << ", width=" << width_[elem]
+                               << ", height=" << height_[elem] << ", fps=" << fps_[elem]
+                               << ", format=" << magic_enum::enum_name(format_[elem]));
         if (default_profile) {
-          RCLCPP_WARN_STREAM(logger_, "Using default profile instead.");
-          RCLCPP_WARN_STREAM(logger_, "default FPS " << default_profile->getFps());
+          RCLCPP_WARN_STREAM(logger_, "Using the default profile instead");
+          RCLCPP_WARN_STREAM(logger_, "Default profile FPS: " << default_profile->getFps());
           selected_profile = default_profile;
         } else {
-          RCLCPP_ERROR_STREAM(
-              logger_, " NO default_profile found , Stream: " << magic_enum::enum_name(elem.first)
-                                                              << " will be disable");
+          RCLCPP_ERROR_STREAM(logger_, "No default profile found, disabling stream "
+                                           << magic_enum::enum_name(elem.first));
           enable_stream_[elem] = false;
           continue;
         }
@@ -1886,11 +1885,11 @@ void OBCameraNode::stopStreams() {
       // disable interleave frame only if device is still connected
       if ((interleave_ae_mode_ == "hdr") || (interleave_ae_mode_ == "laser")) {
         try {
-          RCLCPP_DEBUG_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
+          RCLCPP_DEBUG_STREAM(logger_, "Current interleave AE mode: " << interleave_ae_mode_);
           if (device_->isPropertySupported(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                                            OB_PERMISSION_WRITE)) {
             interleave_frame_enable_ = false;
-            RCLCPP_DEBUG_STREAM(logger_, "Enable enable_interleave_depth_frame to "
+            RCLCPP_DEBUG_STREAM(logger_, "Set enable_interleave_depth_frame to "
                                              << (interleave_frame_enable_ ? "true" : "false"));
             TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                                 interleave_frame_enable_);
@@ -1919,7 +1918,8 @@ void OBCameraNode::stopIMU() {
 
   if (enable_sync_output_accel_gyro_) {
     if (!imu_sync_output_start_ || !imuPipeline_) {
-      RCLCPP_INFO_STREAM(logger_, "imu pipeline not started or not exist, skip stop imu pipeline");
+      RCLCPP_DEBUG_STREAM(logger_,
+                          "IMU pipeline not started or unavailable, skip stopping IMU pipeline");
       return;
     }
     try {
@@ -1935,7 +1935,7 @@ void OBCameraNode::stopIMU() {
     for (const auto &stream_index : HID_STREAMS) {
       if (imu_started_[stream_index]) {
         CHECK(sensors_.count(stream_index));
-        RCLCPP_INFO_STREAM(logger_, "stop " << stream_name_[stream_index] << " stream");
+        RCLCPP_DEBUG_STREAM(logger_, "Stop " << stream_name_[stream_index] << " stream");
         try {
           sensors_[stream_index]->stop();
         } catch (const ob::Error &e) {
@@ -2373,7 +2373,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(ae_reference_stream_, "ae_reference_stream", "depth");
   setAndGetNodeParameter<std::string>(ae_strategy_, "ae_strategy", "motion");
 
-  RCLCPP_INFO_STREAM(logger_, "current time domain: " << time_domain_);
+  RCLCPP_INFO_STREAM(logger_, "Current time domain: " << time_domain_);
   RCLCPP_DEBUG_STREAM(logger_, "hdr_index1_laser_control_ "
                                    << hdr_index1_laser_control_ << " hdr_index1_depth_exposure_ "
                                    << hdr_index1_depth_exposure_ << " hdr_index1_depth_gain_ "
@@ -3501,7 +3501,7 @@ void OBCameraNode::onNewColorFrameCallback() {
     color_frame_queue_.pop();
   }
 
-  RCLCPP_DEBUG_STREAM(logger_, "Color frame thread exit!");
+  RCLCPP_DEBUG_STREAM(logger_, "Color frame thread exited");
 }
 
 void OBCameraNode::onNewLeftColorFrameCallback() {
@@ -3519,7 +3519,7 @@ void OBCameraNode::onNewLeftColorFrameCallback() {
     onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_LEFT), COLOR_LEFT);
     left_color_frame_queue_.pop();
   }
-  RCLCPP_DEBUG_STREAM(logger_, "Left Color frame thread exit!");
+  RCLCPP_DEBUG_STREAM(logger_, "Left color frame thread exited");
 }
 
 void OBCameraNode::onNewRightColorFrameCallback() {
@@ -3537,7 +3537,7 @@ void OBCameraNode::onNewRightColorFrameCallback() {
     onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_RIGHT), COLOR_RIGHT);
     right_color_frame_queue_.pop();
   }
-  RCLCPP_DEBUG_STREAM(logger_, "Right Color frame thread exit!");
+  RCLCPP_DEBUG_STREAM(logger_, "Right color frame thread exited");
 }
 
 std::shared_ptr<ob::Frame> OBCameraNode::softwareDecodeColorFrame(
@@ -4714,7 +4714,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           if (request->filter_enable) {
             device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
                                       request->filter_param[0]);
-            RCLCPP_INFO_STREAM(logger_, "Setting hardware noise removal filter threshold :"
+            RCLCPP_INFO_STREAM(logger_, "Set hardware noise removal filter threshold to "
                                             << request->filter_param[0]);
           }
         } else {

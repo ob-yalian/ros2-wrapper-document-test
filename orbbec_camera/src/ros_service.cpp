@@ -643,7 +643,7 @@ void OBCameraNode::setGainCallback(const std::shared_ptr<SetInt32 ::Request>& re
     auto range = device_->getIntPropertyRange(prop_id);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
-      RCLCPP_INFO_STREAM(logger_, "set gain value out of range");
+      RCLCPP_INFO_STREAM(logger_, "Set gain value out of range");
       response->message = "value out of range";
       return;
     }
@@ -751,9 +751,9 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
         device_->getStructuredData(OB_STRUCT_COLOR_AE_ROI, reinterpret_cast<uint8_t*>(&config),
                                    &data_size);
         RCLCPP_INFO_STREAM(
-            logger_, "set color AE ROI : "
+            logger_, "Set color AE ROI : "
                          << "[Left: " << config.x0_left << ", Right: " << config.x1_right
-                         << ", Top: " << config.y0_top << ", Bottom: " << config.y1_bottom << " ]");
+                         << ", Top: " << config.y0_top << ", Bottom: " << config.y1_bottom << "]");
         break;
       default:
         RCLCPP_ERROR(logger_, "%s NOT a video stream", __FUNCTION__);
@@ -1331,18 +1331,19 @@ void OBCameraNode::toggleSensorCallback(const std::shared_ptr<SetBool::Request>&
   std::string msg;
   if (request->data) {
     if (enable_stream_[stream_index]) {
-      msg = stream_name_[stream_index] + " Already ON";
+      msg = stream_name_[stream_index] + " is already enabled";
     }
-    RCLCPP_INFO_STREAM(logger_, "toggling sensor " << stream_name_[stream_index] << " ON");
+    RCLCPP_INFO_STREAM(logger_, "Request to set sensor " << stream_name_[stream_index] << " to ON");
 
   } else {
     if (!enable_stream_[stream_index]) {
-      msg = stream_name_[stream_index] + " Already OFF";
+      msg = stream_name_[stream_index] + " is already disabled";
     }
-    RCLCPP_INFO_STREAM(logger_, "toggling sensor " << stream_name_[stream_index] << " OFF");
+    RCLCPP_INFO_STREAM(logger_,
+                       "Request to set sensor " << stream_name_[stream_index] << " to OFF");
   }
   if (!msg.empty()) {
-    RCLCPP_ERROR_STREAM(logger_, msg);
+    RCLCPP_WARN_STREAM(logger_, msg);
     response->success = true;
     response->message = msg;
     return;
