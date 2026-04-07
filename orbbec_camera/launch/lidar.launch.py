@@ -172,6 +172,16 @@ def generate_launch_description():
             description='SDK log level: none, debug, info, warn, error, fatal.'
         ),
         DeclareLaunchArgument(
+            'ros_log_level',
+            default_value='info',
+            description='ROS log level: debug, info, warn, error, fatal.'
+        ),
+        DeclareLaunchArgument(
+            'log_file_name',
+            default_value='',
+            description='Custom log file name for SDK logs. If empty, default naming is used.'
+        ),
+        DeclareLaunchArgument(
             'time_domain',
             default_value='device',  # global, device, system
             description='Timestamp domain: device (device clock), global (time sync), or system (host clock).'
