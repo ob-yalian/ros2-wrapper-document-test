@@ -458,8 +458,6 @@ void OBCameraNode::setupDevices() {
   }
   if (!sync_mode_str_.empty()) {
     auto sync_config = device_->getMultiDeviceSyncConfig();
-    RCLCPP_INFO_STREAM(logger_,
-                       "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
     std::transform(sync_mode_str_.begin(), sync_mode_str_.end(), sync_mode_str_.begin(), ::toupper);
     sync_mode_ = OBSyncModeFromString(sync_mode_str_);
     sync_config.syncMode = sync_mode_;
@@ -471,7 +469,8 @@ void OBCameraNode::setupDevices() {
     sync_config.framesPerTrigger = frames_per_trigger_;
     TRY_EXECUTE_BLOCK(device_->setMultiDeviceSyncConfig(sync_config));
     sync_config = device_->getMultiDeviceSyncConfig();
-    RCLCPP_INFO_STREAM(logger_, "Set sync mode: " << magic_enum::enum_name(sync_config.syncMode));
+    RCLCPP_INFO_STREAM(logger_,
+                       "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
     if (sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING) {
       RCLCPP_INFO_STREAM(logger_, "Frames per trigger: " << sync_config.framesPerTrigger);
       RCLCPP_INFO_STREAM(logger_,
@@ -924,8 +923,8 @@ void OBCameraNode::setupDevices() {
       device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
     auto default_noise_removal_filter_min_diff =
         device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-    RCLCPP_INFO_STREAM(logger_, "default noise removal filter min diff: "
-                                    << default_noise_removal_filter_min_diff);
+    RCLCPP_DEBUG_STREAM(logger_, "default noise removal filter min diff: "
+                                     << default_noise_removal_filter_min_diff);
     if (noise_removal_filter_min_diff_ != -1 &&
         default_noise_removal_filter_min_diff != noise_removal_filter_min_diff_) {
       auto range = device_->getIntPropertyRange(OB_PROP_DEPTH_MAX_DIFF_INT);
@@ -949,8 +948,8 @@ void OBCameraNode::setupDevices() {
       device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
     auto default_noise_removal_filter_max_size =
         device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-    RCLCPP_INFO_STREAM(logger_, "default noise removal filter max size: "
-                                    << default_noise_removal_filter_max_size);
+    RCLCPP_DEBUG_STREAM(logger_, "default noise removal filter max size: "
+                                     << default_noise_removal_filter_max_size);
     if (noise_removal_filter_max_size_ != -1 &&
         default_noise_removal_filter_max_size != noise_removal_filter_max_size_) {
       auto range = device_->getIntPropertyRange(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);

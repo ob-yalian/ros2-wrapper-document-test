@@ -405,11 +405,9 @@ void OBCameraNodeDriver::onDeviceDisconnected(const std::shared_ptr<ob::DeviceLi
     RCLCPP_INFO_STREAM(logger_, "device with " << uid << " disconnected");
     if (uid == device_unique_id_ || serial_number_ == serial_number) {
       RCLCPP_INFO_STREAM(logger_,
-                         "device with " << uid << " disconnected, notify reset device thread 1.");
+                         "device with " << uid << " disconnected, notify reset device thread");
       reset_device_flag_ = true;
       reset_device_cond_.notify_all();
-      RCLCPP_INFO_STREAM(logger_,
-                         "device with " << uid << " disconnected, notify reset device thread 2.");
       break;
     }
   }
@@ -840,11 +838,9 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceBySerialNumber(
   std::transform(serial_number.begin(), serial_number.end(), std::back_inserter(lower_sn),
                  [](auto ch) { return isalpha(ch) ? tolower(ch) : static_cast<int>(ch); });
   for (size_t i = 0; i < list->getCount(); i++) {
-    RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                                "Before lock: Select device serial number: " << serial_number);
+    RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
+                                 "Selecting device by serial number: " << serial_number);
     std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-    RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                                "After lock: Select device serial number: " << serial_number);
     try {
       auto pid = list->getPid(i);
       if (isOpenNIDevice(pid)) {
@@ -854,15 +850,16 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceBySerialNumber(
         if (device_info->getSerialNumber() == serial_number) {
           RCLCPP_INFO_STREAM_THROTTLE(
               logger_, *get_clock(), 5000,
-              "Device serial number " << device_info->getSerialNumber() << " matched");
+              "Matched device serial number: " << device_info->getSerialNumber());
           return device;
         }
       } else {
         std::string sn = list->getSerialNumber(i);
-        RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000, "Device serial number: " << sn);
+        RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
+                                     "Checking device serial number: " << sn);
         if (sn == serial_number) {
           RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                                      "Device serial number " << sn << " matched");
+                                      "Matched device serial number: " << sn);
           return list->getDevice(i, device_access_mode_);
         }
       }
@@ -879,7 +876,6 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceBySerialNumber(
   }
   return nullptr;
 }
-
 std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByUSBPort(
     const std::shared_ptr<ob::DeviceList> &list, const std::string &usb_port) {
   try {
