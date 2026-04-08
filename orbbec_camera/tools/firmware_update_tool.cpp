@@ -96,7 +96,7 @@ std::vector<std::string> splitCsv(const std::string &value) {
 void printUsage(const char *program) {
   std::cout
       << "Usage:\n"
-      << "ros2 run orbbec_camera " << program << " --\\\n"
+      << "ros2 run orbbec_camera firmware_update_tool --\\\n"
       << "      [--serial_number SN[,SN2...]]\\\n"
       << "      [--firmware_path /path/to/firmware.bin]\\\n"
       << "      [--preset_path /path/a.bin,/path/b.bin]\\\n"
