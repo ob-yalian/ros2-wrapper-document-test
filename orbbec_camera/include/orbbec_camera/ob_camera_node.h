@@ -47,6 +47,9 @@
 #include "libobsensor/ObSensor.hpp"
 
 #include "orbbec_camera_msgs/msg/device_info.hpp"
+#include "orbbec_camera_msgs/msg/depth_filter_param.hpp"
+#include "orbbec_camera_msgs/msg/depth_filter_state.hpp"
+#include "orbbec_camera_msgs/msg/depth_filters_status.hpp"
 #include "orbbec_camera_msgs/srv/get_device_info.hpp"
 #include "orbbec_camera_msgs/msg/extrinsics.hpp"
 #include "orbbec_camera_msgs/msg/metadata.hpp"
@@ -117,6 +120,8 @@ using SetFilter = orbbec_camera_msgs::srv::SetFilter;
 using SetArrays = orbbec_camera_msgs::srv::SetArrays;
 using SetUserCalibParams = orbbec_camera_msgs::srv::SetUserCalibParams;
 using GetUserCalibParams = orbbec_camera_msgs::srv::GetUserCalibParams;
+using DepthFilterState = orbbec_camera_msgs::msg::DepthFilterState;
+using DepthFiltersStatus = orbbec_camera_msgs::msg::DepthFiltersStatus;
 
 typedef std::pair<ob_stream_type, int> stream_index_pair;
 
@@ -255,6 +260,15 @@ class OBCameraNode {
   void setupDefaultImageFormat();
 
   void setupPublishers();
+
+  void publishDepthFiltersStatus();
+
+  DepthFilterState buildDepthFilterState(const std::string &filter_name, bool enabled) const;
+
+  static std::string normalizeDepthFilterName(const std::string &filter_name);
+
+  static void appendDepthFilterParam(DepthFilterState &filter_state, const std::string &name,
+                                     const std::string &value);
 
   void setupCameraInfo();
 
@@ -822,6 +836,7 @@ class OBCameraNode {
   int spatial_moderate_filter_diff_threshold_ = -1;
   int spatial_moderate_filter_magnitude_ = -1;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr filter_status_pub_;
+  rclcpp::Publisher<DepthFiltersStatus>::SharedPtr depth_filters_status_pub_;
   nlohmann::json filter_status_;
   std::string align_mode_ = "HW";
   std::unique_ptr<diagnostic_updater::Updater> diagnostic_updater_ = nullptr;
