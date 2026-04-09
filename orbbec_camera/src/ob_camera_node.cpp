@@ -119,30 +119,176 @@ void OBCameraNode::publishDepthFiltersStatus() {
   if (!depth_filters_status_pub_) {
     return;
   }
+
+  auto find_depth_filter = [this](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
+    const auto normalized_name = normalizeDepthFilterName(filter_name);
+    auto       it              = std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                                              [&normalized_name](const auto &filter) {
+                                                return normalizeDepthFilterName(filter->type()) ==
+                                                           normalized_name ||
+                                                       normalizeDepthFilterName(filter->getName()) ==
+                                                           normalized_name;
+                                              });
+    if (it == depth_filter_list_.end()) {
+      return nullptr;
+    }
+    return *it;
+  };
+
+  auto sync_filter_enabled = [&find_depth_filter](const std::string &filter_name, bool &cached_state) {
+    auto filter = find_depth_filter(filter_name);
+    if (!filter) {
+      return;
+    }
+    try {
+      cached_state = filter->isEnabled();
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  };
+
+  sync_filter_enabled("DecimationFilter", enable_decimation_filter_);
+  sync_filter_enabled("HDRMerge", enable_hdr_merge_);
+  sync_filter_enabled("SequenceIdFilter", enable_sequence_id_filter_);
+  sync_filter_enabled("SpatialAdvancedFilter", enable_spatial_filter_);
+  sync_filter_enabled("TemporalFilter", enable_temporal_filter_);
+  sync_filter_enabled("HoleFillingFilter", enable_hole_filling_filter_);
+  sync_filter_enabled("DisparityTransform", enable_disparity_to_depth_);
+  sync_filter_enabled("ThresholdFilter", enable_threshold_filter_);
+  sync_filter_enabled("SpatialFastFilter", enable_spatial_fast_filter_);
+  sync_filter_enabled("SpatialModerateFilter", enable_spatial_moderate_filter_);
+  sync_filter_enabled("FalsePositiveFilter", enable_false_positive_filter_);
+  sync_filter_enabled("MgcNoiseRemovalFilter", enable_mgc_noise_removal_filter_);
+  sync_filter_enabled("LutNoiseRemovalFilter", enable_lut_noise_removal_filter_);
+
+  if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
+    try {
+      enable_noise_removal_filter_ = device_->getBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
+    try {
+      noise_removal_filter_min_diff_ = device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
+    try {
+      noise_removal_filter_max_size_ = device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                   OB_PERMISSION_READ_WRITE)) {
+    try {
+      enable_hardware_noise_removal_filter_ =
+          device_->getBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                   OB_PERMISSION_READ_WRITE)) {
+    try {
+      hardware_noise_removal_filter_threshold_ =
+          device_->getFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+
+  if (auto filter = find_depth_filter("DecimationFilter")) {
+    try {
+      decimation_filter_scale_ = static_cast<int>(filter->as<ob::DecimationFilter>()->getScaleValue());
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (auto filter = find_depth_filter("SequenceIdFilter")) {
+    try {
+      sequence_id_filter_id_ = filter->as<ob::SequenceIdFilter>()->getSelectSequenceId();
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (auto filter = find_depth_filter("ThresholdFilter")) {
+    try {
+      threshold_filter_min_ = static_cast<int>(filter->getConfigValue("min"));
+      threshold_filter_max_ = static_cast<int>(filter->getConfigValue("max"));
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (auto filter = find_depth_filter("SpatialAdvancedFilter")) {
+    try {
+      auto params = filter->as<ob::SpatialAdvancedFilter>()->getFilterParams();
+      spatial_filter_alpha_          = params.alpha;
+      spatial_filter_diff_threshold_ = params.disp_diff;
+      spatial_filter_magnitude_      = params.magnitude;
+      spatial_filter_radius_         = params.radius;
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (auto filter = find_depth_filter("TemporalFilter")) {
+    try {
+      temporal_filter_diff_threshold_ = static_cast<float>(filter->getConfigValue("diff_scale"));
+      temporal_filter_weight_         = static_cast<float>(filter->getConfigValue("weight"));
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (auto filter = find_depth_filter("SpatialFastFilter")) {
+    try {
+      auto params = filter->as<ob::SpatialFastFilter>()->getFilterParams();
+      spatial_fast_filter_radius_ = params.radius;
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (auto filter = find_depth_filter("SpatialModerateFilter")) {
+    try {
+      auto params                         = filter->as<ob::SpatialModerateFilter>()->getFilterParams();
+      spatial_moderate_filter_diff_threshold_ = params.disp_diff;
+      spatial_moderate_filter_magnitude_      = params.magnitude;
+      spatial_moderate_filter_radius_         = params.radius;
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+
   DepthFiltersStatus msg;
   msg.header.stamp = node_->now();
   msg.header.frame_id = camera_name_;
 
-  const std::vector<std::pair<std::string, bool>> filter_states = {
-      {"DecimationFilter", enable_decimation_filter_},
-      {"HDRMerge", enable_hdr_merge_},
-      {"SequenceIdFilter", enable_sequence_id_filter_},
-      {"SpatialAdvancedFilter", enable_spatial_filter_},
-      {"TemporalFilter", enable_temporal_filter_},
-      {"HoleFillingFilter", enable_hole_filling_filter_},
-      {"DisparityTransform", enable_disparity_to_depth_},
-      {"ThresholdFilter", enable_threshold_filter_},
-      {"SpatialFastFilter", enable_spatial_fast_filter_},
-      {"SpatialModerateFilter", enable_spatial_moderate_filter_},
-      {"FalsePositiveFilter", enable_false_positive_filter_},
-      {"MgcNoiseRemovalFilter", enable_mgc_noise_removal_filter_},
-      {"LutNoiseRemovalFilter", enable_lut_noise_removal_filter_},
-      {"NoiseRemovalFilter", enable_noise_removal_filter_},
-      {"HardwareNoiseRemovalFilter", enable_hardware_noise_removal_filter_},
-  };
-  msg.filters.reserve(filter_states.size());
-  for (const auto &filter_state : filter_states) {
-    msg.filters.push_back(buildDepthFilterState(filter_state.first, filter_state.second));
+  std::vector<std::string> ordered_filter_names;
+  ordered_filter_names.reserve(depth_filter_list_.size());
+  for (const auto &filter : depth_filter_list_) {
+    if (!filter) {
+      continue;
+    }
+    const auto normalized_name = normalizeDepthFilterName(filter->type());
+    if (std::find(ordered_filter_names.begin(), ordered_filter_names.end(), normalized_name) ==
+        ordered_filter_names.end()) {
+      ordered_filter_names.push_back(normalized_name);
+    }
+  }
+
+  msg.filters.reserve(ordered_filter_names.size());
+  for (const auto &filter_name : ordered_filter_names) {
+    bool enabled = false;
+    if (auto filter = find_depth_filter(filter_name)) {
+      try {
+        enabled = filter->isEnabled();
+      } catch (const std::exception &) {
+        // Keep default value when runtime querying fails.
+      }
+    }
+    msg.filters.push_back(buildDepthFilterState(filter_name, enabled));
   }
   depth_filters_status_pub_->publish(msg);
 }
@@ -4609,13 +4755,16 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
+    const auto normalized_request_filter_name = normalizeDepthFilterName(request->filter_name);
     const bool in_recommended_filter_list =
         std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                     [&request](const auto &filter) {
-                       return filter->type() == request->filter_name;
+                     [&normalized_request_filter_name](const auto &filter) {
+                       return normalizeDepthFilterName(filter->type()) ==
+                              normalized_request_filter_name;
                      }) != depth_filter_list_.end();
-    const bool is_noise_removal_filter = request->filter_name == "NoiseRemovalFilter";
-    const bool is_hardware_noise_removal = request->filter_name == "HardwareNoiseRemoval";
+    const bool is_noise_removal_filter = normalized_request_filter_name == "NoiseRemovalFilter";
+    const bool is_hardware_noise_removal =
+        normalized_request_filter_name == "HardwareNoiseRemovalFilter";
     const bool noise_removal_property_writable =
         device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
         device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
@@ -4638,11 +4787,14 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
     auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                             [&request](const std::shared_ptr<ob::Filter> &filter) {
-                               return filter->getName() == request->filter_name;
+                             [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                               return normalizeDepthFilterName(filter->getName()) ==
+                                          normalized_request_filter_name ||
+                                      normalizeDepthFilterName(filter->type()) ==
+                                          normalized_request_filter_name;
                              });
     depth_filter_list_.erase(it, depth_filter_list_.end());
-    if (request->filter_name == "DecimationFilter") {
+    if (normalized_request_filter_name == "DecimationFilter") {
       auto decimation_filter = std::make_shared<ob::DecimationFilter>();
       decimation_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(decimation_filter);
@@ -4669,7 +4821,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_decimation_filter_ = request->filter_enable;
 
-    } else if (request->filter_name == "HDRMerge") {
+    } else if (normalized_request_filter_name == "HDRMerge") {
       auto hdr_merge_filter = std::make_shared<ob::HdrMerge>();
       hdr_merge_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(hdr_merge_filter);
@@ -4698,7 +4850,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_hdr_merge_ = request->filter_enable;
 
-    } else if (request->filter_name == "SequenceIdFilter") {
+    } else if (normalized_request_filter_name == "SequenceIdFilter") {
       auto sequenced_filter = std::make_shared<ob::SequenceIdFilter>();
       sequenced_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(sequenced_filter);
@@ -4714,7 +4866,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_sequence_id_filter_ = request->filter_enable;
 
-    } else if (request->filter_name == "ThresholdFilter") {
+    } else if (normalized_request_filter_name == "ThresholdFilter") {
       auto threshold_filter = std::make_shared<ob::ThresholdFilter>();
       threshold_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(threshold_filter);
@@ -4733,7 +4885,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_threshold_filter_ = request->filter_enable;
 
-    } else if (request->filter_name == "NoiseRemovalFilter") {
+    } else if (normalized_request_filter_name == "NoiseRemovalFilter") {
       if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
         device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, request->filter_enable);
       }
@@ -4768,7 +4920,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         return;
       }
       enable_noise_removal_filter_ = request->filter_enable;
-    } else if (request->filter_name == "HardwareNoiseRemoval") {
+    } else if (normalized_request_filter_name == "HardwareNoiseRemovalFilter") {
       if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
                                        OB_PERMISSION_READ_WRITE)) {
         device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
@@ -4790,7 +4942,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         }
       }
       enable_hardware_noise_removal_filter_ = request->filter_enable;
-    } else if (request->filter_name == "SpatialAdvancedFilter") {
+    } else if (normalized_request_filter_name == "SpatialAdvancedFilter") {
       auto spatial_filter = std::make_shared<ob::SpatialAdvancedFilter>();
       spatial_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(spatial_filter);
@@ -4816,7 +4968,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         return;
       }
       enable_spatial_filter_ = request->filter_enable;
-    } else if (request->filter_name == "TemporalFilter") {
+    } else if (normalized_request_filter_name == "TemporalFilter") {
       auto temporal_filter = std::make_shared<ob::TemporalFilter>();
       temporal_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(temporal_filter);
@@ -4834,7 +4986,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         return;
       }
       enable_temporal_filter_ = request->filter_enable;
-    } else if (request->filter_name == "SpatialFastFilter") {
+    } else if (normalized_request_filter_name == "SpatialFastFilter") {
       auto spatial_fast_filter = std::make_shared<ob::SpatialFastFilter>();
       spatial_fast_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(spatial_fast_filter);
@@ -4852,7 +5004,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_spatial_fast_filter_ = request->filter_enable;
 
-    } else if (request->filter_name == "SpatialModerateFilter") {
+    } else if (normalized_request_filter_name == "SpatialModerateFilter") {
       auto spatial_moderate_filter = std::make_shared<ob::SpatialModerateFilter>();
       spatial_moderate_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(spatial_moderate_filter);
@@ -4875,17 +5027,17 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         return;
       }
       enable_spatial_moderate_filter_ = request->filter_enable;
-    } else if (request->filter_name == "FalsePositiveFilter") {
+    } else if (normalized_request_filter_name == "FalsePositiveFilter") {
       auto false_positive_filter = std::make_shared<ob::FalsePositiveFilter>();
       false_positive_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(false_positive_filter);
       enable_false_positive_filter_ = request->filter_enable;
-    } else if (request->filter_name == "MgcNoiseRemovalFilter") {
+    } else if (normalized_request_filter_name == "MgcNoiseRemovalFilter") {
       auto mgc_filter = std::make_shared<ob::MgcNoiseRemovalFilter>();
       mgc_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(mgc_filter);
       enable_mgc_noise_removal_filter_ = request->filter_enable;
-    } else if (request->filter_name == "LutNoiseRemovalFilter") {
+    } else if (normalized_request_filter_name == "LutNoiseRemovalFilter") {
       auto lut_filter = std::make_shared<ob::LutNoiseRemovalFilter>();
       lut_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(lut_filter);
@@ -4896,7 +5048,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                              << "Cannot be set\n"
                              << "The filter_name value that can be set is "
                                 "DecimationFilter, HDRMerge, SequenceIdFilter, ThresholdFilter, "
-                                "NoiseRemovalFilter, HardwareNoiseRemoval, SpatialAdvancedFilter, "
+                                "NoiseRemovalFilter, HardwareNoiseRemoval/HardwareNoiseRemovalFilter, SpatialAdvancedFilter, "
                                 "SpatialFastFilter, SpatialModerateFilter, FalsePositiveFilter and "
                                 "TemporalFilter, MgcNoiseRemovalFilter and "
                                 "LutNoiseRemovalFilter");
@@ -4912,7 +5064,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                   << ", " << configSchema.def << ", " << configSchema.desc << "}" << std::endl;
       }
     }
-    filter_status_[request->filter_name] = request->filter_enable;
+    filter_status_[normalized_request_filter_name] = request->filter_enable;
     if (filter_status_pub_) {
       std_msgs::msg::String msg;
       msg.data = filter_status_.dump(2);
