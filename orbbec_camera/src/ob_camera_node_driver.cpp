@@ -880,10 +880,8 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByUSBPort(
     const std::shared_ptr<ob::DeviceList> &list, const std::string &usb_port) {
   try {
     RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                                "Before lock: Select device usb port: " << usb_port);
+                                "Selecting device by USB port: " << usb_port);
     std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-    RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                                "After lock: Select device usb port: " << usb_port);
     auto device = list->getDeviceByUid(usb_port.c_str(), device_access_mode_);
     if (device) {
       RCLCPP_INFO_STREAM_THROTTLE(logger_, *get_clock(), 5000,
@@ -913,10 +911,8 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByUSBPort(
 std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByNetIP(
     const std::shared_ptr<ob::DeviceList> &list, const std::string &net_ip) {
   RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                               "Before lock: Select device net ip: " << net_ip);
+                               "Selecting device by network IP: " << net_ip);
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  RCLCPP_DEBUG_STREAM_THROTTLE(logger_, *get_clock(), 5000,
-                               "After lock: Select device net ip: " << net_ip);
   std::shared_ptr<ob::Device> device = nullptr;
   for (size_t i = 0; i < list->getCount(); i++) {
     try {
@@ -1152,7 +1148,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
     ob_lidar_node_->startStreams();
     ob_lidar_node_->startIMU();
   } else {
-    RCLCPP_INFO_STREAM(logger_, "ob_camera_node_ is nullptr");
+    RCLCPP_WARN_STREAM(logger_, "Camera or LiDAR node is null after device initialization");
   }
 
 }  // namespace orbbec_camera

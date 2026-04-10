@@ -938,7 +938,7 @@ void OBCameraNode::setupDevices() {
         device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, noise_removal_filter_min_diff_);
         auto new_noise_removal_filter_min_diff =
             device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-        RCLCPP_INFO_STREAM(logger_, "after set noise removal filter min diff: "
+        RCLCPP_INFO_STREAM(logger_, "Updated noise removal filter min diff: "
                                         << new_noise_removal_filter_min_diff);
       }
     }
@@ -963,7 +963,7 @@ void OBCameraNode::setupDevices() {
         device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, noise_removal_filter_max_size_);
         auto new_noise_removal_filter_max_size =
             device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-        RCLCPP_INFO_STREAM(logger_, "after set noise removal filter max size: "
+        RCLCPP_INFO_STREAM(logger_, "Updated noise removal filter max size: "
                                         << new_noise_removal_filter_max_size);
       }
     }
@@ -3194,7 +3194,7 @@ void OBCameraNode::setDisparitySearchOffset() {
   if (device_->isPropertySupported(OB_PROP_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_WRITE)) {
     if (disparity_search_offset_ >= 0 && disparity_search_offset_ <= 127) {
       device_->setIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT, disparity_search_offset_);
-      RCLCPP_INFO_STREAM(logger_, "disparity_search_offset: " << disparity_search_offset_);
+      RCLCPP_INFO_STREAM(logger_, "Set disparity search offset to " << disparity_search_offset_);
     }
     if (offset_index0_ >= 0 && offset_index0_ <= 127 && offset_index1_ >= 0 &&
         offset_index1_ <= 127) {
@@ -4586,8 +4586,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       return;
     }
 
-    RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
-                                                << (request->filter_enable ? "true" : "false"));
+    RCLCPP_INFO_STREAM(logger_, "Filter update request: name="
+                                    << request->filter_name
+                                    << ", enabled=" << (request->filter_enable ? "true" : "false"));
     auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
                              [&request](const std::shared_ptr<ob::Filter> &filter) {
                                return filter->getName() == request->filter_name;
@@ -4683,7 +4684,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, request->filter_param[0]);
           auto new_noise_removal_filter_min_diff =
               device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-          RCLCPP_INFO_STREAM(logger_, "after set noise removal filter min diff: "
+          RCLCPP_INFO_STREAM(logger_, "Updated noise removal filter min diff: "
                                           << new_noise_removal_filter_min_diff);
         }
         if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
@@ -4694,7 +4695,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, request->filter_param[1]);
           auto new_noise_removal_filter_max_size =
               device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-          RCLCPP_INFO_STREAM(logger_, "after set noise removal filter max size: "
+          RCLCPP_INFO_STREAM(logger_, "Updated noise removal filter max size: "
                                           << new_noise_removal_filter_max_size);
         }
       } else {
