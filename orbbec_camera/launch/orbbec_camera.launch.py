@@ -27,6 +27,7 @@ def generate_launch_arguments():
         #general config
         DeclareLaunchArgument('camera_model', default_value=default_camera_model),
         DeclareLaunchArgument('config_file_path', default_value=''),
+        DeclareLaunchArgument('ros_log_level', default_value='info'),
         #multi-device sync param
         DeclareLaunchArgument('camera_name', default_value='camera'),
         DeclareLaunchArgument('usb_port', default_value=''),
