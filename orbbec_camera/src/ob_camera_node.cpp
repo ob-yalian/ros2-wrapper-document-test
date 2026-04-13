@@ -5088,22 +5088,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         return;
       }
     }
-    std::vector<std::shared_ptr<ob::Filter>> depth_filters_snapshot;
-    {
-      std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      depth_filters_snapshot = depth_filter_list_;
-    }
-    for (auto &filter : depth_filters_snapshot) {
-      std::cout << " - " << filter->getName() << ": "
-                << (filter->isEnabled() ? "enabled" : "disabled") << std::endl;
-      auto configSchemaVec = filter->getConfigSchemaVec();
-      for (auto &configSchema : configSchemaVec) {
-        std::cout << "    - {" << configSchema.name << ", " << configSchema.type << ", "
-                  << configSchema.min << ", " << configSchema.max << ", " << configSchema.step
-                  << ", " << configSchema.def << ", " << configSchema.desc << "}" << std::endl;
-      }
-    }
-    filter_status_[normalized_request_filter_name] = request->filter_enable;
+    filter_status_[normalized_request_filter_name] = static_cast<bool>(request->filter_enable);
     if (filter_status_pub_) {
       std_msgs::msg::String msg;
       msg.data = filter_status_.dump(2);
