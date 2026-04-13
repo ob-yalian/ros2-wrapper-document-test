@@ -121,6 +121,8 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_firmware_log", default_value="false"),
         DeclareLaunchArgument("enable_noise_removal_filter", default_value="false"),
         DeclareLaunchArgument("time_domain", default_value="global"),
+        DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
+        DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
     ]
 
     # Node configuration
