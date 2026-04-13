@@ -112,16 +112,23 @@ void OBCameraNode::publishDepthFiltersStatus() {
     return;
   }
 
-  auto find_depth_filter = [this](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
+  std::vector<std::shared_ptr<ob::Filter>> depth_filters_snapshot;
+  {
+    std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
+    depth_filters_snapshot = depth_filter_list_;
+  }
+
+  auto find_depth_filter =
+      [&depth_filters_snapshot, this](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
     const auto normalized_name = normalizeDepthFilterName(filter_name);
-    auto       it              = std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+    auto       it              = std::find_if(depth_filters_snapshot.begin(), depth_filters_snapshot.end(),
                                               [&normalized_name](const auto &filter) {
                                                 return normalizeDepthFilterName(filter->type()) ==
                                                            normalized_name ||
                                                        normalizeDepthFilterName(filter->getName()) ==
                                                            normalized_name;
                                               });
-    if (it == depth_filter_list_.end()) {
+    if (it == depth_filters_snapshot.end()) {
       return nullptr;
     }
     return *it;
@@ -268,14 +275,14 @@ void OBCameraNode::publishDepthFiltersStatus() {
                                    OB_PERMISSION_READ_WRITE);
 
   std::vector<std::string> ordered_filter_names;
-  ordered_filter_names.reserve(depth_filter_list_.size() + 2);
+  ordered_filter_names.reserve(depth_filters_snapshot.size() + 2);
   auto append_unique_filter_name = [&ordered_filter_names](const std::string &filter_name) {
     if (std::find(ordered_filter_names.begin(), ordered_filter_names.end(), filter_name) ==
         ordered_filter_names.end()) {
       ordered_filter_names.push_back(filter_name);
     }
   };
-  for (const auto &filter : depth_filter_list_) {
+  for (const auto &filter : depth_filters_snapshot) {
     if (!filter) {
       continue;
     }
@@ -3381,6 +3388,7 @@ std::shared_ptr<ob::Frame> OBCameraNode::processDepthFrameFilter(
   if (frame == nullptr || frame->getType() != OB_FRAME_DEPTH) {
     return nullptr;
   }
+  std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
   for (size_t i = 0; i < depth_filter_list_.size(); i++) {
     auto filter = depth_filter_list_[i];
     CHECK_NOTNULL(filter.get());
@@ -4771,12 +4779,16 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
     const auto normalized_request_filter_name = normalizeDepthFilterName(request->filter_name);
-    const bool in_recommended_filter_list =
-        std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                     [&normalized_request_filter_name](const auto &filter) {
-                       return normalizeDepthFilterName(filter->type()) ==
-                              normalized_request_filter_name;
-                     }) != depth_filter_list_.end();
+    bool in_recommended_filter_list = false;
+    {
+      std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      in_recommended_filter_list =
+          std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                       [&normalized_request_filter_name](const auto &filter) {
+                         return normalizeDepthFilterName(filter->type()) ==
+                                normalized_request_filter_name;
+                       }) != depth_filter_list_.end();
+    }
     const bool is_noise_removal_filter = normalized_request_filter_name == "NoiseRemovalFilter";
     const bool is_hardware_noise_removal =
         normalized_request_filter_name == "HardwareNoiseRemovalFilter";
@@ -4801,15 +4813,16 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
 
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
-    auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                             [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                               return normalizeDepthFilterName(filter->getName()) ==
-                                          normalized_request_filter_name ||
-                                      normalizeDepthFilterName(filter->type()) ==
-                                          normalized_request_filter_name;
-                             });
-    depth_filter_list_.erase(it, depth_filter_list_.end());
     if (normalized_request_filter_name == "DecimationFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto decimation_filter = std::make_shared<ob::DecimationFilter>();
       decimation_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(decimation_filter);
@@ -4837,6 +4850,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       enable_decimation_filter_ = request->filter_enable;
 
     } else if (normalized_request_filter_name == "HDRMerge") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto hdr_merge_filter = std::make_shared<ob::HdrMerge>();
       hdr_merge_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(hdr_merge_filter);
@@ -4866,6 +4888,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       enable_hdr_merge_ = request->filter_enable;
 
     } else if (normalized_request_filter_name == "SequenceIdFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto sequenced_filter = std::make_shared<ob::SequenceIdFilter>();
       sequenced_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(sequenced_filter);
@@ -4882,6 +4913,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       enable_sequence_id_filter_ = request->filter_enable;
 
     } else if (normalized_request_filter_name == "ThresholdFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto threshold_filter = std::make_shared<ob::ThresholdFilter>();
       threshold_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(threshold_filter);
@@ -4958,6 +4998,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_hardware_noise_removal_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "SpatialAdvancedFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto spatial_filter = std::make_shared<ob::SpatialAdvancedFilter>();
       spatial_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(spatial_filter);
@@ -4984,6 +5033,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_spatial_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "TemporalFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto temporal_filter = std::make_shared<ob::TemporalFilter>();
       temporal_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(temporal_filter);
@@ -5002,6 +5060,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_temporal_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "SpatialFastFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto spatial_fast_filter = std::make_shared<ob::SpatialFastFilter>();
       spatial_fast_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(spatial_fast_filter);
@@ -5020,6 +5087,15 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       enable_spatial_fast_filter_ = request->filter_enable;
 
     } else if (normalized_request_filter_name == "SpatialModerateFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto spatial_moderate_filter = std::make_shared<ob::SpatialModerateFilter>();
       spatial_moderate_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(spatial_moderate_filter);
@@ -5043,16 +5119,43 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_spatial_moderate_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "FalsePositiveFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto false_positive_filter = std::make_shared<ob::FalsePositiveFilter>();
       false_positive_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(false_positive_filter);
       enable_false_positive_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "MgcNoiseRemovalFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto mgc_filter = std::make_shared<ob::MgcNoiseRemovalFilter>();
       mgc_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(mgc_filter);
       enable_mgc_noise_removal_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "LutNoiseRemovalFilter") {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+                                 return normalizeDepthFilterName(filter->getName()) ==
+                                            normalized_request_filter_name ||
+                                        normalizeDepthFilterName(filter->type()) ==
+                                            normalized_request_filter_name;
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
       auto lut_filter = std::make_shared<ob::LutNoiseRemovalFilter>();
       lut_filter->enable(request->filter_enable);
       depth_filter_list_.push_back(lut_filter);
@@ -5069,7 +5172,12 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
                                 "LutNoiseRemovalFilter");
       return;
     }
-    for (auto &filter : depth_filter_list_) {
+    std::vector<std::shared_ptr<ob::Filter>> depth_filters_snapshot;
+    {
+      std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      depth_filters_snapshot = depth_filter_list_;
+    }
+    for (auto &filter : depth_filters_snapshot) {
       std::cout << " - " << filter->getName() << ": "
                 << (filter->isEnabled() ? "enabled" : "disabled") << std::endl;
       auto configSchemaVec = filter->getConfigSchemaVec();

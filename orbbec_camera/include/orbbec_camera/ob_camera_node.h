@@ -880,6 +880,7 @@ class OBCameraNode {
   bool has_first_color_frame_ = false;
   bool use_intra_process_ = false;
   std::string cloud_frame_id_;
+  std::mutex depth_filter_mutex_;
   std::vector<std::shared_ptr<ob::Filter>> depth_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> color_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_color_filter_list_;
