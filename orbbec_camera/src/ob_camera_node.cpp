@@ -4810,416 +4810,317 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
-    const auto normalized_request_filter_name = normalizeDepthFilterName(request->filter_name);
-    bool in_recommended_filter_list = false;
-    {
-      std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      in_recommended_filter_list =
-          std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                       [&normalized_request_filter_name](const auto &filter) {
-                         return normalizeDepthFilterName(filter->type()) ==
-                                normalized_request_filter_name;
-                       }) != depth_filter_list_.end();
-    }
-    const bool is_noise_removal_filter = normalized_request_filter_name == "NoiseRemovalFilter";
-    const bool is_hardware_noise_removal =
-        normalized_request_filter_name == "HardwareNoiseRemovalFilter";
-    const bool noise_removal_property_writable =
-        device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
-        device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
-        device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE);
-    const bool hardware_noise_removal_property_writable =
-        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                                     OB_PERMISSION_READ_WRITE) ||
-        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                     OB_PERMISSION_READ_WRITE);
-    const bool supported_by_writable_property =
-        (is_noise_removal_filter && noise_removal_property_writable) ||
-        (is_hardware_noise_removal && hardware_noise_removal_property_writable);
-
-    if (!in_recommended_filter_list && !supported_by_writable_property) {
+    response->success = false;
+    response->message.clear();
+    auto fail = [&response](const std::string &msg) {
       response->success = false;
-      response->message = "Filter '" + request->filter_name + "' is not supported by this device";
-      return;
+      response->message = msg;
+    };
+    const auto normalized_request_filter_name = normalizeDepthFilterName(request->filter_name);
+    const bool is_noise_removal_filter = normalized_request_filter_name == "NoiseRemovalFilter";
+    const bool is_hardware_noise_removal_filter =
+        normalized_request_filter_name == "HardwareNoiseRemovalFilter";
+    bool is_supported_by_property = false;
+    if (is_noise_removal_filter) {
+      is_supported_by_property =
+          device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
+          device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
+          device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE);
+    } else if (is_hardware_noise_removal_filter) {
+      is_supported_by_property =
+          device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                       OB_PERMISSION_READ_WRITE) ||
+          device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                       OB_PERMISSION_READ_WRITE);
     }
 
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
-    if (normalized_request_filter_name == "DecimationFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto decimation_filter = std::make_shared<ob::DecimationFilter>();
-      decimation_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(decimation_filter);
-      if (request->filter_param.size() > 0) {
-        auto range = decimation_filter->getScaleRange();
-        auto decimation_filter_scale = request->filter_param[0];
-        if (decimation_filter_scale <= range.max && decimation_filter_scale >= range.min) {
-          RCLCPP_INFO_STREAM(logger_,
-                             "Set decimation filter scale value to " << decimation_filter_scale);
-          decimation_filter->setScaleValue(decimation_filter_scale);
-        }
-        if (decimation_filter_scale != -1 &&
-            (decimation_filter_scale < range.min || decimation_filter_scale > range.max)) {
-          RCLCPP_ERROR_STREAM(logger_, "Decimation filter scale value is out of range "
-                                           << range.min << " - " << range.max);
-        }
-        if (decimation_filter_scale <= range.max && decimation_filter_scale >= range.min) {
-          decimation_filter_scale_ = decimation_filter_scale;
-        }
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
+    if (is_noise_removal_filter || is_hardware_noise_removal_filter) {
+      if (!is_supported_by_property) {
+        fail("Filter '" + normalized_request_filter_name + "' is not supported by this device");
         return;
       }
-      enable_decimation_filter_ = request->filter_enable;
-
-    } else if (normalized_request_filter_name == "HDRMerge") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto hdr_merge_filter = std::make_shared<ob::HdrMerge>();
-      hdr_merge_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(hdr_merge_filter);
-      if (request->filter_param.size() > 3) {
-        auto config = OBHdrConfig();
-        config.enable = true;
-        config.exposure_1 = request->filter_param[0];
-        config.gain_1 = request->filter_param[1];
-        config.exposure_2 = request->filter_param[2];
-        config.gain_2 = request->filter_param[3];
-        device_->setStructuredData(OB_STRUCT_DEPTH_HDR_CONFIG,
-                                   reinterpret_cast<const uint8_t *>(&config), sizeof(config));
-        RCLCPP_INFO_STREAM(logger_, "Set HDR merge filter params: "
-                                        << "\nexposure_1: " << request->filter_param[0]
-                                        << "\ngain_1: " << request->filter_param[1]
-                                        << "\nexposure_2: " << request->filter_param[2]
-                                        << "\ngain_2: " << request->filter_param[3]);
-        hdr_merge_exposure_1_ = request->filter_param[0];
-        hdr_merge_gain_1_ = request->filter_param[1];
-        hdr_merge_exposure_2_ = request->filter_param[2];
-        hdr_merge_gain_2_ = request->filter_param[3];
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_hdr_merge_ = request->filter_enable;
-
-    } else if (normalized_request_filter_name == "SequenceIdFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto sequenced_filter = std::make_shared<ob::SequenceIdFilter>();
-      sequenced_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(sequenced_filter);
-      if (request->filter_param.size() > 0) {
-        sequenced_filter->selectSequenceId(request->filter_param[0]);
-        RCLCPP_INFO_STREAM(
-            logger_, "Set sequenced filter selectSequenceId value to " << request->filter_param[0]);
-        sequence_id_filter_id_ = request->filter_param[0];
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_sequence_id_filter_ = request->filter_enable;
-
-    } else if (normalized_request_filter_name == "ThresholdFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto threshold_filter = std::make_shared<ob::ThresholdFilter>();
-      threshold_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(threshold_filter);
-      if (request->filter_param.size() > 1) {
-        auto threshold_filter_min = request->filter_param[0];
-        auto threshold_filter_max = request->filter_param[1];
-        threshold_filter->setValueRange(threshold_filter_min, threshold_filter_max);
-        RCLCPP_INFO_STREAM(logger_, "Set threshold filter value range to "
-                                        << threshold_filter_min << " - " << threshold_filter_max);
-        threshold_filter_min_ = threshold_filter_min;
-        threshold_filter_max_ = threshold_filter_max;
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_threshold_filter_ = request->filter_enable;
-
-    } else if (normalized_request_filter_name == "NoiseRemovalFilter") {
-      if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
-        device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, request->filter_enable);
-      }
-      if (request->filter_param.size() > 1) {
-        if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
-          auto default_noise_removal_filter_min_diff =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-          RCLCPP_INFO_STREAM(logger_, "default noise removal filter min diff: "
-                                          << default_noise_removal_filter_min_diff);
-          device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, request->filter_param[0]);
-          auto new_noise_removal_filter_min_diff =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-          RCLCPP_INFO_STREAM(logger_, "after set noise removal filter min diff: "
-                                          << new_noise_removal_filter_min_diff);
-          noise_removal_filter_min_diff_ = request->filter_param[0];
+      if (is_noise_removal_filter) {
+        if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
+          device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, request->filter_enable);
+          RCLCPP_INFO_STREAM(logger_, "enable_noise_removal_filter:" << request->filter_enable);
         }
-        if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
-          auto default_noise_removal_filter_max_size =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-          RCLCPP_INFO_STREAM(logger_, "default noise removal filter max size: "
-                                          << default_noise_removal_filter_max_size);
-          device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, request->filter_param[1]);
-          auto new_noise_removal_filter_max_size =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-          RCLCPP_INFO_STREAM(logger_, "after set noise removal filter max size: "
-                                          << new_noise_removal_filter_max_size);
-          noise_removal_filter_max_size_ = request->filter_param[1];
-        }
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_noise_removal_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "HardwareNoiseRemovalFilter") {
-      if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                                       OB_PERMISSION_READ_WRITE)) {
-        device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                                 request->filter_enable);
-        if (request->filter_param.size() > 0 &&
-            device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                         OB_PERMISSION_READ_WRITE)) {
-          if (request->filter_enable) {
-            device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                      request->filter_param[0]);
-            RCLCPP_INFO_STREAM(logger_, "Setting hardware noise removal filter threshold :"
-                                            << request->filter_param[0]);
-            hardware_noise_removal_filter_threshold_ = request->filter_param[0];
+        if (request->filter_param.size() > 1) {
+          if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
+            auto default_noise_removal_filter_min_diff =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
+            RCLCPP_INFO_STREAM(logger_, "default_noise_removal_filter_min_diff: "
+                                            << default_noise_removal_filter_min_diff);
+            device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, request->filter_param[0]);
+            auto new_noise_removal_filter_min_diff =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
+            RCLCPP_INFO_STREAM(logger_, "after set noise_removal_filter_min_diff: "
+                                            << new_noise_removal_filter_min_diff);
+            noise_removal_filter_min_diff_ = request->filter_param[0];
           }
-        } else {
-          response->message =
-              "The filter switch setting is successful, but the filter parameter setting fails";
+          if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT,
+                                           OB_PERMISSION_WRITE)) {
+            auto default_noise_removal_filter_max_size =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+            RCLCPP_INFO_STREAM(logger_, "default_noise_removal_filter_max_size: "
+                                            << default_noise_removal_filter_max_size);
+            device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, request->filter_param[1]);
+            auto new_noise_removal_filter_max_size =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+            RCLCPP_INFO_STREAM(logger_, "after set noise_removal_filter_max_size: "
+                                            << new_noise_removal_filter_max_size);
+            noise_removal_filter_max_size_ = request->filter_param[1];
+          }
+        }
+        enable_noise_removal_filter_ = request->filter_enable;
+      } else if (is_hardware_noise_removal_filter) {
+        if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                         OB_PERMISSION_READ_WRITE)) {
+          device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                   request->filter_enable);
+          RCLCPP_INFO_STREAM(logger_,
+                             "Setting hardware_noise_removal_filter:" << request->filter_enable);
+          if (request->filter_param.size() > 0 &&
+              device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                           OB_PERMISSION_READ_WRITE)) {
+            if (request->filter_enable) {
+              device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                        request->filter_param[0]);
+              RCLCPP_INFO_STREAM(logger_, "Setting hardware_noise_removal_filter_threshold :"
+                                              << request->filter_param[0]);
+              hardware_noise_removal_filter_threshold_ = request->filter_param[0];
+            }
+          } else {
+            fail("The filter switch setting is successful, but the filter parameter setting fails");
+            return;
+          }
+        }
+        enable_hardware_noise_removal_filter_ = request->filter_enable;
+      }
+    } else {
+      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+      auto is_same_filter =
+          [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+            return normalizeDepthFilterName(filter->getName()) == normalized_request_filter_name ||
+                   normalizeDepthFilterName(filter->type()) == normalized_request_filter_name;
+          };
+
+      auto first_match_it = std::find_if(
+          depth_filter_list_.begin(), depth_filter_list_.end(),
+          [&is_same_filter](const auto &filter) { return is_same_filter(filter); });
+      if (first_match_it == depth_filter_list_.end()) {
+        fail("Filter '" + normalized_request_filter_name + "' is not supported by this device");
+        return;
+      }
+      std::size_t filter_insert_pos =
+          static_cast<std::size_t>(std::distance(depth_filter_list_.begin(), first_match_it));
+
+      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                               [&is_same_filter](const std::shared_ptr<ob::Filter> &filter) {
+                                 return is_same_filter(filter);
+                               });
+      depth_filter_list_.erase(it, depth_filter_list_.end());
+
+      auto add_or_replace_filter = [&filter_insert_pos,
+                                    this](const std::shared_ptr<ob::Filter> &filter) {
+        if (!filter) {
           return;
         }
-      }
-      enable_hardware_noise_removal_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "SpatialAdvancedFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto spatial_filter = std::make_shared<ob::SpatialAdvancedFilter>();
-      spatial_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(spatial_filter);
-      if (request->filter_param.size() > 3) {
-        OBSpatialAdvancedFilterParams params{};
-        params.alpha = request->filter_param[0];
-        params.disp_diff = request->filter_param[1];
-        params.magnitude = request->filter_param[2];
-        params.radius = request->filter_param[3];
-        spatial_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_, "Set SpatialAdvancedFilter params: "
-                                        << "\nalpha:" << params.alpha
-                                        << "\ndisp_diff:" << params.disp_diff
-                                        << "\nmagnitude:" << static_cast<int>(params.magnitude)
-                                        << "\nradius:" << params.radius);
-        spatial_filter_alpha_ = params.alpha;
-        spatial_filter_diff_threshold_ = params.disp_diff;
-        spatial_filter_magnitude_ = params.magnitude;
-        spatial_filter_radius_ = params.radius;
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_spatial_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "TemporalFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto temporal_filter = std::make_shared<ob::TemporalFilter>();
-      temporal_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(temporal_filter);
-      if (request->filter_param.size() > 1) {
-        temporal_filter->setDiffScale(request->filter_param[0]);
-        temporal_filter->setWeight(request->filter_param[1]);
-        RCLCPP_INFO_STREAM(logger_, "Set TemporalFilter params: "
-                                        << "\ndiff_scale:" << request->filter_param[0]
-                                        << "\nweight:" << request->filter_param[1]);
-        temporal_filter_diff_threshold_ = request->filter_param[0];
-        temporal_filter_weight_ = request->filter_param[1];
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_temporal_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "SpatialFastFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto spatial_fast_filter = std::make_shared<ob::SpatialFastFilter>();
-      spatial_fast_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(spatial_fast_filter);
-      if (request->filter_param.size() > 0) {
-        OBSpatialFastFilterParams params{};
-        params.radius = request->filter_param[0];
-        spatial_fast_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_,
-                           "Set SpatialFastFilter radius to " << static_cast<int>(params.radius));
-        spatial_fast_filter_radius_ = params.radius;
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_spatial_fast_filter_ = request->filter_enable;
+        if (filter_insert_pos <= depth_filter_list_.size()) {
+          depth_filter_list_.insert(
+              depth_filter_list_.begin() + static_cast<std::ptrdiff_t>(filter_insert_pos), filter);
+        } else {
+          depth_filter_list_.push_back(filter);
+        }
+      };
 
-    } else if (normalized_request_filter_name == "SpatialModerateFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto spatial_moderate_filter = std::make_shared<ob::SpatialModerateFilter>();
-      spatial_moderate_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(spatial_moderate_filter);
-      if (request->filter_param.size() > 2) {
-        OBSpatialModerateFilterParams params{};
-        params.disp_diff = request->filter_param[0];
-        params.magnitude = request->filter_param[1];
-        params.radius = request->filter_param[2];
-        spatial_moderate_filter->setFilterParams(params);
-        RCLCPP_INFO_STREAM(logger_, "Set SpatialModerateFilter params: "
-                                        << "\ndisp_diff:" << params.disp_diff
-                                        << "\nmagnitude:" << static_cast<int>(params.magnitude)
-                                        << "\nradius:" << static_cast<int>(params.radius));
-        spatial_moderate_filter_diff_threshold_ = params.disp_diff;
-        spatial_moderate_filter_magnitude_ = params.magnitude;
-        spatial_moderate_filter_radius_ = params.radius;
+      if (normalized_request_filter_name == "DecimationFilter") {
+        auto decimation_filter = std::make_shared<ob::DecimationFilter>();
+        decimation_filter->enable(request->filter_enable);
+        add_or_replace_filter(decimation_filter);
+        if (request->filter_param.size() > 0) {
+          auto range = decimation_filter->getScaleRange();
+          auto decimation_filter_scale = request->filter_param[0];
+          if (decimation_filter_scale <= range.max && decimation_filter_scale >= range.min) {
+            RCLCPP_INFO_STREAM(logger_,
+                               "Set decimation filter scale value to " << decimation_filter_scale);
+            decimation_filter->setScaleValue(decimation_filter_scale);
+          }
+          if (decimation_filter_scale != -1 &&
+              (decimation_filter_scale < range.min || decimation_filter_scale > range.max)) {
+            RCLCPP_ERROR_STREAM(logger_, "Decimation filter scale value is out of range "
+                                             << range.min << " - " << range.max);
+            fail("Decimation filter scale value is out of range");
+            return;
+          }
+          if (decimation_filter_scale <= range.max && decimation_filter_scale >= range.min) {
+            decimation_filter_scale_ = decimation_filter_scale;
+          }
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_decimation_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "HDRMerge") {
+        auto hdr_merge_filter = std::make_shared<ob::HdrMerge>();
+        hdr_merge_filter->enable(request->filter_enable);
+        add_or_replace_filter(hdr_merge_filter);
+        if (request->filter_param.size() > 3) {
+          auto config = OBHdrConfig();
+          config.enable = true;
+          config.exposure_1 = request->filter_param[0];
+          config.gain_1 = request->filter_param[1];
+          config.exposure_2 = request->filter_param[2];
+          config.gain_2 = request->filter_param[3];
+          device_->setStructuredData(OB_STRUCT_DEPTH_HDR_CONFIG,
+                                     reinterpret_cast<const uint8_t *>(&config), sizeof(config));
+          RCLCPP_INFO_STREAM(logger_, "Set HDR merge filter params: "
+                                          << "\nexposure_1: " << request->filter_param[0]
+                                          << "\ngain_1: " << request->filter_param[1]
+                                          << "\nexposure_2: " << request->filter_param[2]
+                                          << "\ngain_2: " << request->filter_param[3]);
+          hdr_merge_exposure_1_ = request->filter_param[0];
+          hdr_merge_gain_1_ = request->filter_param[1];
+          hdr_merge_exposure_2_ = request->filter_param[2];
+          hdr_merge_gain_2_ = request->filter_param[3];
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_hdr_merge_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "SequenceIdFilter") {
+        auto sequenced_filter = std::make_shared<ob::SequenceIdFilter>();
+        sequenced_filter->enable(request->filter_enable);
+        add_or_replace_filter(sequenced_filter);
+        if (request->filter_param.size() > 0) {
+          sequenced_filter->selectSequenceId(request->filter_param[0]);
+          RCLCPP_INFO_STREAM(
+              logger_, "Set sequenced filter selectSequenceId value to " << request->filter_param[0]);
+          sequence_id_filter_id_ = request->filter_param[0];
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_sequence_id_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "ThresholdFilter") {
+        auto threshold_filter = std::make_shared<ob::ThresholdFilter>();
+        threshold_filter->enable(request->filter_enable);
+        add_or_replace_filter(threshold_filter);
+        if (request->filter_param.size() > 1) {
+          auto threshold_filter_min = request->filter_param[0];
+          auto threshold_filter_max = request->filter_param[1];
+          threshold_filter->setValueRange(threshold_filter_min, threshold_filter_max);
+          RCLCPP_INFO_STREAM(logger_, "Set threshold filter value range to "
+                                          << threshold_filter_min << " - " << threshold_filter_max);
+          threshold_filter_min_ = threshold_filter_min;
+          threshold_filter_max_ = threshold_filter_max;
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_threshold_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "SpatialAdvancedFilter") {
+        auto spatial_filter = std::make_shared<ob::SpatialAdvancedFilter>();
+        spatial_filter->enable(request->filter_enable);
+        add_or_replace_filter(spatial_filter);
+        if (request->filter_param.size() > 3) {
+          OBSpatialAdvancedFilterParams params{};
+          params.alpha = request->filter_param[0];
+          params.disp_diff = request->filter_param[1];
+          params.magnitude = request->filter_param[2];
+          params.radius = request->filter_param[3];
+          spatial_filter->setFilterParams(params);
+          RCLCPP_INFO_STREAM(logger_, "Set SpatialAdvancedFilter params: "
+                                          << "\nalpha:" << params.alpha
+                                          << "\ndisp_diff:" << params.disp_diff
+                                          << "\nmagnitude:" << static_cast<int>(params.magnitude)
+                                          << "\nradius:" << params.radius);
+          spatial_filter_alpha_ = params.alpha;
+          spatial_filter_diff_threshold_ = params.disp_diff;
+          spatial_filter_magnitude_ = params.magnitude;
+          spatial_filter_radius_ = params.radius;
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_spatial_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "TemporalFilter") {
+        auto temporal_filter = std::make_shared<ob::TemporalFilter>();
+        temporal_filter->enable(request->filter_enable);
+        add_or_replace_filter(temporal_filter);
+        if (request->filter_param.size() > 1) {
+          temporal_filter->setDiffScale(request->filter_param[0]);
+          temporal_filter->setWeight(request->filter_param[1]);
+          RCLCPP_INFO_STREAM(logger_, "Set TemporalFilter params: "
+                                          << "\ndiff_scale:" << request->filter_param[0]
+                                          << "\nweight:" << request->filter_param[1]);
+          temporal_filter_diff_threshold_ = request->filter_param[0];
+          temporal_filter_weight_ = request->filter_param[1];
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_temporal_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "SpatialFastFilter") {
+        auto spatial_fast_filter = std::make_shared<ob::SpatialFastFilter>();
+        spatial_fast_filter->enable(request->filter_enable);
+        add_or_replace_filter(spatial_fast_filter);
+        if (request->filter_param.size() > 0) {
+          OBSpatialFastFilterParams params{};
+          params.radius = request->filter_param[0];
+          spatial_fast_filter->setFilterParams(params);
+          RCLCPP_INFO_STREAM(logger_,
+                             "Set SpatialFastFilter radius to " << static_cast<int>(params.radius));
+          spatial_fast_filter_radius_ = params.radius;
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_spatial_fast_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "SpatialModerateFilter") {
+        auto spatial_moderate_filter = std::make_shared<ob::SpatialModerateFilter>();
+        spatial_moderate_filter->enable(request->filter_enable);
+        add_or_replace_filter(spatial_moderate_filter);
+        if (request->filter_param.size() > 2) {
+          OBSpatialModerateFilterParams params{};
+          params.disp_diff = request->filter_param[0];
+          params.magnitude = request->filter_param[1];
+          params.radius = request->filter_param[2];
+          spatial_moderate_filter->setFilterParams(params);
+          RCLCPP_INFO_STREAM(logger_, "Set SpatialModerateFilter params: "
+                                          << "\ndisp_diff:" << params.disp_diff
+                                          << "\nmagnitude:" << static_cast<int>(params.magnitude)
+                                          << "\nradius:" << static_cast<int>(params.radius));
+          spatial_moderate_filter_diff_threshold_ = params.disp_diff;
+          spatial_moderate_filter_magnitude_ = params.magnitude;
+          spatial_moderate_filter_radius_ = params.radius;
+        } else {
+          fail("The filter switch setting is successful, but the filter parameter setting fails");
+          return;
+        }
+        enable_spatial_moderate_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "FalsePositiveFilter") {
+        auto false_positive_filter = std::make_shared<ob::FalsePositiveFilter>();
+        false_positive_filter->enable(request->filter_enable);
+        add_or_replace_filter(false_positive_filter);
+        enable_false_positive_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "MgcNoiseRemovalFilter") {
+        auto mgc_filter = std::make_shared<ob::MgcNoiseRemovalFilter>();
+        mgc_filter->enable(request->filter_enable);
+        add_or_replace_filter(mgc_filter);
+        enable_mgc_noise_removal_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "LutNoiseRemovalFilter") {
+        auto lut_filter = std::make_shared<ob::LutNoiseRemovalFilter>();
+        lut_filter->enable(request->filter_enable);
+        add_or_replace_filter(lut_filter);
+        enable_lut_noise_removal_filter_ = request->filter_enable;
       } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
+        fail(normalized_request_filter_name + " cannot be set");
         return;
       }
-      enable_spatial_moderate_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "FalsePositiveFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto false_positive_filter = std::make_shared<ob::FalsePositiveFilter>();
-      false_positive_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(false_positive_filter);
-      enable_false_positive_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "MgcNoiseRemovalFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto mgc_filter = std::make_shared<ob::MgcNoiseRemovalFilter>();
-      mgc_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(mgc_filter);
-      enable_mgc_noise_removal_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "LutNoiseRemovalFilter") {
-      std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                               [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
-                                 return normalizeDepthFilterName(filter->getName()) ==
-                                            normalized_request_filter_name ||
-                                        normalizeDepthFilterName(filter->type()) ==
-                                            normalized_request_filter_name;
-                               });
-      depth_filter_list_.erase(it, depth_filter_list_.end());
-      auto lut_filter = std::make_shared<ob::LutNoiseRemovalFilter>();
-      lut_filter->enable(request->filter_enable);
-      depth_filter_list_.push_back(lut_filter);
-      enable_lut_noise_removal_filter_ = request->filter_enable;
-    } else {
-      RCLCPP_INFO_STREAM(logger_,
-                         request->filter_name
-                             << "Cannot be set\n"
-                             << "The filter_name value that can be set is "
-                                "DecimationFilter, HDRMerge, SequenceIdFilter, ThresholdFilter, "
-                                "NoiseRemovalFilter, HardwareNoiseRemoval/HardwareNoiseRemovalFilter, SpatialAdvancedFilter, "
-                                "SpatialFastFilter, SpatialModerateFilter, FalsePositiveFilter and "
-                                "TemporalFilter, MgcNoiseRemovalFilter and "
-                                "LutNoiseRemovalFilter");
-      return;
     }
-    std::vector<std::shared_ptr<ob::Filter>> depth_filters_snapshot;
-    {
-      std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      depth_filters_snapshot = depth_filter_list_;
-    }
-    for (auto &filter : depth_filters_snapshot) {
-      std::cout << " - " << filter->getName() << ": "
-                << (filter->isEnabled() ? "enabled" : "disabled") << std::endl;
-      auto configSchemaVec = filter->getConfigSchemaVec();
-      for (auto &configSchema : configSchemaVec) {
-        std::cout << "    - {" << configSchema.name << ", " << configSchema.type << ", "
-                  << configSchema.min << ", " << configSchema.max << ", " << configSchema.step
-                  << ", " << configSchema.def << ", " << configSchema.desc << "}" << std::endl;
-      }
-    }
-    filter_status_[normalized_request_filter_name] = request->filter_enable;
+    filter_status_[normalized_request_filter_name] = static_cast<bool>(request->filter_enable);
     if (filter_status_pub_) {
       std_msgs::msg::String msg;
       msg.data = filter_status_.dump(2);
@@ -5228,14 +5129,17 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
     publishDepthFiltersStatus();
     response->success = true;
   } catch (const ob::Error &e) {
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
+    response->message = "Failed to set filter: " + orbbec_camera::formatObErrorWithStatus(e);
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set filter: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
-    response->message = e.what();
     response->success = false;
+    response->message = std::string("Failed to set filter: ") + e.what();
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set filter: " << e.what());
   } catch (...) {
-    response->message = "unknown error";
     response->success = false;
+    response->message = "unknown error";
+    RCLCPP_ERROR_STREAM(logger_, "unknown error");
   }
 }
 bool OBCameraNode::isWriteCustomerDataSuccess() const {
