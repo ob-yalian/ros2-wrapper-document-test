@@ -66,50 +66,42 @@ DepthFilterState OBCameraNode::buildDepthFilterState(const std::string &filter_n
   };
 
   if (normalized_filter_name == "DecimationFilter") {
-    appendDepthFilterParam(filter_state, "decimation_filter_scale", to_param_value(decimation_filter_scale_));
+    appendDepthFilterParam(filter_state, "decimate", to_param_value(decimation_filter_scale_));
   } else if (normalized_filter_name == "HDRMerge") {
-    appendDepthFilterParam(filter_state, "hdr_merge_exposure_1", to_param_value(hdr_merge_exposure_1_));
-    appendDepthFilterParam(filter_state, "hdr_merge_gain_1", to_param_value(hdr_merge_gain_1_));
-    appendDepthFilterParam(filter_state, "hdr_merge_exposure_2", to_param_value(hdr_merge_exposure_2_));
-    appendDepthFilterParam(filter_state, "hdr_merge_gain_2", to_param_value(hdr_merge_gain_2_));
+    appendDepthFilterParam(filter_state, "exposure_1", to_param_value(hdr_merge_exposure_1_));
+    appendDepthFilterParam(filter_state, "gain_1", to_param_value(hdr_merge_gain_1_));
+    appendDepthFilterParam(filter_state, "exposure_2", to_param_value(hdr_merge_exposure_2_));
+    appendDepthFilterParam(filter_state, "gain_2", to_param_value(hdr_merge_gain_2_));
   } else if (normalized_filter_name == "SequenceIdFilter") {
-    appendDepthFilterParam(filter_state, "sequence_id_filter_id", to_param_value(sequence_id_filter_id_));
+    appendDepthFilterParam(filter_state, "sequenceid", to_param_value(sequence_id_filter_id_));
   } else if (normalized_filter_name == "ThresholdFilter") {
-    appendDepthFilterParam(filter_state, "threshold_filter_min", to_param_value(threshold_filter_min_));
-    appendDepthFilterParam(filter_state, "threshold_filter_max", to_param_value(threshold_filter_max_));
+    appendDepthFilterParam(filter_state, "min", to_param_value(threshold_filter_min_));
+    appendDepthFilterParam(filter_state, "max", to_param_value(threshold_filter_max_));
   } else if (normalized_filter_name == "NoiseRemovalFilter") {
-    appendDepthFilterParam(filter_state, "noise_removal_filter_min_diff",
-                           to_param_value(noise_removal_filter_min_diff_));
-    appendDepthFilterParam(filter_state, "noise_removal_filter_max_size",
-                           to_param_value(noise_removal_filter_max_size_));
+    appendDepthFilterParam(filter_state, "min_diff", to_param_value(noise_removal_filter_min_diff_));
+    appendDepthFilterParam(filter_state, "max_size", to_param_value(noise_removal_filter_max_size_));
   } else if (normalized_filter_name == "HardwareNoiseRemovalFilter") {
-    appendDepthFilterParam(filter_state, "hardware_noise_removal_filter_threshold",
+    appendDepthFilterParam(filter_state, "threshold",
                            to_param_value(hardware_noise_removal_filter_threshold_));
   } else if (normalized_filter_name == "SpatialAdvancedFilter") {
-    appendDepthFilterParam(filter_state, "spatial_filter_alpha", to_param_value(spatial_filter_alpha_));
-    appendDepthFilterParam(filter_state, "spatial_filter_diff_threshold",
-                           to_param_value(spatial_filter_diff_threshold_));
-    appendDepthFilterParam(filter_state, "spatial_filter_magnitude",
-                           to_param_value(spatial_filter_magnitude_));
-    appendDepthFilterParam(filter_state, "spatial_filter_radius", to_param_value(spatial_filter_radius_));
+    appendDepthFilterParam(filter_state, "alpha", to_param_value(spatial_filter_alpha_));
+    appendDepthFilterParam(filter_state, "disp_diff", to_param_value(spatial_filter_diff_threshold_));
+    appendDepthFilterParam(filter_state, "magnitude", to_param_value(spatial_filter_magnitude_));
+    appendDepthFilterParam(filter_state, "radius", to_param_value(spatial_filter_radius_));
   } else if (normalized_filter_name == "TemporalFilter") {
-    appendDepthFilterParam(filter_state, "temporal_filter_diff_threshold",
+    appendDepthFilterParam(filter_state, "diff_scale",
                            to_param_value(temporal_filter_diff_threshold_));
-    appendDepthFilterParam(filter_state, "temporal_filter_weight", to_param_value(temporal_filter_weight_));
+    appendDepthFilterParam(filter_state, "weight", to_param_value(temporal_filter_weight_));
   } else if (normalized_filter_name == "HoleFillingFilter") {
-    appendDepthFilterParam(filter_state, "hole_filling_filter_mode", hole_filling_filter_mode_);
-  } else if (normalized_filter_name == "DisparityTransform") {
-    appendDepthFilterParam(filter_state, "disparity_to_depth_mode", disparity_to_depth_mode_);
+    appendDepthFilterParam(filter_state, "hole_filling_mode", hole_filling_filter_mode_);
   } else if (normalized_filter_name == "SpatialFastFilter") {
-    appendDepthFilterParam(filter_state, "spatial_fast_filter_radius",
-                           to_param_value(spatial_fast_filter_radius_));
+    appendDepthFilterParam(filter_state, "radius", to_param_value(spatial_fast_filter_radius_));
   } else if (normalized_filter_name == "SpatialModerateFilter") {
-    appendDepthFilterParam(filter_state, "spatial_moderate_filter_diff_threshold",
+    appendDepthFilterParam(filter_state, "disp_diff",
                            to_param_value(spatial_moderate_filter_diff_threshold_));
-    appendDepthFilterParam(filter_state, "spatial_moderate_filter_magnitude",
+    appendDepthFilterParam(filter_state, "magnitude",
                            to_param_value(spatial_moderate_filter_magnitude_));
-    appendDepthFilterParam(filter_state, "spatial_moderate_filter_radius",
-                           to_param_value(spatial_moderate_filter_radius_));
+    appendDepthFilterParam(filter_state, "radius", to_param_value(spatial_moderate_filter_radius_));
   }
 
   return filter_state;
