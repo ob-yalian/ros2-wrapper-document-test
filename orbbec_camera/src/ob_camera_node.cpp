@@ -38,6 +38,22 @@
 namespace orbbec_camera {
 using namespace std::chrono_literals;
 
+namespace {
+
+int64_t getSystemNowUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::system_clock::now().time_since_epoch())
+      .count();
+}
+
+int64_t getSteadyNowUs() {
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             std::chrono::steady_clock::now().time_since_epoch())
+      .count();
+}
+
+}  // namespace
+
 OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> device,
                            std::shared_ptr<Parameters> parameters, bool use_intra_process)
     : node_(node),
@@ -64,6 +80,20 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   compression_params_.push_back(cv::IMWRITE_PNG_STRATEGY_DEFAULT);
   setupDefaultImageFormat();
   setupTopics();
+
+  if (enable_frame_timestamp_csv_) {
+    if (frame_timestamp_csv_file_.empty()) {
+      frame_timestamp_csv_file_ =
+          (std::filesystem::current_path() / (camera_name_ + "_frame_timestamp_stats.csv"))
+              .string();
+    }
+    frame_timestamp_csv_logger_ =
+        std::make_unique<FrameTimestampCsvLogger>(true, frame_timestamp_csv_file_, logger_);
+    if (!frame_timestamp_csv_logger_->enabled()) {
+      frame_timestamp_csv_logger_.reset();
+    }
+  }
+
 #if defined(USE_RK_HW_DECODER)
   if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
     jpeg_decoder_ = std::make_unique<RKJPEGDecoder>(width_[COLOR], height_[COLOR]);
@@ -164,6 +194,15 @@ void OBCameraNode::clean() noexcept {
   }
   // Set running flag to false first to signal all operations to stop
   is_running_.store(false);
+
+  try {
+    if (frame_timestamp_csv_logger_) {
+      frame_timestamp_csv_logger_->shutdown();
+      frame_timestamp_csv_logger_.reset();
+    }
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down frame timestamp CSV logger");
+  }
 
   // Stop diagnostic timer and updater first BEFORE acquiring device_lock to prevent deadlock
   try {
@@ -2222,6 +2261,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
   setAndGetNodeParameter<bool>(enable_color_undistortion_, "enable_color_undistortion", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
+  setAndGetNodeParameter<bool>(enable_frame_timestamp_csv_, "enable_frame_timestamp_csv", false);
+  setAndGetNodeParameter<std::string>(frame_timestamp_csv_file_, "frame_timestamp_csv_file", "");
   setAndGetNodeParameter<std::string>(exposure_range_mode_, "exposure_range_mode", "default");
   setAndGetNodeParameter<std::string>(load_config_json_file_path_, "load_config_json_file_path",
                                       "");
@@ -3155,8 +3196,7 @@ void OBCameraNode::setDepthAutoExposureROI() {
     return;
   }
   if (isGemini305SeriesPID(pid_) && ae_reference_stream_ == "color") {
-    RCLCPP_WARN_STREAM(logger_,
-                       "Skip setting depth AE ROI because AE Reference Stream is color");
+    RCLCPP_WARN_STREAM(logger_, "Skip setting depth AE ROI because AE Reference Stream is color");
     depth_roi_has_run = true;
     return;
   }
@@ -3201,8 +3241,7 @@ void OBCameraNode::setColorAutoExposureROI() {
     return;
   }
   if (isGemini305SeriesPID(pid_) && ae_reference_stream_ == "depth") {
-    RCLCPP_WARN_STREAM(logger_,
-                       "Skip setting color AE ROI because AE Reference Stream is depth");
+    RCLCPP_WARN_STREAM(logger_, "Skip setting color AE ROI because AE Reference Stream is depth");
     color_roi_has_run = true;
     return;
   }
@@ -3264,6 +3303,8 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
   if (frame_set == nullptr) {
     return;
   }
+  const auto frame_set_arrival_system_us = getSystemNowUs();
+  const auto frame_set_arrival_steady_us = getSteadyNowUs();
   try {
     if (!tf_published_) {
       publishStaticTransforms();
@@ -3326,6 +3367,19 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       RCLCPP_DEBUG(logger_,
                    "Depth registration is disabled or align filter is null or depth frame is "
                    "null or color frame is null");
+    }
+
+    auto final_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
+    auto final_depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
+    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) {
+      const bool track_color = enable_stream_[COLOR] && static_cast<bool>(final_color_frame);
+      const bool track_depth = enable_stream_[DEPTH] && static_cast<bool>(final_depth_frame);
+      const bool color_publish_expected = track_color;
+      const bool depth_publish_expected = track_depth;
+      frame_timestamp_csv_logger_->recordFrameSet(
+          final_color_frame, final_depth_frame, frame_set_arrival_system_us,
+          frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
+          depth_publish_expected);
     }
 
     // Refresh frame from current frameset before logging to reflect post-filter/alignment output.
@@ -3849,6 +3903,11 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     fps_delay_status_depth_->tick(frame_timestamp);
   }
   if (has_raw_image_subscriber) {
+    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
+        (stream_index == COLOR || stream_index == DEPTH)) {
+      frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
+                                                         getSystemNowUs(), getSteadyNowUs());
+    }
     image_publishers_[stream_index]->publish(std::move(image_msg));
   }
 }
