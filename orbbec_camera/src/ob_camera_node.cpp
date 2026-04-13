@@ -4785,40 +4785,88 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       response->message = msg;
     };
     const auto normalized_request_filter_name = normalizeDepthFilterName(request->filter_name);
-    bool in_recommended_filter_list = false;
-    {
-      std::lock_guard<std::mutex> depth_filter_lock(depth_filter_mutex_);
-      in_recommended_filter_list =
-          std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
-                       [&normalized_request_filter_name](const auto &filter) {
-                         return normalizeDepthFilterName(filter->type()) ==
-                                normalized_request_filter_name;
-                       }) != depth_filter_list_.end();
-    }
     const bool is_noise_removal_filter = normalized_request_filter_name == "NoiseRemovalFilter";
-    const bool is_hardware_noise_removal =
+    const bool is_hardware_noise_removal_filter =
         normalized_request_filter_name == "HardwareNoiseRemovalFilter";
-    const bool noise_removal_property_writable =
-        device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
-        device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
-        device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE);
-    const bool hardware_noise_removal_property_writable =
-        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                                     OB_PERMISSION_READ_WRITE) ||
-        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                     OB_PERMISSION_READ_WRITE);
-    const bool supported_by_writable_property =
-        (is_noise_removal_filter && noise_removal_property_writable) ||
-        (is_hardware_noise_removal && hardware_noise_removal_property_writable);
-
-    if (!in_recommended_filter_list && !supported_by_writable_property) {
-      fail("Filter '" + request->filter_name + "' is not supported by this device");
-      return;
+    bool is_supported_by_property = false;
+    if (is_noise_removal_filter) {
+      is_supported_by_property =
+          device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
+          device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
+          device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE);
+    } else if (is_hardware_noise_removal_filter) {
+      is_supported_by_property =
+          device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                       OB_PERMISSION_READ_WRITE) ||
+          device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                       OB_PERMISSION_READ_WRITE);
     }
 
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
-    if (normalized_request_filter_name == "DecimationFilter") {
+    if (is_noise_removal_filter || is_hardware_noise_removal_filter) {
+      if (!is_supported_by_property) {
+        fail("Filter '" + normalized_request_filter_name + "' is not supported by this device");
+        return;
+      }
+      if (is_noise_removal_filter) {
+        if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
+          device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, request->filter_enable);
+          RCLCPP_INFO_STREAM(logger_, "enable_noise_removal_filter:" << request->filter_enable);
+        }
+        if (request->filter_param.size() > 1) {
+          if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
+            auto default_noise_removal_filter_min_diff =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
+            RCLCPP_INFO_STREAM(logger_, "default_noise_removal_filter_min_diff: "
+                                            << default_noise_removal_filter_min_diff);
+            device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, request->filter_param[0]);
+            auto new_noise_removal_filter_min_diff =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
+            RCLCPP_INFO_STREAM(logger_, "after set noise_removal_filter_min_diff: "
+                                            << new_noise_removal_filter_min_diff);
+            noise_removal_filter_min_diff_ = request->filter_param[0];
+          }
+          if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT,
+                                           OB_PERMISSION_WRITE)) {
+            auto default_noise_removal_filter_max_size =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+            RCLCPP_INFO_STREAM(logger_, "default_noise_removal_filter_max_size: "
+                                            << default_noise_removal_filter_max_size);
+            device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, request->filter_param[1]);
+            auto new_noise_removal_filter_max_size =
+                device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+            RCLCPP_INFO_STREAM(logger_, "after set noise_removal_filter_max_size: "
+                                            << new_noise_removal_filter_max_size);
+            noise_removal_filter_max_size_ = request->filter_param[1];
+          }
+        }
+        enable_noise_removal_filter_ = request->filter_enable;
+      } else if (is_hardware_noise_removal_filter) {
+        if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                         OB_PERMISSION_READ_WRITE)) {
+          device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                   request->filter_enable);
+          RCLCPP_INFO_STREAM(logger_,
+                             "Setting hardware_noise_removal_filter:" << request->filter_enable);
+          if (request->filter_param.size() > 0 &&
+              device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                           OB_PERMISSION_READ_WRITE)) {
+            if (request->filter_enable) {
+              device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                        request->filter_param[0]);
+              RCLCPP_INFO_STREAM(logger_, "Setting hardware_noise_removal_filter_threshold :"
+                                              << request->filter_param[0]);
+              hardware_noise_removal_filter_threshold_ = request->filter_param[0];
+            }
+          } else {
+            fail("The filter switch setting is successful, but the filter parameter setting fails");
+            return;
+          }
+        }
+        enable_hardware_noise_removal_filter_ = request->filter_enable;
+      }
+    } else if (normalized_request_filter_name == "DecimationFilter") {
       std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
       auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
                                [&normalized_request_filter_name](const std::shared_ptr<ob::Filter> &filter) {
@@ -4945,63 +4993,6 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
       enable_threshold_filter_ = request->filter_enable;
 
-    } else if (normalized_request_filter_name == "NoiseRemovalFilter") {
-      if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
-        device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, request->filter_enable);
-      }
-      if (request->filter_param.size() > 1) {
-        if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
-          auto default_noise_removal_filter_min_diff =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-          RCLCPP_INFO_STREAM(logger_, "default noise removal filter min diff: "
-                                          << default_noise_removal_filter_min_diff);
-          device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, request->filter_param[0]);
-          auto new_noise_removal_filter_min_diff =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-          RCLCPP_INFO_STREAM(logger_, "after set noise removal filter min diff: "
-                                          << new_noise_removal_filter_min_diff);
-          noise_removal_filter_min_diff_ = request->filter_param[0];
-        }
-        if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE)) {
-          auto default_noise_removal_filter_max_size =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-          RCLCPP_INFO_STREAM(logger_, "default noise removal filter max size: "
-                                          << default_noise_removal_filter_max_size);
-          device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, request->filter_param[1]);
-          auto new_noise_removal_filter_max_size =
-              device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-          RCLCPP_INFO_STREAM(logger_, "after set noise removal filter max size: "
-                                          << new_noise_removal_filter_max_size);
-          noise_removal_filter_max_size_ = request->filter_param[1];
-        }
-      } else {
-        response->message =
-            "The filter switch setting is successful, but the filter parameter setting fails";
-        return;
-      }
-      enable_noise_removal_filter_ = request->filter_enable;
-    } else if (normalized_request_filter_name == "HardwareNoiseRemovalFilter") {
-      if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                                       OB_PERMISSION_READ_WRITE)) {
-        device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                                 request->filter_enable);
-        if (request->filter_param.size() > 0 &&
-            device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                         OB_PERMISSION_READ_WRITE)) {
-          if (request->filter_enable) {
-            device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                      request->filter_param[0]);
-            RCLCPP_INFO_STREAM(logger_, "Setting hardware noise removal filter threshold :"
-                                            << request->filter_param[0]);
-            hardware_noise_removal_filter_threshold_ = request->filter_param[0];
-          }
-        } else {
-          response->message =
-              "The filter switch setting is successful, but the filter parameter setting fails";
-          return;
-        }
-      }
-      enable_hardware_noise_removal_filter_ = request->filter_enable;
     } else if (normalized_request_filter_name == "SpatialAdvancedFilter") {
       std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
       auto it = std::remove_if(depth_filter_list_.begin(), depth_filter_list_.end(),
