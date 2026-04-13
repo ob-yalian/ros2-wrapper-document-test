@@ -28,7 +28,7 @@ bool isGemini330SeriesForDisparity(uint32_t pid) {
   return pid == GEMINI_335_PID || pid == GEMINI_336_PID || pid == GEMINI_330_PID ||
          pid == GEMINI_335L_PID || pid == GEMINI_336L_PID || pid == GEMINI_330L_PID ||
          pid == GEMINI_335LG_PID || pid == GEMINI_335LE_PID || pid == GEMINI_338_PID ||
-         pid == GEMINI_338Lg_PID || pid == GEMINI_338Le_PID || pid == GEMINI_338L_PID ||
+         pid == GEMINI_338LG_PID || pid == GEMINI_338LE_PID || pid == GEMINI_338L_PID ||
          pid == GEMINI_331L_PID;
 }
 
