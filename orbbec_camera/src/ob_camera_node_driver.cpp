@@ -223,9 +223,8 @@ void OBCameraNodeDriver::init() {
   ob::Context::setExtensionsDirectory(extension_path_.c_str());
   g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name);
   auto log_level_str = declare_parameter<std::string>("log_level", "none");
-  auto ros_log_level_str = declare_parameter<std::string>("ros_log_level", "info");
   auto log_level = obLogSeverityFromString(log_level_str);
-  auto ros_log_level = rosLogSeverityFromString(ros_log_level_str);
+  auto ros_log_level = rosLogSeverityFromString(log_level_str);
   auto log_file_name = declare_parameter<std::string>("log_file_name", "");
   std::string pwd_dir = std::getenv("PWD") ? std::getenv("PWD") : std::getenv("HOME");
   std::string log_path = pwd_dir + "/Log/" + g_camera_name;
@@ -235,7 +234,7 @@ void OBCameraNodeDriver::init() {
   if (ros_log_level != RCUTILS_LOG_SEVERITY_UNSET) {
     auto ret = rcutils_logging_set_logger_level(this->get_logger().get_name(), ros_log_level);
     if (ret != RCUTILS_RET_OK) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to set ROS log level to " << ros_log_level_str);
+      RCLCPP_WARN_STREAM(logger_, "Failed to set ROS log level to " << log_level_str);
     }
   }
   // Set custom log file name if specified
