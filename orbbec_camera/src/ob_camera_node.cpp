@@ -53,8 +53,8 @@ void OBCameraNode::appendDepthFilterParam(DepthFilterState &filter_state, const 
   filter_state.params.push_back(param);
 }
 
-DepthFilterState OBCameraNode::buildDepthFilterState(const std::string &filter_name,
-                                                     bool enabled) const {
+DepthFilterState OBCameraNode::buildDepthFilterState(const std::string &filter_name, bool enabled,
+                                                     const std::shared_ptr<ob::Filter> &filter) const {
   const auto normalized_filter_name = normalizeDepthFilterName(filter_name);
   DepthFilterState filter_state;
   filter_state.filter_name = normalized_filter_name;
@@ -102,6 +102,37 @@ DepthFilterState OBCameraNode::buildDepthFilterState(const std::string &filter_n
     appendDepthFilterParam(filter_state, "magnitude",
                            to_param_value(spatial_moderate_filter_magnitude_));
     appendDepthFilterParam(filter_state, "radius", to_param_value(spatial_moderate_filter_radius_));
+  }
+
+  if (filter_state.params.empty() && filter) {
+    auto format_filter_config_value = [](const OBFilterConfigSchemaItem &config_schema, double value) {
+      switch (config_schema.type) {
+        case OB_FILTER_CONFIG_VALUE_TYPE_INT: {
+          return std::to_string(static_cast<long long>(value));
+        }
+        case OB_FILTER_CONFIG_VALUE_TYPE_BOOLEAN:
+          return value != 0.0 ? std::string("true") : std::string("false");
+        case OB_FILTER_CONFIG_VALUE_TYPE_FLOAT:
+        default: {
+          std::ostringstream ss;
+          ss << value;
+          return ss.str();
+        }
+      }
+    };
+
+    try {
+      for (const auto &config_schema : filter->getConfigSchemaVec()) {
+        if (config_schema.name == nullptr || config_schema.name[0] == '\0') {
+          continue;
+        }
+        appendDepthFilterParam(filter_state, config_schema.name,
+                               format_filter_config_value(
+                                   config_schema, filter->getConfigValue(config_schema.name)));
+      }
+    } catch (const std::exception &) {
+      // Keep the state without dynamic params if runtime querying fails.
+    }
   }
 
   return filter_state;
@@ -298,19 +329,20 @@ void OBCameraNode::publishDepthFiltersStatus() {
   msg.filters.reserve(ordered_filter_names.size());
   for (const auto &filter_name : ordered_filter_names) {
     bool enabled = false;
+    auto filter = find_depth_filter(filter_name);
     if (filter_name == "NoiseRemovalFilter") {
       enabled = enable_noise_removal_filter_;
     } else if (filter_name == "HardwareNoiseRemovalFilter") {
       enabled = enable_hardware_noise_removal_filter_;
     }
-    if (auto filter = find_depth_filter(filter_name)) {
+    if (filter) {
       try {
         enabled = filter->isEnabled();
       } catch (const std::exception &) {
         // Keep default value when runtime querying fails.
       }
     }
-    msg.filters.push_back(buildDepthFilterState(filter_name, enabled));
+    msg.filters.push_back(buildDepthFilterState(filter_name, enabled, filter));
   }
   depth_filters_status_pub_->publish(msg);
 }

@@ -263,7 +263,8 @@ class OBCameraNode {
 
   void publishDepthFiltersStatus();
 
-  DepthFilterState buildDepthFilterState(const std::string &filter_name, bool enabled) const;
+  DepthFilterState buildDepthFilterState(const std::string &filter_name, bool enabled,
+                                         const std::shared_ptr<ob::Filter> &filter) const;
 
   static std::string normalizeDepthFilterName(const std::string &filter_name);
 
