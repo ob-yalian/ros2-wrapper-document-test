@@ -4778,6 +4778,12 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
+    response->success = false;
+    response->message.clear();
+    auto fail = [&response](const std::string &msg) {
+      response->success = false;
+      response->message = msg;
+    };
     const auto normalized_request_filter_name = normalizeDepthFilterName(request->filter_name);
     bool in_recommended_filter_list = false;
     {
@@ -4806,8 +4812,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         (is_hardware_noise_removal && hardware_noise_removal_property_writable);
 
     if (!in_recommended_filter_list && !supported_by_writable_property) {
-      response->success = false;
-      response->message = "Filter '" + request->filter_name + "' is not supported by this device";
+      fail("Filter '" + request->filter_name + "' is not supported by this device");
       return;
     }
 
@@ -5196,14 +5201,17 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
     publishDepthFiltersStatus();
     response->success = true;
   } catch (const ob::Error &e) {
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
+    response->message = "Failed to set filter: " + orbbec_camera::formatObErrorWithStatus(e);
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set filter: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
-    response->message = e.what();
     response->success = false;
+    response->message = std::string("Failed to set filter: ") + e.what();
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set filter: " << e.what());
   } catch (...) {
-    response->message = "unknown error";
     response->success = false;
+    response->message = "unknown error";
+    RCLCPP_ERROR_STREAM(logger_, "unknown error");
   }
 }
 bool OBCameraNode::isWriteCustomerDataSuccess() const {
