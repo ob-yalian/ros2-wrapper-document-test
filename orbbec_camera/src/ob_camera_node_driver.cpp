@@ -1338,7 +1338,7 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     initializeDevice(device);
     end_time = std::chrono::high_resolution_clock::now();
     time_cost = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    RCLCPP_DEBUG_STREAM(logger_, "Initialize device cost: " << time_cost.count() << " ms");
+    RCLCPP_INFO_STREAM(logger_, "Initialize device cost: " << time_cost.count() << " ms");
 
     if (firmware_update_success_) {
       firmware_update_success_ = false;

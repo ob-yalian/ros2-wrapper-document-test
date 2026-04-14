@@ -448,13 +448,15 @@ void OBCameraNode::setupDevices() {
   }
   if (device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_CONTROL_INT, enable_laser_);
-    RCLCPP_INFO_STREAM(logger_, "Current G300 laser control: "
-                                    << device_->getIntProperty(OB_PROP_LASER_CONTROL_INT));
+    RCLCPP_INFO_STREAM(logger_,
+                       "Current G300 laser control: "
+                           << (device_->getIntProperty(OB_PROP_LASER_CONTROL_INT) ? "ON" : "OFF"));
   }
   if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_BOOL, enable_laser_);
-    RCLCPP_INFO_STREAM(logger_,
-                       "Current laser control: " << device_->getIntProperty(OB_PROP_LASER_BOOL));
+    RCLCPP_INFO_STREAM(
+        logger_,
+        "Current laser control: " << (device_->getIntProperty(OB_PROP_LASER_BOOL) ? "ON" : "OFF"));
   }
   if (!sync_mode_str_.empty()) {
     auto sync_config = device_->getMultiDeviceSyncConfig();
@@ -622,8 +624,10 @@ void OBCameraNode::setupDevices() {
     }
     if (preset_value >= 0) {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_PRESET_PRIORITY_INT, preset_value);
-      RCLCPP_INFO_STREAM(logger_, "Current color preset: " << device_->getIntProperty(
-                                      OB_PROP_COLOR_PRESET_PRIORITY_INT));
+      RCLCPP_INFO_STREAM(logger_, "Current color preset: "
+                                      << (device_->getIntProperty(OB_PROP_COLOR_PRESET_PRIORITY_INT)
+                                              ? "Warm Biased AWB"
+                                              : "Default"));
     }
   }
   if (color_exposure_ != -1 &&
@@ -654,8 +658,10 @@ void OBCameraNode::setupDevices() {
     int set_enable_color_auto_exposure_priority = enable_color_auto_exposure_priority_ ? 1 : 0;
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT,
                         set_enable_color_auto_exposure_priority);
-    RCLCPP_INFO_STREAM(logger_, "Current color auto exposure priority: " << device_->getIntProperty(
-                                    OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT));
+    RCLCPP_INFO_STREAM(
+        logger_,
+        "Current color auto exposure priority: "
+            << (device_->getIntProperty(OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF"));
   }
   if (device_->isPropertySupported(OB_PROP_COLOR_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_AUTO_EXPOSURE_BOOL,
@@ -841,8 +847,10 @@ void OBCameraNode::setupDevices() {
     int set_enable_depth_auto_exposure_priority = enable_depth_auto_exposure_priority_ ? 1 : 0;
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT,
                         set_enable_depth_auto_exposure_priority);
-    RCLCPP_INFO_STREAM(logger_, "Current depth auto exposure priority: " << device_->getIntProperty(
-                                    OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT));
+    RCLCPP_INFO_STREAM(
+        logger_,
+        "Current depth auto exposure priority: "
+            << (device_->getIntProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF"));
   }
   if (device_->isPropertySupported(OB_PROP_IR_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_IR_AUTO_EXPOSURE_BOOL, enable_ir_auto_exposure_);
@@ -1755,11 +1763,11 @@ void OBCameraNode::startStreams() {
   }
   // enable interleave frame
   if ((interleave_ae_mode_ == "hdr") || (interleave_ae_mode_ == "laser")) {
-    RCLCPP_DEBUG_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
+    RCLCPP_INFO_STREAM(logger_, "current interleave_ae_mode_: " << interleave_ae_mode_);
     if (device_->isPropertySupported(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL, OB_PERMISSION_WRITE)) {
       TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                           interleave_frame_enable_);
-      RCLCPP_DEBUG_STREAM(
+      RCLCPP_INFO_STREAM(
           logger_,
           "Enable enable_interleave_depth_frame to "
               << (device_->getBoolProperty(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL) ? "true"
