@@ -45,6 +45,34 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
   return filter_name;
 }
 
+namespace {
+
+std::string getDepthFilterStatusName(const std::string &filter_name) {
+  if (filter_name == "SpatialAdvancedFilter") {
+    return "SpatialFilter";
+  }
+  if (filter_name == "DisparityTransform") {
+    return "DisparityToDepth";
+  }
+  return filter_name;
+}
+
+std::string getDepthFilterStatusParamName(const std::string &filter_name,
+                                          const std::string &param_name) {
+  if (filter_name == "SpatialAdvancedFilter" && param_name == "disp_diff") {
+    return "diff_threshold";
+  }
+  if (filter_name == "TemporalFilter" && param_name == "diff_scale") {
+    return "diff_threshold";
+  }
+  if (filter_name == "DecimationFilter" && param_name == "decimate") {
+    return "scale";
+  }
+  return param_name;
+}
+
+}  // namespace
+
 void OBCameraNode::appendDepthFilterParam(DepthFilterState &filter_state, const std::string &name,
                                           const std::string &value) {
   orbbec_camera_msgs::msg::DepthFilterParam param;
@@ -57,7 +85,7 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
     const std::string &filter_name, bool enabled, const std::shared_ptr<ob::Filter> &filter) const {
   const auto normalized_filter_name = normalizeDepthFilterName(filter_name);
   DepthFilterState filter_state;
-  filter_state.filter_name = normalized_filter_name;
+  filter_state.filter_name = getDepthFilterStatusName(normalized_filter_name);
   filter_state.enabled = enabled;
   auto to_param_value = [](const auto &value) {
     std::ostringstream ss;
@@ -99,7 +127,7 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
           continue;
         }
         appendDepthFilterParam(
-            filter_state, config_schema.name,
+            filter_state, getDepthFilterStatusParamName(normalized_filter_name, config_schema.name),
             format_filter_config_value(config_schema, filter->getConfigValue(config_schema.name)));
       }
     } catch (const std::exception &) {
