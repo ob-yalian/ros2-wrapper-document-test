@@ -62,6 +62,9 @@ std::string getDepthFilterStatusParamName(const std::string &filter_name,
   if (filter_name == "SpatialAdvancedFilter" && param_name == "disp_diff") {
     return "diff_threshold";
   }
+  if (filter_name == "SpatialModerateFilter" && param_name == "disp_diff") {
+    return "diff_threshold";
+  }
   if (filter_name == "TemporalFilter" && param_name == "diff_scale") {
     return "diff_threshold";
   }
@@ -69,6 +72,12 @@ std::string getDepthFilterStatusParamName(const std::string &filter_name,
     return "scale";
   }
   return param_name;
+}
+
+bool shouldExposeDepthFilterParams(const std::string &filter_name) {
+  return filter_name != "MgcNoiseRemovalFilter" && filter_name != "LutNoiseRemovalFilter" &&
+         filter_name != "DisparityTransform" && filter_name != "FalsePositiveFilter" &&
+         filter_name != "EdgeNoiseRemovalFilter";
 }
 
 }  // namespace
@@ -103,7 +112,8 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
                            to_param_value(hardware_noise_removal_filter_threshold_));
   }
 
-  if (filter_state.params.empty() && filter) {
+  if (filter_state.params.empty() && filter &&
+      shouldExposeDepthFilterParams(normalized_filter_name)) {
     auto format_filter_config_value = [](const OBFilterConfigSchemaItem &config_schema,
                                          double value) {
       switch (config_schema.type) {
