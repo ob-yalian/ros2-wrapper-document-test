@@ -182,7 +182,17 @@ OB_DEPTH_PRECISION_LEVEL depthPrecisionLevelFromString(
 
 float depthPrecisionFromString(const std::string& depth_precision_level_str);
 
+std::string colorPowerLineFrequencyToString(int value);
+
+std::string depthPrecisionLevelToString(int value);
+
 OBMultiDeviceSyncMode OBSyncModeFromString(const std::string& mode);
+
+std::string disparityRangeModeToString(int value);
+
+std::string exposureRangeModeToString(int value);
+
+std::string intraCameraSyncReferenceToString(int value);
 
 OB_SAMPLE_RATE sampleRateFromString(std::string& sample_rate);
 

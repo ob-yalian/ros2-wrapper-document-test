@@ -540,6 +540,38 @@ float depthPrecisionFromString(const std::string &depth_precision_level_str) {
   return std::stof(depth_precision_level_str_num);
 }
 
+std::string colorPowerLineFrequencyToString(int value) {
+  switch (value) {
+    case 0:
+      return "disable";
+    case 1:
+      return "50hz";
+    case 2:
+      return "60hz";
+    case 3:
+      return "auto";
+    default:
+      return "unknown";
+  }
+}
+
+std::string depthPrecisionLevelToString(int value) {
+  switch (static_cast<OB_DEPTH_PRECISION_LEVEL>(value)) {
+    case OB_PRECISION_1MM:
+      return "1mm";
+    case OB_PRECISION_0MM8:
+      return "0.8mm";
+    case OB_PRECISION_0MM4:
+      return "0.4mm";
+    case OB_PRECISION_0MM2:
+      return "0.2mm";
+    case OB_PRECISION_0MM1:
+      return "0.1mm";
+    default:
+      return "unknown";
+  }
+}
+
 OBMultiDeviceSyncMode OBSyncModeFromString(const std::string &mode) {
   if (mode == "FREE_RUN") {
     return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_FREE_RUN;
@@ -557,6 +589,43 @@ OBMultiDeviceSyncMode OBSyncModeFromString(const std::string &mode) {
     return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_HARDWARE_TRIGGERING;
   } else {
     return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_FREE_RUN;
+  }
+}
+
+std::string disparityRangeModeToString(int value) {
+  switch (value) {
+    case 0:
+      return "64";
+    case 1:
+      return "128";
+    case 2:
+      return "256";
+    default:
+      return "unknown";
+  }
+}
+
+std::string exposureRangeModeToString(int value) {
+  switch (value) {
+    case 0:
+      return "regular";
+    case 1:
+      return "ultimate";
+    default:
+      return "unknown";
+  }
+}
+
+std::string intraCameraSyncReferenceToString(int value) {
+  switch (value) {
+    case 0:
+      return "Start";
+    case 1:
+      return "Middle";
+    case 2:
+      return "End";
+    default:
+      return "unknown";
   }
 }
 

@@ -665,8 +665,8 @@ void OBCameraNode::setupDevices() {
 
   for (const auto &[stream_index, enable] : enable_stream_) {
     if (enable && sensors_.find(stream_index) == sensors_.end()) {
-      RCLCPP_WARN_STREAM(logger_, magic_enum::enum_name(stream_index.first)
-                                      << " sensor not supported by current device, skipping");
+      RCLCPP_DEBUG_STREAM(logger_, magic_enum::enum_name(stream_index.first)
+                                       << " sensor not supported by current device, skipping");
       enable_stream_[stream_index] = false;
     }
   }
@@ -817,8 +817,10 @@ void OBCameraNode::setupDevices() {
     auto default_precision_level = device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
     if (default_precision_level != depth_precision_) {
       device_->setIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT, depth_precision_);
-      RCLCPP_INFO_STREAM(logger_, "Current depth precision: " << device_->getIntProperty(
-                                      OB_PROP_DEPTH_PRECISION_LEVEL_INT));
+      const auto current_depth_precision =
+          device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
+      RCLCPP_INFO_STREAM(logger_, "Current depth precision: "
+                                      << depthPrecisionLevelToString(current_depth_precision));
     }
   } else if (device_->isPropertySupported(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT,
                                           OB_PERMISSION_READ_WRITE) &&
@@ -1126,8 +1128,10 @@ void OBCameraNode::setupDevices() {
     } else if (color_powerline_freq_ == "auto") {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, 3);
     }
-    RCLCPP_INFO_STREAM(logger_, "Current color powerline freq: " << device_->getIntProperty(
-                                    OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT));
+    const auto current_color_powerline_freq =
+        device_->getIntProperty(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT);
+    RCLCPP_INFO_STREAM(logger_, "Current color powerline freq: " << colorPowerLineFrequencyToString(
+                                    current_color_powerline_freq));
   }
   if (depth_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_DEPTH_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
@@ -1296,8 +1300,10 @@ void OBCameraNode::setupDevices() {
     } else {
       RCLCPP_ERROR(logger_, "disparity range mode does not support this setting");
     }
+    const auto current_disparity_range_mode =
+        device_->getIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
     RCLCPP_INFO_STREAM(logger_, "Current disparity range mode: "
-                                    << device_->getIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT));
+                                    << disparityRangeModeToString(current_disparity_range_mode));
   }
   if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
                                    OB_PERMISSION_READ_WRITE)) {
@@ -1329,8 +1335,10 @@ void OBCameraNode::setupDevices() {
     } else {
       RCLCPP_ERROR(logger_, "exposure range mode does not support this setting");
     }
-    RCLCPP_INFO_STREAM(logger_, "Current exposure range mode: " << device_->getIntProperty(
-                                    OB_PROP_DEVICE_PERFORMANCE_MODE_INT));
+    const auto current_exposure_range_mode =
+        device_->getIntProperty(OB_PROP_DEVICE_PERFORMANCE_MODE_INT);
+    RCLCPP_INFO_STREAM(logger_, "Current exposure range mode: "
+                                    << exposureRangeModeToString(current_exposure_range_mode));
   }
   if (!load_config_json_file_path_.empty()) {
     device_->loadPresetFromJsonFile(load_config_json_file_path_.c_str());
@@ -1370,8 +1378,11 @@ void OBCameraNode::setupDevices() {
     } else {
       RCLCPP_ERROR(logger_, "intra camera sync reference does not support this setting");
     }
-    RCLCPP_INFO_STREAM(logger_, "Current intra camera sync reference: " << device_->getIntProperty(
-                                    OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT));
+    const auto current_intra_camera_sync_reference =
+        device_->getIntProperty(OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT);
+    RCLCPP_INFO_STREAM(
+        logger_, "Current intra camera sync reference: "
+                     << intraCameraSyncReferenceToString(current_intra_camera_sync_reference));
   }
   if (device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE)) {
     device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, (ae_strategy_ == "motion" ? 0 : 1));
