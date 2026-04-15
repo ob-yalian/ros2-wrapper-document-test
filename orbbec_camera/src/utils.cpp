@@ -941,16 +941,17 @@ UndistortedImageResult undistortImage(const cv::Mat &image, const OBCameraIntrin
   cv::Mat dist_coeffs = (cv::Mat_<float>(8, 1) << distortion.k1, distortion.k2, distortion.p1,
                          distortion.p2, distortion.k3, distortion.k4, distortion.k5, distortion.k6);
   cv::Size image_size(image.cols, image.rows);
-  cv::Mat new_camera_matrix =
-      cv::getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, image_size, 0.0, image_size);
+  // cv::Mat new_camera_matrix =
+  // cv::getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, image_size, 0.0, image_size);
   // Undistort the image using the new camera matrix
-  cv::undistort(image, result.image, camera_matrix, dist_coeffs, new_camera_matrix);
+  // cv::undistort(image, result.image, camera_matrix, dist_coeffs, new_camera_matrix);
+  cv::undistort(image, result.image, camera_matrix, dist_coeffs);
   // Update the intrinsic parameters with the new camera matrix
   result.new_intrinsic = intrinsic;  // Copy original values first
-  result.new_intrinsic.fx = new_camera_matrix.at<double>(0, 0);
-  result.new_intrinsic.fy = new_camera_matrix.at<double>(1, 1);
-  result.new_intrinsic.cx = new_camera_matrix.at<double>(0, 2);
-  result.new_intrinsic.cy = new_camera_matrix.at<double>(1, 2);
+  // result.new_intrinsic.fx = new_camera_matrix.at<double>(0, 0);
+  // result.new_intrinsic.fy = new_camera_matrix.at<double>(1, 1);
+  // result.new_intrinsic.cx = new_camera_matrix.at<double>(0, 2);
+  // result.new_intrinsic.cy = new_camera_matrix.at<double>(1, 2);
   result.new_intrinsic.width = image.cols;
   result.new_intrinsic.height = image.rows;
   return result;
