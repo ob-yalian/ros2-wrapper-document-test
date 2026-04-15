@@ -45,6 +45,43 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
   return filter_name;
 }
 
+namespace {
+
+std::string getDepthFilterStatusName(const std::string &filter_name) {
+  if (filter_name == "SpatialAdvancedFilter") {
+    return "SpatialFilter";
+  }
+  if (filter_name == "DisparityTransform") {
+    return "DisparityToDepth";
+  }
+  return filter_name;
+}
+
+std::string getDepthFilterStatusParamName(const std::string &filter_name,
+                                          const std::string &param_name) {
+  if (filter_name == "SpatialAdvancedFilter" && param_name == "disp_diff") {
+    return "diff_threshold";
+  }
+  if (filter_name == "SpatialModerateFilter" && param_name == "disp_diff") {
+    return "diff_threshold";
+  }
+  if (filter_name == "TemporalFilter" && param_name == "diff_scale") {
+    return "diff_threshold";
+  }
+  if (filter_name == "DecimationFilter" && param_name == "decimate") {
+    return "scale";
+  }
+  return param_name;
+}
+
+bool shouldExposeDepthFilterParams(const std::string &filter_name) {
+  return filter_name != "MgcNoiseRemovalFilter" && filter_name != "LutNoiseRemovalFilter" &&
+         filter_name != "DisparityTransform" && filter_name != "FalsePositiveFilter" &&
+         filter_name != "EdgeNoiseRemovalFilter";
+}
+
+}  // namespace
+
 void OBCameraNode::appendDepthFilterParam(DepthFilterState &filter_state, const std::string &name,
                                           const std::string &value) {
   orbbec_camera_msgs::msg::DepthFilterParam param;
@@ -57,7 +94,7 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
     const std::string &filter_name, bool enabled, const std::shared_ptr<ob::Filter> &filter) const {
   const auto normalized_filter_name = normalizeDepthFilterName(filter_name);
   DepthFilterState filter_state;
-  filter_state.filter_name = normalized_filter_name;
+  filter_state.filter_name = getDepthFilterStatusName(normalized_filter_name);
   filter_state.enabled = enabled;
   auto to_param_value = [](const auto &value) {
     std::ostringstream ss;
@@ -75,7 +112,8 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
                            to_param_value(hardware_noise_removal_filter_threshold_));
   }
 
-  if (filter_state.params.empty() && filter) {
+  if (filter_state.params.empty() && filter &&
+      shouldExposeDepthFilterParams(normalized_filter_name)) {
     auto format_filter_config_value = [](const OBFilterConfigSchemaItem &config_schema,
                                          double value) {
       switch (config_schema.type) {
@@ -99,7 +137,7 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
           continue;
         }
         appendDepthFilterParam(
-            filter_state, config_schema.name,
+            filter_state, getDepthFilterStatusParamName(normalized_filter_name, config_schema.name),
             format_filter_config_value(config_schema, filter->getConfigValue(config_schema.name)));
       }
     } catch (const std::exception &) {
@@ -1623,7 +1661,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
         spatial_filter->setFilterParams(params);
       }
       auto current_params = spatial_filter->getFilterParams();
-      RCLCPP_INFO_STREAM(logger_, "Current SpatialAdvancedFilter params: "
+      RCLCPP_INFO_STREAM(logger_, "Current SpatialFilter params: "
                                       << "alpha=" << current_params.alpha << ", disp_diff="
                                       << current_params.disp_diff << ", magnitude="
                                       << static_cast<int>(current_params.magnitude)
@@ -5065,7 +5103,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           return;
         }
         enable_threshold_filter_ = request->filter_enable;
-      } else if (normalized_request_filter_name == "SpatialAdvancedFilter") {
+      } else if (normalized_request_filter_name == "SpatialFilter") {
         auto spatial_filter = std::make_shared<ob::SpatialAdvancedFilter>();
         spatial_filter->enable(request->filter_enable);
         add_or_replace_filter(spatial_filter);
@@ -5076,7 +5114,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           params.magnitude = request->filter_param[2];
           params.radius = request->filter_param[3];
           spatial_filter->setFilterParams(params);
-          RCLCPP_INFO_STREAM(logger_, "Set SpatialAdvancedFilter params: "
+          RCLCPP_INFO_STREAM(logger_, "Set SpatialFilter params: "
                                           << "\nalpha:" << params.alpha
                                           << "\ndisp_diff:" << params.disp_diff
                                           << "\nmagnitude:" << static_cast<int>(params.magnitude)
