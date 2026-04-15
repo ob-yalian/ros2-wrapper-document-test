@@ -4901,27 +4901,19 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         }
         if (request->filter_param.size() > 1) {
           if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
-            auto default_noise_removal_filter_min_diff =
-                device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-            RCLCPP_INFO_STREAM(logger_, "default_noise_removal_filter_min_diff: "
-                                            << default_noise_removal_filter_min_diff);
             device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, request->filter_param[0]);
             auto new_noise_removal_filter_min_diff =
                 device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
-            RCLCPP_INFO_STREAM(logger_, "after set noise_removal_filter_min_diff: "
+            RCLCPP_INFO_STREAM(logger_, "Set noise_removal_filter_min_diff: "
                                             << new_noise_removal_filter_min_diff);
             noise_removal_filter_min_diff_ = request->filter_param[0];
           }
           if (device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT,
                                            OB_PERMISSION_WRITE)) {
-            auto default_noise_removal_filter_max_size =
-                device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-            RCLCPP_INFO_STREAM(logger_, "default_noise_removal_filter_max_size: "
-                                            << default_noise_removal_filter_max_size);
             device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, request->filter_param[1]);
             auto new_noise_removal_filter_max_size =
                 device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
-            RCLCPP_INFO_STREAM(logger_, "after set noise_removal_filter_max_size: "
+            RCLCPP_INFO_STREAM(logger_, "Set noise_removal_filter_max_size: "
                                             << new_noise_removal_filter_max_size);
             noise_removal_filter_max_size_ = request->filter_param[1];
           }
@@ -4933,14 +4925,14 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
                                    request->filter_enable);
           RCLCPP_INFO_STREAM(logger_,
-                             "Setting hardware_noise_removal_filter:" << request->filter_enable);
+                             "Set hardware_noise_removal_filter:" << request->filter_enable);
           if (request->filter_param.size() > 0 &&
               device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
                                            OB_PERMISSION_READ_WRITE)) {
             if (request->filter_enable) {
               device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
                                         request->filter_param[0]);
-              RCLCPP_INFO_STREAM(logger_, "Setting hardware_noise_removal_filter_threshold :"
+              RCLCPP_INFO_STREAM(logger_, "Set hardware_noise_removal_filter_threshold :"
                                               << request->filter_param[0]);
               hardware_noise_removal_filter_threshold_ = request->filter_param[0];
             }
