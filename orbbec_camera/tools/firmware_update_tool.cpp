@@ -93,7 +93,7 @@ std::vector<std::string> splitCsv(const std::string &value) {
   return result;
 }
 
-void printUsage(const char *program) {
+void printUsage() {
   std::cout
       << "Usage:\n"
       << "ros2 run orbbec_camera firmware_update_tool --\\\n"
@@ -628,11 +628,11 @@ int main(int argc, char **argv) {
   std::string parse_error;
   if (!parseArgs(argc, argv, args, parse_error)) {
     std::cerr << "Argument error: " << parse_error << std::endl;
-    printUsage(argv[0]);
+    printUsage();
     return 1;
   }
   if (args.help) {
-    printUsage(argv[0]);
+    printUsage();
     return 0;
   }
 
