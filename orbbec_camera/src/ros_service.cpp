@@ -27,11 +27,13 @@ namespace {
 bool isGemini330SeriesForDisparity(uint32_t pid) {
   return pid == GEMINI_335_PID || pid == GEMINI_336_PID || pid == GEMINI_330_PID ||
          pid == GEMINI_335L_PID || pid == GEMINI_336L_PID || pid == GEMINI_330L_PID ||
-         pid == GEMINI_335LG_PID || pid == GEMINI_335LE_PID;
+         pid == GEMINI_335LG_PID || pid == GEMINI_335LE_PID || pid == GEMINI_338_PID ||
+         pid == GEMINI_338LG_PID || pid == GEMINI_338LE_PID || pid == GEMINI_338L_PID ||
+         pid == GEMINI_331L_PID;
 }
 
 bool isSupportedDisparityResolutionForPid(uint32_t pid, int width, int height) {
-  if (pid == GEMINI_335LE_PID) {
+  if (pid == GEMINI_335LE_PID || pid == GEMINI_338LE_PID) {
     return (width == 1280 && height == 800) || (width == 640 && height == 400) ||
            (width == 424 && height == 266) || (width == 320 && height == 200);
   }
@@ -41,11 +43,11 @@ bool isSupportedDisparityResolutionForPid(uint32_t pid, int width, int height) {
 }
 
 std::string getDisparityResolutionHintByPid(uint32_t pid) {
-  if (pid == GEMINI_335LE_PID) {
-    return "Supported resolutions for Gemini 335Le: 1280x800/640x400/424x266/320x200";
+  if (pid == GEMINI_335LE_PID || pid == GEMINI_338LE_PID) {
+    return "Supported resolutions for the current device: 1280x800/640x400/424x266/320x200";
   }
 
-  return "Supported resolutions for Gemini 335/336/330/335L/336L/335Lg/330L: "
+  return "Supported resolutions for the current device: "
          "1280x800/1280x720/640x400/424x266";
 }
 
