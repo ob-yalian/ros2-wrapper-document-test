@@ -645,7 +645,7 @@ void OBCameraNode::setGainCallback(const std::shared_ptr<SetInt32 ::Request>& re
     auto range = device_->getIntPropertyRange(prop_id);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
-      RCLCPP_INFO_STREAM(logger_, "set gain value out of range");
+      RCLCPP_WARN_STREAM(logger_, "Gain value is out of range");
       response->message = "value out of range";
       return;
     }
@@ -717,9 +717,9 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
         device_->getStructuredData(OB_STRUCT_DEPTH_AE_ROI, reinterpret_cast<uint8_t*>(&config),
                                    &data_size);
         RCLCPP_INFO_STREAM(
-            logger_, "set depth AE ROI : "
+            logger_, "Set depth AE ROI to "
                          << "[Left: " << config.x0_left << ", Right: " << config.x1_right
-                         << ", Top: " << config.y0_top << ", Bottom: " << config.y1_bottom << " ]");
+                         << ", Top: " << config.y0_top << ", Bottom: " << config.y1_bottom << "]");
         break;
       case OB_STREAM_COLOR:
       case OB_STREAM_COLOR_LEFT:
@@ -753,9 +753,9 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
         device_->getStructuredData(OB_STRUCT_COLOR_AE_ROI, reinterpret_cast<uint8_t*>(&config),
                                    &data_size);
         RCLCPP_INFO_STREAM(
-            logger_, "set color AE ROI : "
+            logger_, "Set color AE ROI to "
                          << "[Left: " << config.x0_left << ", Right: " << config.x1_right
-                         << ", Top: " << config.y0_top << ", Bottom: " << config.y1_bottom << " ]");
+                         << ", Top: " << config.y0_top << ", Bottom: " << config.y1_bottom << "]");
         break;
       default:
         RCLCPP_ERROR(logger_, "%s NOT a video stream", __FUNCTION__);
@@ -800,13 +800,13 @@ void OBCameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Requ
     auto range = device_->getIntPropertyRange(OB_PROP_COLOR_WHITE_BALANCE_INT);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
-      RCLCPP_INFO_STREAM(logger_, "set white balance value out of range");
+      RCLCPP_WARN_STREAM(logger_, "White balance value is out of range");
       response->message = "value out of range";
       return;
     }
     bool auto_white_balance = device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL);
     if (auto_white_balance) {
-      RCLCPP_WARN(logger_, "auto white balance is enabled, set white balance will be ignored");
+      RCLCPP_WARN(logger_, "Auto white balance is enabled, set white balance will be ignored");
       response->success = false;
       response->message = "auto white balance is enabled";
       return;
@@ -887,7 +887,7 @@ void OBCameraNode::setAutoExposureCallback(
     auto range = device_->getIntPropertyRange(prop_id);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
-      RCLCPP_INFO_STREAM(logger_, "set auto exposure value out of range");
+      RCLCPP_WARN_STREAM(logger_, "Auto exposure value is out of range");
       response->message = "value out of range";
       return;
     }
@@ -1274,7 +1274,7 @@ void OBCameraNode::setPtpConfigCallback(
     if (!device_->isPropertySupported(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL,
                                       OB_PERMISSION_READ_WRITE)) {
       response->success = false;
-      RCLCPP_ERROR(logger_, "OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL not supported or not writable");
+      RCLCPP_ERROR(logger_, "PTP clock sync property is not supported or not writable");
       return;
     }
     device_->setBoolProperty(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL, request->data);
@@ -1333,18 +1333,19 @@ void OBCameraNode::toggleSensorCallback(const std::shared_ptr<SetBool::Request>&
   std::string msg;
   if (request->data) {
     if (enable_stream_[stream_index]) {
-      msg = stream_name_[stream_index] + " Already ON";
+      msg = stream_name_[stream_index] + " is already enabled";
     }
-    RCLCPP_INFO_STREAM(logger_, "toggling sensor " << stream_name_[stream_index] << " ON");
+    RCLCPP_INFO_STREAM(logger_, "Request to set sensor " << stream_name_[stream_index] << " to ON");
 
   } else {
     if (!enable_stream_[stream_index]) {
-      msg = stream_name_[stream_index] + " Already OFF";
+      msg = stream_name_[stream_index] + " is already disabled";
     }
-    RCLCPP_INFO_STREAM(logger_, "toggling sensor " << stream_name_[stream_index] << " OFF");
+    RCLCPP_INFO_STREAM(logger_,
+                       "Request to set sensor " << stream_name_[stream_index] << " to OFF");
   }
   if (!msg.empty()) {
-    RCLCPP_ERROR_STREAM(logger_, msg);
+    RCLCPP_WARN_STREAM(logger_, msg);
     response->success = true;
     response->message = msg;
     return;
