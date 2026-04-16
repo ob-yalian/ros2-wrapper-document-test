@@ -35,6 +35,12 @@
 
 std::string g_camera_name = "orbbec_camera";  // Assuming this is declared elsewhere
 std::string g_time_domain = "global";         // Assuming this is declared elsewhere
+namespace {
+std::string getLogDirectoryForCamera(const std::string &camera_name) {
+  std::string home_dir = std::getenv("HOME") ? std::getenv("HOME") : "";
+  return (std::filesystem::path(home_dir) / ".ros" / "Log" / camera_name).string();
+}
+}  // namespace
 
 void signalHandler(int sig) {
   // Prevent recursive signal handling
@@ -60,7 +66,7 @@ void signalHandler(int sig) {
     }
     in_signal_handler.store(false);
   } else {
-    std::string log_dir = "Log/";
+    std::filesystem::path log_dir = getLogDirectoryForCamera(g_camera_name);
 
     // get current time
     std::time_t now = std::time(nullptr);
@@ -72,13 +78,13 @@ void signalHandler(int sig) {
 
     // generate log file name
     std::string log_file_name = g_camera_name + "_crash_stack_trace_" + time_stream.str() + ".log";
-    std::string log_file_path = log_dir + log_file_name;
+    std::filesystem::path log_file_path = log_dir / log_file_name;
 
     if (!std::filesystem::exists(log_dir)) {
       std::filesystem::create_directories(log_dir);
     }
 
-    std::cout << "Log crash stack trace to " << log_file_path << std::endl;
+    std::cout << "Log crash stack trace to " << log_file_path.string() << std::endl;
     std::ofstream log_file(log_file_path, std::ios::app);
 
     if (log_file.is_open()) {
@@ -226,8 +232,7 @@ void OBCameraNodeDriver::init() {
   auto log_level = obLogSeverityFromString(log_level_str);
   auto ros_log_level = rosLogSeverityFromString(log_level_str);
   auto log_file_name = declare_parameter<std::string>("log_file_name", "");
-  std::string home_dir = std::getenv("HOME") ? std::getenv("HOME") : "";
-  std::string log_path = home_dir + "/.ros/Log/" + g_camera_name;
+  std::string log_path = getLogDirectoryForCamera(g_camera_name);
   // Set logger to console
   ob::Context::setLoggerToConsole(log_level);
   ob::Context::setLoggerToFile(log_level, log_path.c_str());
