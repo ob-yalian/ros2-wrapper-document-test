@@ -1050,6 +1050,19 @@ void OBCameraNode::setupDevices() {
                                       OB_PROP_COLOR_AE_MAX_EXPOSURE_INT));
     }
   }
+  if (color_ae_max_gain_ != -1 &&
+      device_->isPropertySupported(OB_PROP_COLOR_AE_MAX_GAIN_INT, OB_PERMISSION_WRITE)) {
+    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_AE_MAX_GAIN_INT);
+    if (color_ae_max_gain_ < range.min || color_ae_max_gain_ > range.max) {
+      RCLCPP_ERROR(logger_,
+                   "color AE max gain value is out of range[%d,%d], please check the value",
+                   range.min, range.max);
+    } else {
+      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_AE_MAX_GAIN_INT, color_ae_max_gain_);
+      RCLCPP_INFO_STREAM(logger_, "Current color AE max gain: "
+                                      << device_->getIntProperty(OB_PROP_COLOR_AE_MAX_GAIN_INT));
+    }
+  }
   if (color_brightness_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
     auto range = device_->getIntPropertyRange(OB_PROP_COLOR_BRIGHTNESS_INT);
@@ -2532,6 +2545,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(color_gain_, "color_gain", -1);
   setAndGetNodeParameter<int>(color_white_balance_, "color_white_balance", -1);
   setAndGetNodeParameter<int>(color_ae_max_exposure_, "color_ae_max_exposure", -1);
+  setAndGetNodeParameter<int>(color_ae_max_gain_, "color_ae_max_gain", -1);
   setAndGetNodeParameter<int>(color_brightness_, "color_brightness", -1);
   setAndGetNodeParameter<int>(color_roi_brightness_, "color_roi_brightness", -1);
   setAndGetNodeParameter<int>(color_sharpness_, "color_sharpness", -1);

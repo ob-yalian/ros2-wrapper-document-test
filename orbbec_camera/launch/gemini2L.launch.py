@@ -34,6 +34,7 @@ def generate_launch_description():
         DeclareLaunchArgument("color_camera_info_qos", default_value="default"),
         DeclareLaunchArgument("enable_color_auto_exposure", default_value="true"),
         DeclareLaunchArgument("color_ae_max_exposure", default_value="-1"),
+        DeclareLaunchArgument("color_ae_max_gain", default_value="-1"),
         DeclareLaunchArgument("color_exposure", default_value="-1"),
         DeclareLaunchArgument("color_gain", default_value="-1"),
         DeclareLaunchArgument("enable_color_auto_white_balance", default_value="true"),
