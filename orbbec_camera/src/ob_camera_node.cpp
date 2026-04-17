@@ -1161,8 +1161,7 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Current color denoising level: "
                                     << device_->getIntProperty(OB_PROP_COLOR_DENOISING_LEVEL_INT));
   }
-  if (isGemini335PID(pid_) &&
-      device_->isPropertySupported(OB_PROP_COLOR_ANTI_FLICKER_BOOL, OB_PERMISSION_WRITE)) {
+  if (device_->isPropertySupported(OB_PROP_COLOR_ANTI_FLICKER_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_ANTI_FLICKER_BOOL, color_anti_flicker_);
     RCLCPP_INFO_STREAM(
         logger_, "Current color anti-flicker to "
