@@ -70,6 +70,7 @@
 #include "orbbec_camera/image_publisher.h"
 #include "orbbec_camera/fps_counter.hpp"
 #include "orbbec_camera/fps_delay_status.hpp"
+#include "orbbec_camera/frame_timestamp_csv_logger.h"
 #include "jpeg_decoder.h"
 #include <std_msgs/msg/string.hpp>
 #include <fcntl.h>
@@ -424,7 +425,7 @@ class OBCameraNode {
                                   std::shared_ptr<GetUserCalibParams::Response>& response);
 
   void setAEReferenceStreamCallback(const std::shared_ptr<SetString::Request>& request,
-                         std::shared_ptr<SetString::Response>& response);
+                                    std::shared_ptr<SetString::Response>& response);
 
   void setAEStrategyCallback(const std::shared_ptr<SetString::Request>& request,
                              std::shared_ptr<SetString::Response>& response);
@@ -864,6 +865,9 @@ class OBCameraNode {
   int min_depth_limit_ = 0;
   int max_depth_limit_ = 0;
   std::string time_domain_ = "global";  // device, system, global
+  bool enable_frame_timestamp_csv_ = false;
+  std::string frame_timestamp_csv_file_;
+  std::unique_ptr<FrameTimestampCsvLogger> frame_timestamp_csv_logger_;
   std::string exposure_range_mode_ = "default";
   std::string load_config_json_file_path_ = "";
   std::string export_config_json_file_path_ = "";
