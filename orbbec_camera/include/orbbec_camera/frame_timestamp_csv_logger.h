@@ -53,6 +53,8 @@ class FrameTimestampCsvLogger {
     bool final = false;
     uint64_t frame_index = 0;
 
+    std::optional<int64_t> metadata_frame_number;
+    std::optional<int64_t> sensor_ts_us;
     int64_t device_ts_us = 0;
     int64_t global_ts_us = 0;
     int64_t sdk_system_ts_us = 0;
@@ -62,6 +64,7 @@ class FrameTimestampCsvLogger {
     std::optional<int64_t> publish_steady_us;
 
     std::optional<int64_t> device_ts_delta_us;
+    std::optional<int64_t> sensor_ts_delta_us;
     std::optional<int64_t> global_ts_delta_us;
     std::optional<int64_t> sdk_system_ts_delta_us;
     std::optional<int64_t> arrival_system_delta_us;
@@ -82,6 +85,7 @@ class FrameTimestampCsvLogger {
 
   struct PreviousStreamTimestamps {
     std::optional<int64_t> device_ts_us;
+    std::optional<int64_t> sensor_ts_us;
     std::optional<int64_t> global_ts_us;
     std::optional<int64_t> sdk_system_ts_us;
     std::optional<int64_t> arrival_system_us;
