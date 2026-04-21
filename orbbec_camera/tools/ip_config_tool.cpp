@@ -23,7 +23,7 @@ struct CliArgs {
   bool dhcp = false;
   bool dhcp_option_set = false;
   std::string force_ip_mac;
-  std::string old_ip = "192.168.1.10";
+  std::string current_ip = "192.168.1.10";
   int port = 8090;
   std::string new_ip = "192.168.1.200";
   std::string mask = "255.255.255.0";
@@ -79,9 +79,9 @@ void printHelp() {
       << "  ros2 run orbbec_camera ip_config_tool --\\\n"
       << "      <dhcp|set_ip|force_ip> [options]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- dhcp --enable_dhcp <true|false>\\\n"
-      << "      [--old_ip <ip>] [--port <port>]\n"
+      << "      [--current_ip <ip>] [--port <port>]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- set_ip\\\n"
-      << "      [--old_ip <ip>] [--port <port>] [--new_ip <ip>] [--mask <ip>] [--gateway <ip>]\n"
+      << "      [--current_ip <ip>] [--port <port>] [--new_ip <ip>] [--mask <ip>] [--gateway <ip>]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- force_ip --force_ip_mac <mac>\\\n"
       << "      [--enable_dhcp <true|false>] [--new_ip <ip>] [--mask <ip>] [--gateway <ip>]\n"
       << "  (legacy alias: set_device_ip)\n\n"
@@ -91,7 +91,7 @@ void printHelp() {
       << "  force_ip                   Force IP by MAC address.\n\n"
       << "Parameters:\n"
       << "  --enable_dhcp <bool>       DHCP flag for dhcp/force-ip (default: false).\n"
-      << "  --old_ip <ip>              Current device IP for dhcp/set-ip (default: 192.168.1.10).\n"
+      << "  --current_ip <ip>          Current device IP for dhcp/set-ip (default: 192.168.1.10).\n"
       << "  --port <port>              Device port for dhcp/set-ip (default: 8090).\n"
       << "  --new_ip <ip>              Static IP for set-ip/force-ip (default: 192.168.1.200).\n"
       << "  --mask <ip>                Subnet mask for set-ip/force-ip (default: 255.255.255.0).\n"
@@ -103,12 +103,12 @@ void printHelp() {
       << "  [DHCP]\n"
       << "    Enable:  ros2 run orbbec_camera ip_config_tool -- \\\n"
       << "             dhcp \\\n"
-      << "             --old_ip 192.168.1.10 \\\n"
+      << "             --current_ip 192.168.1.10 \\\n"
       << "             --enable_dhcp true\n"
       << "  [Set IP]\n"
       << "    Static:  ros2 run orbbec_camera ip_config_tool -- \\\n"
       << "             set_ip \\\n"
-      << "             --old_ip 192.168.1.10 \\\n"
+      << "             --current_ip 192.168.1.10 \\\n"
       << "             --new_ip 192.168.1.200 \\\n"
       << "             --mask 255.255.255.0 \\\n"
       << "             --gateway 192.168.1.1\n"
@@ -172,16 +172,16 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
       continue;
     }
 
-    if (current.rfind("--old_ip=", 0) == 0) {
-      args.old_ip = current.substr(std::strlen("--old_ip="));
+    if (current.rfind("--current_ip=", 0) == 0) {
+      args.current_ip = current.substr(std::strlen("--current_ip="));
       continue;
     }
-    if (current == "--old_ip") {
+    if (current == "--current_ip") {
       if (++i >= argc) {
-        error = "--old_ip requires a value";
+        error = "--current_ip requires a value";
         return false;
       }
-      args.old_ip = argv[i];
+      args.current_ip = argv[i];
       continue;
     }
 
@@ -297,12 +297,12 @@ int main(int argc, char **argv) {
     auto context = std::make_shared<ob::Context>();
 
     if (args.operation == CliArgs::Operation::DHCP) {
-      RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.old_ip.c_str(), args.port);
-      auto device = context->createNetDevice(args.old_ip.c_str(), args.port);
+      RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
+      auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
 
-      uint8_t old_ip_bytes[4] = {0};
-      if (args.dhcp && !parseIpString(args.old_ip, old_ip_bytes)) {
-        RCLCPP_ERROR(logger, "Invalid old_ip format: %s", args.old_ip.c_str());
+      uint8_t current_ip_bytes[4] = {0};
+      if (args.dhcp && !parseIpString(args.current_ip, current_ip_bytes)) {
+        RCLCPP_ERROR(logger, "Invalid current_ip format: %s", args.current_ip.c_str());
         rclcpp::shutdown();
         return 1;
       }
@@ -335,7 +335,7 @@ int main(int argc, char **argv) {
         ip_config.dhcp = args.dhcp ? 1 : 0;
         if (args.dhcp) {
           // Some devices reject all-zero IP payload when enabling DHCP.
-          std::memcpy(ip_config.address, old_ip_bytes, sizeof(old_ip_bytes));
+          std::memcpy(ip_config.address, current_ip_bytes, sizeof(current_ip_bytes));
         }
 
         RCLCPP_WARN(
@@ -350,8 +350,8 @@ int main(int argc, char **argv) {
     }
 
     if (args.operation == CliArgs::Operation::SET_IP) {
-      RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.old_ip.c_str(), args.port);
-      auto device = context->createNetDevice(args.old_ip.c_str(), args.port);
+      RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
+      auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
 
       const bool v2_supported =
           device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
