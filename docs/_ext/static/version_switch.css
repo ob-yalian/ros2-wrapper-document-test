@@ -1,31 +1,42 @@
 .docs-floating-switches {
-    position: fixed;
-    left: 24px;
-    bottom: 24px;
-    z-index: 1100;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.55rem;
-    padding: 0.85rem 0.95rem;
-    border: 1px solid rgba(82, 82, 91, 0.42);
-    border-radius: 4px;
-    background: rgba(195, 195, 201, 0.96);
-    box-shadow: 0 18px 38px rgba(24, 24, 27, 0.26);
-    backdrop-filter: blur(14px);
-    max-width: calc(100vw - 48px);
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+    max-width: none;
+    padding: 0;
+    border-top: 1px solid rgba(82, 82, 91, 0.48);
+    border-radius: 0;
+    background: #a8a8a8;
+    box-shadow: none;
+    backdrop-filter: none;
 }
 
 .docs-floating-switches__item {
     width: 100%;
-    max-width: min(220px, calc(100vw - 48px));
+    max-width: none;
+}
+
+.docs-floating-switches .lang-switch {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 3rem;
+    padding: 0.95rem 1rem !important;
 }
 
 .docs-version-switch {
     display: grid;
     gap: 0.5rem;
-    min-width: 192px;
-    padding: 0.75rem 0 0;
+    min-width: 0;
+    width: 100%;
+    padding: 0.95rem 1rem 1rem;
     border-top: 1px solid rgba(82, 82, 91, 0.28);
 }
 
@@ -58,9 +69,9 @@
     width: 100%;
     min-height: 2.4rem;
     padding: 0 0.85rem;
-    border: 1px solid #8a8a93;
-    border-radius: 4px;
-    background: #b1b1b9;
+    border: 1px solid #7f7f88;
+    border-radius: 0;
+    background: #97979f;
     color: #18181b;
     font-size: 0.95rem;
     font-weight: 600;
@@ -71,22 +82,41 @@
     border-color: #3f3f46;
 }
 
+.wy-nav-side {
+    position: fixed;
+}
+
+.wy-nav-side .wy-side-scroll {
+    padding-bottom: 10.5rem;
+    box-sizing: border-box;
+}
+
 @media (max-width: 768px) {
     .docs-floating-switches {
+        position: fixed;
         left: 12px;
+        right: auto;
         bottom: 12px;
-        gap: 0.55rem;
-        padding: 0.75rem 0.85rem;
+        width: auto;
+        min-width: 176px;
         max-width: calc(100vw - 24px);
+        border: 1px solid rgba(82, 82, 91, 0.42);
     }
 
     .docs-floating-switches__item {
         max-width: calc(100vw - 24px);
     }
 
+    .docs-floating-switches .lang-switch {
+        min-height: 0;
+        justify-content: flex-start !important;
+        padding: 0.75rem 0.85rem !important;
+    }
+
     .docs-version-switch {
         min-width: 156px;
-        padding-top: 0.65rem;
+        width: auto;
+        padding: 0.75rem 0.85rem 0.85rem;
     }
 
     .docs-version-switch__header {
@@ -96,5 +126,9 @@
     .docs-version-switch__select {
         min-height: 2.2rem;
         font-size: 0.88rem;
+    }
+
+    .wy-nav-side .wy-side-scroll {
+        padding-bottom: 0;
     }
 }
