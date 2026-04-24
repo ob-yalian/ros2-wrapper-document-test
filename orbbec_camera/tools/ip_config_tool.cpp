@@ -17,11 +17,14 @@ struct CliArgs {
     DHCP,
     SET_IP,
     FORCE_IP,
+    SET_DHCP_TIMEOUT,
   };
   bool help = false;
   Operation operation = Operation::NONE;
   bool dhcp = false;
   bool dhcp_option_set = false;
+  int dhcp_assign_ip_timeout = -1;
+  bool dhcp_assign_ip_timeout_set = false;
   std::string force_ip_mac;
   std::string current_ip = "192.168.1.10";
   int port = 8090;
@@ -77,27 +80,36 @@ void printHelp() {
   std::cout
       << "Usage:\n"
       << "  ros2 run orbbec_camera ip_config_tool --\\\n"
-      << "      <dhcp|set_ip|force_ip> [options]\n"
+      << "      <dhcp|set_ip|force_ip|set_dhcp_timeout> [options]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- dhcp --enable_dhcp <true|false>\\\n"
       << "      [--current_ip <ip>] [--port <port>]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- set_ip\\\n"
-      << "      [--current_ip <ip>] [--port <port>] [--new_ip <ip>] [--mask <ip>] [--gateway <ip>]\n"
+      << "      [--current_ip <ip>] [--port <port>] [--new_ip <ip>] [--mask <ip>] [--gateway "
+         "<ip>]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- force_ip --force_ip_mac <mac>\\\n"
       << "      [--enable_dhcp <true|false>] [--new_ip <ip>] [--mask <ip>] [--gateway <ip>]\n"
+      << "  ros2 run orbbec_camera ip_config_tool -- set_dhcp_timeout\\\n"
+      << "      [--current_ip <ip>] [--port <port>] --timeout <seconds>\n"
       << "  (legacy alias: set_device_ip)\n\n"
       << "Subcommands:\n"
       << "  dhcp                       Configure DHCP on device by current device address.\n"
       << "  set_ip                     Configure static IP on device by current device address.\n"
-      << "  force_ip                   Force IP by MAC address.\n\n"
+      << "  force_ip                   Force IP by MAC address.\n"
+      << "  set_dhcp_timeout           Configure DHCP address assignment timeout.\n\n"
       << "Parameters:\n"
       << "  --enable_dhcp <bool>       DHCP flag for dhcp/force-ip (default: false).\n"
-      << "  --current_ip <ip>          Current device IP for dhcp/set-ip (default: 192.168.1.10).\n"
-      << "  --port <port>              Device port for dhcp/set-ip (default: 8090).\n"
+      << "  --current_ip <ip>          Current device IP for dhcp/set-ip/set_dhcp_timeout "
+         "(default: 192.168.1.10).\n"
+      << "  --port <port>              Device port for dhcp/set-ip/set_dhcp_timeout "
+         "(default: 8090).\n"
       << "  --new_ip <ip>              Static IP for set-ip/force-ip (default: 192.168.1.200).\n"
       << "  --mask <ip>                Subnet mask for set-ip/force-ip (default: 255.255.255.0).\n"
       << "  --gateway <ip>             Gateway for set-ip/force-ip (default: 192.168.1.1).\n"
       << "  --force_ip_mac <mac>       Target MAC for force-ip (required, e.g. "
-         "54:14:FD:06:07:DA).\n\n"
+         "54:14:FD:06:07:DA).\n"
+      << "  --timeout <sec>            DHCP timeout in seconds for set_dhcp_timeout.\n"
+      << "  --dhcp_assign_ip_timeout <sec>\n"
+      << "                             Alias of --timeout.\n\n"
       << "Examples:\n"
       << "\n"
       << "  [DHCP]\n"
@@ -119,7 +131,13 @@ void printHelp() {
       << "             --force_ip_mac 54:14:FD:06:07:DA \\\n"
       << "             --new_ip 192.168.1.200 \\\n"
       << "             --mask 255.255.255.0 \\\n"
-      << "             --gateway 192.168.1.1\n";
+      << "             --gateway 192.168.1.1\n"
+      << "\n"
+      << "  [Set DHCP Timeout]\n"
+      << "    Timeout: ros2 run orbbec_camera ip_config_tool -- \\\n"
+      << "             set_dhcp_timeout \\\n"
+      << "             --current_ip 192.168.1.10 \\\n"
+      << "             --timeout 10\n";
 }
 
 bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
@@ -132,7 +150,7 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
     }
     if (current == "dhcp") {
       if (args.operation != CliArgs::Operation::NONE) {
-        error = "Only one subcommand is allowed: dhcp, set_ip or force_ip";
+        error = "Only one subcommand is allowed";
         return false;
       }
       args.operation = CliArgs::Operation::DHCP;
@@ -140,7 +158,7 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
     }
     if (current == "set_ip" || current == "set-ip") {
       if (args.operation != CliArgs::Operation::NONE) {
-        error = "Only one subcommand is allowed: dhcp, set_ip or force_ip";
+        error = "Only one subcommand is allowed";
         return false;
       }
       args.operation = CliArgs::Operation::SET_IP;
@@ -148,10 +166,18 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
     }
     if (current == "force_ip" || current == "force-ip") {
       if (args.operation != CliArgs::Operation::NONE) {
-        error = "Only one subcommand is allowed: dhcp, set_ip or force_ip";
+        error = "Only one subcommand is allowed";
         return false;
       }
       args.operation = CliArgs::Operation::FORCE_IP;
+      continue;
+    }
+    if (current == "set_dhcp_timeout" || current == "set-dhcp-timeout") {
+      if (args.operation != CliArgs::Operation::NONE) {
+        error = "Only one subcommand is allowed";
+        return false;
+      }
+      args.operation = CliArgs::Operation::SET_DHCP_TIMEOUT;
       continue;
     }
 
@@ -252,12 +278,47 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
       continue;
     }
 
+    if (current.rfind("--timeout=", 0) == 0) {
+      if (!parseInt(current.substr(std::strlen("--timeout=")), args.dhcp_assign_ip_timeout)) {
+        error = "--timeout expects an integer";
+        return false;
+      }
+      args.dhcp_assign_ip_timeout_set = true;
+      continue;
+    }
+    if (current == "--timeout") {
+      if (++i >= argc || !parseInt(argv[i], args.dhcp_assign_ip_timeout)) {
+        error = "--timeout expects an integer";
+        return false;
+      }
+      args.dhcp_assign_ip_timeout_set = true;
+      continue;
+    }
+
+    if (current.rfind("--dhcp_assign_ip_timeout=", 0) == 0) {
+      if (!parseInt(current.substr(std::strlen("--dhcp_assign_ip_timeout=")),
+                    args.dhcp_assign_ip_timeout)) {
+        error = "--dhcp_assign_ip_timeout expects an integer";
+        return false;
+      }
+      args.dhcp_assign_ip_timeout_set = true;
+      continue;
+    }
+    if (current == "--dhcp_assign_ip_timeout") {
+      if (++i >= argc || !parseInt(argv[i], args.dhcp_assign_ip_timeout)) {
+        error = "--dhcp_assign_ip_timeout expects an integer";
+        return false;
+      }
+      args.dhcp_assign_ip_timeout_set = true;
+      continue;
+    }
+
     error = "Unknown argument: " + current;
     return false;
   }
 
   if (args.operation == CliArgs::Operation::NONE) {
-    error = "Missing subcommand. Use one of: dhcp, set_ip, force_ip";
+    error = "Missing subcommand. Use one of: dhcp, set_ip, force_ip, set_dhcp_timeout";
     return false;
   }
   if (args.operation == CliArgs::Operation::DHCP && !args.dhcp_option_set) {
@@ -270,6 +331,10 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
   }
   if (args.operation == CliArgs::Operation::FORCE_IP && args.force_ip_mac.empty()) {
     error = "force_ip requires --force_ip_mac <mac>";
+    return false;
+  }
+  if (args.operation == CliArgs::Operation::SET_DHCP_TIMEOUT && !args.dhcp_assign_ip_timeout_set) {
+    error = "set_dhcp_timeout requires --timeout <seconds>";
     return false;
   }
 
@@ -488,6 +553,30 @@ int main(int argc, char **argv) {
         rclcpp::shutdown();
         return 1;
       }
+    }
+
+    if (args.operation == CliArgs::Operation::SET_DHCP_TIMEOUT) {
+      RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
+      auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
+
+      if (!device->isPropertySupported(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT, OB_PERMISSION_WRITE)) {
+        RCLCPP_ERROR(logger, "Current device or firmware does not support DHCP assign IP timeout");
+        rclcpp::shutdown();
+        return 1;
+      }
+
+      auto range = device->getIntPropertyRange(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT);
+      if (args.dhcp_assign_ip_timeout < range.min || args.dhcp_assign_ip_timeout > range.max) {
+        RCLCPP_ERROR(logger, "Timeout %d is out of range [%d, %d]", args.dhcp_assign_ip_timeout,
+                     range.min, range.max);
+        rclcpp::shutdown();
+        return 1;
+      }
+
+      device->setIntProperty(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT, args.dhcp_assign_ip_timeout);
+      const int current_timeout = device->getIntProperty(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT);
+      RCLCPP_INFO(logger, "DHCP assign IP timeout applied successfully: %d second(s)",
+                  current_timeout);
     }
 
   } catch (ob::Error &e) {
