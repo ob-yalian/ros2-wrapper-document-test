@@ -10,7 +10,8 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=b86133f3" />
       <link rel="stylesheet" type="text/css" href="../../../_static/css/theme.css?v=9edc463e" />
       <link rel="stylesheet" type="text/css" href="../../../_static/copybutton.css?v=76b2166b" />
-      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=c853d342" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/version_switch.css?v=6e086481" />
+      <link rel="stylesheet" type="text/css" href="../../../_static/custom.css?v=a9de99d3" />
 
   
     <link rel="shortcut icon" href="../../../_static/orbbec_footerlogo_3d_world.svg"/>
@@ -21,6 +22,7 @@
       <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
       <script src="../../../_static/clipboard.min.js?v=a7894cd8"></script>
       <script src="../../../_static/copybutton.js?v=ca8a8b2d"></script>
+      <script src="../../../_static/version_switch.js?v=d7a2ed65"></script>
       <script src="../../../_static/section_search.js?v=036e4266"></script>
       <script src="../../../_static/translations.js?v=540d3cec"></script>
     <script src="../../../_static/js/theme.js"></script>
@@ -422,7 +424,18 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
            <div itemprop="articleBody">
              
-  <div class="lang-switch" style="margin:0 0 1em 0; font-size:0.9em;"><a class="lang-other" href="#">English</a> | <a class="lang-current" href="#">中文</a></div><script>(function(){var p=window.location.pathname;var isEn=p.indexOf('/en/')!==-1 && p.indexOf('/zh/')===-1;if(p.indexOf('/zh/')!==-1) isEn=false;var other = isEn ? p.replace(/\/en\//, '/zh/') : p.replace(/\/zh\//, '/en/');var current=p;var sw=document.querySelector('.lang-switch'); if(!sw) return;var o=sw.querySelector('.lang-other'); var c=sw.querySelector('.lang-current');if(isEn){ o.textContent='中文'; c.textContent='English'; } else { o.textContent='English'; c.textContent='中文'; }o.setAttribute('href', other); c.setAttribute('href', current);})();</script><section id="id1">
+  
+<div class="docs-version-switch" data-docs-version-switch>
+  <div class="docs-version-switch__header">Version</div>
+  <div class="docs-version-switch__control">
+    <label class="docs-version-switch__label" for="docs-version-select">Version</label>
+    <select id="docs-version-select" class="docs-version-switch__select" aria-label="Select documentation version">
+      <option value="">Latest</option>
+    </select>
+  </div>
+</div>
+<script id="docs-version-data" type="application/json">{"default_language": "en", "latest_slug": "Latest", "current": {"slug": "Latest", "label": "Latest", "is_latest": true, "language": "zh_CN"}, "versions": [{"slug": "Latest", "label": "Latest", "is_latest": true}, {"slug": "v2.7.6", "label": "v2.7.6", "is_latest": false}, {"slug": "v2.6.3", "label": "v2.6.3", "is_latest": false}]}</script>
+<div class="lang-switch docs-floating-switches__item"><a class="lang-other" href="#">English</a> | <a class="lang-current" href="#">中文</a></div><script>(function(){function ensureDock(){  var dock=document.querySelector('[data-docs-switch-dock]');  if(dock) return dock;  dock=document.createElement('div');  dock.className='docs-floating-switches';  dock.setAttribute('data-docs-switch-dock','');  document.body.appendChild(dock);  return dock;}function mountSwitch(){var p=window.location.pathname;var isEn=p.indexOf('/en/')!==-1 && p.indexOf('/zh/')===-1;if(p.indexOf('/zh/')!==-1) isEn=false;var other = isEn ? p.replace(/\/en\//, '/zh/') : p.replace(/\/zh\//, '/en/');var current=p;var sw=document.querySelector('.lang-switch'); if(!sw) return;ensureDock().appendChild(sw);var o=sw.querySelector('.lang-other'); var c=sw.querySelector('.lang-current');if(isEn){ o.textContent='中文'; c.textContent='English'; } else { o.textContent='English'; c.textContent='中文'; }o.setAttribute('href', other); c.setAttribute('href', current);}if(document.body){ mountSwitch(); }else { document.addEventListener('DOMContentLoaded', mountSwitch, {once:true}); }})();</script><section id="id1">
 <h1><span class="section-number">6.2. </span>性能基准测试使用<a class="headerlink" href="#id1" title="链接到此标题。"></a></h1>
 <p>本节介绍如何在 C++ 和 Python 中使用性能基准测试工具，并提供示例 YAML 配置文件。</p>
 <section id="id2">
@@ -557,7 +570,7 @@
 
   <div role="contentinfo">
     <p>&#169; 版权所有 2025, 奥比中光科技集团股份有限公司 www.orbbec.com.。
-      <span class="lastupdated">最后更新于 2026年04月08日 08:23:21.
+      <span class="lastupdated">最后更新于 2026年04月24日 08:00:46.
       </span></p>
   </div>
 
