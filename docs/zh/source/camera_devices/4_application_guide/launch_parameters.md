@@ -74,6 +74,8 @@
     *   启用彩色相机的背光补偿功能。**范围**：`0–6`，**默认值**：`3`。
 *   **`color_powerline_freq`**
     *   设置电源线频率。可能的值为 `disable`、`50hz`、`60hz`、`auto`。
+*   **`color_preset`**
+    *   设置 Gemini 330 系列设备的彩色预设。可选值包括 `Default` 和 `Warm Biased AWB`。
 *   **`color_anti_flicker`**
     *   启用彩色防闪烁功能。Gemini 330 系列固件 `1.7.13` 及以上支持；Gemini 305 系列固件 `1.0.54` 及以上支持。
 *   **`enable_color_decimation_filter`** / **`color_decimation_filter_scale`**
@@ -306,9 +308,9 @@
 *   **`enable_spatial_moderate_filter`**
     *   启用深度空间中等滤波器。使用 `spatial_moderate_filter_diff_threshold` 等设置。
 *   **`enable_mgc_noise_removal_filter`**
-    *   启用 MGC 降噪滤波器，主要用于支持该滤波能力的 OpenNI 设备。
+    *   启用 MGC 降噪滤波器。适配机型包括 Astra Mini (S) Pro、DaBai Pro Max、DaBai DCW2。
 *   **`enable_lut_noise_removal_filter`**
-    *   启用 LUT 降噪滤波器，主要用于支持该滤波能力的 OpenNI 设备。
+    *   启用 LUT 降噪滤波器。适配机型包括 Astra Mini (S) Pro、DaBai Pro Max、DaBai DCW2。
 
 ---
 

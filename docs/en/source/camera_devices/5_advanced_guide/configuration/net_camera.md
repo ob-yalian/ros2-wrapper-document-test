@@ -111,7 +111,7 @@ set_dhcp_timeout \
 - **`force_ip_mac`** – Target MAC address for Force IP.
 - **`timeout`** / **`dhcp_assign_ip_timeout`** – DHCP address assignment timeout in seconds.
 
-> **Version notes**: `ip_config_tool` was integrated in wrapper version 2.8.0. The `LLA` switch was removed from this tool after wrapper version 2.8.1. `set_dhcp_timeout` is supported from wrapper version 2.8.5.
+> **Version notes**: The `LLA` switch was supported only by Gemini 335Le firmware `1.7.05` and above and Gemini 435Le firmware `1.3.17` and above.
 
 ## Force IP Function
 

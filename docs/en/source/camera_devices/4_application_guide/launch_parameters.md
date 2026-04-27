@@ -74,6 +74,8 @@ The following are the launch parameters available:
     *    Enables the color camera’s backlight compensation feature. **Range**: `0–6`, **Default**: `3`.
 *   **`color_powerline_freq`**
     *   Set the power line freq. The possible values are `disable`, `50hz`, `60hz`, `auto`.
+*   **`color_preset`**
+    *   Set the Color preset for Gemini 330 series devices. Options include `Default` and `Warm Biased AWB`.
 *   **`color_anti_flicker`**
     *   Enable Color anti-flicker. Supported by Gemini 330 series firmware `1.7.13` and above, and Gemini 305 series firmware `1.0.54` and above.
 *   **`enable_color_decimation_filter`** / **`color_decimation_filter_scale`**
@@ -306,9 +308,9 @@ The following are the launch parameters available:
 *   **`enable_spatial_moderate_filter`**
     *   Enable the Depth spatial moderate filter. Set with `spatial_moderate_filter_diff_threshold`, etc.
 *   **`enable_mgc_noise_removal_filter`**
-    *   Enable the MGC noise removal filter, mainly for OpenNI devices that support this filter.
+    *   Enable the MGC noise removal filter. This parameter is available for Astra Mini (S) Pro, DaBai Pro Max, and DaBai DCW2.
 *   **`enable_lut_noise_removal_filter`**
-    *   Enable the LUT noise removal filter, mainly for OpenNI devices that support this filter.
+    *   Enable the LUT noise removal filter. This parameter is available for Astra Mini (S) Pro, DaBai Pro Max, and DaBai DCW2.
 
 ---
 

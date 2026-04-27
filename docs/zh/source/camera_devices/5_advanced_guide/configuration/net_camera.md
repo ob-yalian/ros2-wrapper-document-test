@@ -111,7 +111,7 @@ set_dhcp_timeout \
 - **`force_ip_mac`** – Force IP 目标设备 MAC 地址。
 - **`timeout`** / **`dhcp_assign_ip_timeout`** – DHCP 分配 IP 超时时间，单位为秒。
 
-> **版本说明**：`ip_config_tool` 在 wrapper version 2.8.0 集成；`LLA` 开关在 wrapper version 2.8.1 后已从该工具移除；`set_dhcp_timeout` 在 wrapper version 2.8.5 后支持。
+> **版本说明**：`LLA` 开关仅 Gemini 335Le 固件 `1.7.05` 及以上、Gemini 435Le 固件 `1.3.17` 及以上支持。
 
 ## 强制 IP 功能
 
