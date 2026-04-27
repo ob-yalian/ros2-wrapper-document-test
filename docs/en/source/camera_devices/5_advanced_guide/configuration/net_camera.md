@@ -44,38 +44,80 @@ For [multi_net_camera.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v
 ros2 launch orbbec_camera multi_net_camera.launch.py
 ```
 
-## set_device_ip Utility
+Use `list_devices_node` to inspect connected devices. Since v2.8.x, this tool also prints firmware version, local network interface name for Ethernet devices, and IP source type (`NONE`, `LLA`, `DHCP`, `PERSISTENT`).
 
-The **`set_device_ip`** executable allows you to configure the IP settings of a network camera directly from ROS 2, including switching between DHCP and static IP, and setting subnet mask and gateway. This is useful for quickly assigning or updating IP addresses without modifying launch files.
+## ip_config_tool Utility
 
-> **Note:** The IP settings applied with `set_device_ip` are **permanent** and **will not be reset** if the device is powered off or restarted.
-> **Supported Versions**: Wrapper version 2.6.3 and above.
+The **`ip_config_tool`** executable allows you to configure network camera IP settings directly from ROS 2, including DHCP, static IP, Force IP, and DHCP address assignment timeout. This is useful for quickly assigning or updating IP addresses without modifying launch files.
+
+> **Note:** Configuration applied with `dhcp` or `set_ip` is written to the device. `force_ip` is temporary and must be applied again after the device is powered off or restarted.
+> **Compatibility**: `set_device_ip` is still kept as a legacy alias and calls `ip_config_tool`. The old `old_ip` argument has been renamed to `current_ip`.
 
 **Example Usage**
 
+Show help:
+
 ```bash
-ros2 run orbbec_camera set_device_ip --ros-args \
--p old_ip:=192.168.1.10 \
--p dhcp:=false \
--p new_ip:=192.168.1.11 \
--p mask:=255.255.255.0 \
--p gateway:=192.168.1.1
+ros2 run orbbec_camera ip_config_tool -- --help
+```
+
+Enable DHCP:
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+dhcp \
+--current_ip 192.168.1.10 \
+--enable_dhcp true
+```
+
+Disable DHCP and set a static IP:
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+set_ip \
+--current_ip 192.168.1.10 \
+--new_ip 192.168.1.11 \
+--mask 255.255.255.0 \
+--gateway 192.168.1.1
+```
+
+Force IP by MAC address:
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+force_ip \
+--force_ip_mac 54:14:FD:06:07:DA \
+--new_ip 192.168.1.50 \
+--mask 255.255.255.0 \
+--gateway 192.168.1.1
+```
+
+Set DHCP address assignment timeout:
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+set_dhcp_timeout \
+--current_ip 192.168.1.10 \
+--timeout 10
 ```
 
 **Parameters**
 
-- **`old_ip`** – Current IP address of the device.
-- **`dhcp`** – Set to `true` to use DHCP or `false` for static IP.
-- **`new_ip`** – Static IP address to assign when DHCP is disabled.
+- **`current_ip`** – Current IP address of the device.
+- **`enable_dhcp`** – Enable or disable DHCP for the `dhcp` or `force_ip` subcommand.
+- **`new_ip`** – Static IP address to assign.
 - **`mask`** – Subnet mask for the new IP.
 - **`gateway`** – Gateway address for the new IP.
+- **`force_ip_mac`** – Target MAC address for Force IP.
+- **`timeout`** / **`dhcp_assign_ip_timeout`** – DHCP address assignment timeout in seconds.
+
+> **Version notes**: `ip_config_tool` was integrated in wrapper version 2.8.0. The `LLA` switch was removed from this tool after wrapper version 2.8.1. `set_dhcp_timeout` is supported from wrapper version 2.8.5.
 
 ## Force IP Function
 
 The **Force IP** feature allows you to assign a **static IP address** to a network camera, overriding DHCP settings. This is useful when multiple network cameras are connected, and you need each device to have a fixed IP for reliable communication.
 
 > **Note:** The Force IP configuration **will be reset if the device is powered off or restarted**. You need to reapply the settings after reboot.
-> **Supported Versions**: Wrapper version 2.6.3 and above.
 
 **Parameters**
 

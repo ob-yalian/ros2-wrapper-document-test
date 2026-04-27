@@ -21,7 +21,6 @@
     *   深度流的相机校准数据和元数据。
 *   `/camera/depth/metadata`
     *   来自深度流固件的底层元数据。
-
 *   `/camera/ir/image_raw`
     *   红外（IR）流的原始图像数据。
 *   `/camera/ir/camera_info`
@@ -61,7 +60,11 @@
     *   报告相机设备的当前状态。
 
 *   `/camera/depth_filter_status`
-    *   报告深度传感器后处理滤波器的状态。
+    *   报告深度传感器后处理滤波器的状态，类型为 `std_msgs/msg/String`，内容为 JSON 字符串。
+
+*   `/camera/depth_filters/status`
+    *   报告深度传感器后处理滤波器的结构化状态，类型为 `orbbec_camera_msgs/msg/DepthFiltersStatus`。
+    *   消息中包含 `DepthFilterState[] filters`，每个滤波器状态包含 `filter_name`、`enabled` 和 `DepthFilterParam[] params`。
 
 *   `/diagnostics`
     *   发布相机节点的诊断信息。目前包括设备温度。

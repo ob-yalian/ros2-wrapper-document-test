@@ -4,7 +4,6 @@
 
 This example node is designed for **synchronized capture and timestamp verification** across **four Orbbec cameras**.
 It can be used to validate frame alignment accuracy under the multi-camera **Primary / Secondary Synced** mode.
-> **Supported Versions**: Wrapper version 2.6.3 and above.
 
 ---
 

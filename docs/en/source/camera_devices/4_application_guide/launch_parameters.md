@@ -40,19 +40,14 @@ The following are the launch parameters available:
     *   ROS 2 Message Quality of Service (QoS) settings. The possible values are `SYSTEM_DEFAULT`, `DEFAULT`, `PARAMETER_EVENTS`, `SERVICES_DEFAULT`, `PARAMETERS`, `SENSOR_DATA` and are case-insensitive. These correspond to `rmw_qos_profile_system_default`, `rmw_qos_profile_default`, `rmw_qos_profile_parameter_events`, `rmw_qos_profile_services_default`, `rmw_qos_profile_parameters`, and `SENSOR_DATA`, respectively.
 * **`color.image_raw.enable_pub_plugins`**
   * Enable Color image transport plugins. Default: `["image_transport/compressed", "image_transport/raw", "image_transport/theora"]`.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 * **`depth.image_raw.enable_pub_plugins`**
   * Enable Depth image transport plugins. Default: `["image_transport/compressedDepth", "image_transport/raw"]`.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 * **`left_ir.image_raw.enable_pub_plugins`**
   * Enable Left IR image transport plugins. Default: `["image_transport/compressed", "image_transport/raw", "image_transport/theora"]`.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 * **`right_ir.image_raw.enable_pub_plugins`**
   * Enable Right IR image transport plugins. Default: `["image_transport/compressed", "image_transport/raw", "image_transport/theora"]`.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 * **`point_cloud_decimation_filter_factor`**
   * Point cloud downsampling factor. Range: `1–8`. `1` means no downsampling.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 
 ### Sensor Controls
 
@@ -71,18 +66,22 @@ The following are the launch parameters available:
     *   Set the Color white balance.
 *   **`color_ae_max_exposure`**
     *   Set the maximum exposure value for Color auto exposure.
+*   **`color_ae_max_gain`**
+    *   Set the maximum gain for Color auto exposure. Supported by Gemini 2 firmware `1.5.04` and above, and Gemini 2L firmware `1.5.09` and above.
 *   **`color_brightness`**, **`color_sharpness`**, **`color_gamma`**, **`color_saturation`**, **`color_contrast`**, **`color_hue`**
     *   Set the Color brightness, sharpness, gamma, saturation, contrast, and hue.
 *   **`color_backlight_compensation`**
     *    Enables the color camera’s backlight compensation feature. **Range**: `0–6`, **Default**: `3`.
 *   **`color_powerline_freq`**
     *   Set the power line freq. The possible values are `disable`, `50hz`, `60hz`, `auto`.
+*   **`color_anti_flicker`**
+    *   Enable Color anti-flicker. Supported by Gemini 330 series firmware `1.7.13` and above, and Gemini 305 series firmware `1.0.54` and above.
 *   **`enable_color_decimation_filter`** / **`color_decimation_filter_scale`**
     *   Enable the Color decimation filter and set its scale.
 *   **`color_ae_roi_[left|right|top|bottom]`**
     *   Set Color auto exposure ROI.
 *   **`color_denoising_level`**
-    *   Enables the ISP denoising feature for Gemini 330 series devices. **Range:** `0–8`, **Default:** `0` (auto).
+    *   Enable ISP Color denoising. **Range:** `0–8`; `0` means auto. Supported by Gemini 330 series, Gemini 2 firmware `1.5.04` and above, and Gemini 2L firmware `1.5.09` and above. This feature requires Color auto exposure and new firmware support.
 
 
 #### Depth Stream
@@ -142,19 +141,14 @@ The following are the launch parameters available:
   * Set net device's IP address and port (Usually `8090`).
 * **`force_ip_enable`**
   * Enable the Force IP function. **Default:** `false`
-  > **Supported Versions**: Wrapper version 2.5.4 and above.
 * **`force_ip_mac`**
   * Target device MAC address when multiple cameras are connected (e.g., `"54:14:FD:06:07:DA"`). You can use the `list_devices_node` to find the MAC of each device. **Default:** `""`
-  > **Supported Versions**: Wrapper version 2.5.4 and above.
 * **`force_ip_address`**
   * Static IP address to assign. **Default:** `192.168.1.10`
-  > **Supported Versions**: Wrapper version 2.5.4 and above.
 * **`force_ip_subnet_mask`**
   * Subnet mask for the static IP. **Default:** `255.255.255.0`
-  > **Supported Versions**: Wrapper version 2.5.4 and above.
 * **`force_ip_gateway`**
   * Gateway address for the static IP. **Default:** `192.168.1.1`
-  > **Supported Versions**: Wrapper version 2.5.4 and above.
 > Used for [net camera](../5_advanced_guide/configuration/net_camera.md).
 
 #### Device-Specific
@@ -165,27 +159,23 @@ The following are the launch parameters available:
 * **`enable_ptp_config`**
   * Enable PTP time synchronization. Requires `enable_sync_host_time` to be `false`.
   > **Supported Modules**: Gemini 335Le
-  > **Supported Versions**: Wrapper version 2.3.4 and above.
 * **`preset_resolution_config`**
   * Preset resolution configuration for the camera device. Format: "width,height,ir_decimation_factor,depth_decimation_factor". Example: "1280,720,4,4". Leave empty to disable.
   > **Supported Modules**: Gemini 435Le
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
-* **`ae_mode`**
-  * `colorbased`: Automatic exposure based on color flow. `depthbased`: Automatic exposure based on depth flow. **Default:** `depthbased`
-  > **Supported Modules**: Gemini 305
-  > **Supported Versions**: Wrapper version 2.7.2 and above.
-* **`enalbe_sports_mode`**
-  * Whether to enable sports mode. **Default:** `false`
-  > **Supported Modules**: Gemini 305
-  > **Supported Versions**: Wrapper version 2.7.2 and above.
+* **`ae_reference_stream`**
+  * Set the auto-exposure reference stream. Options: `depth`, `color`. Default: `depth`.
+  > **Supported Modules**: Gemini 305 series.
+  > **Compatibility**: This replaces the old `ae_mode` parameter. The old values `depthbased/colorbased` map to `depth/color`.
+* **`ae_strategy`**
+  * Set the auto-exposure strategy. Options: `default`, `motion`. Default: `motion`.
+  > **Supported Modules**: Gemini 305 series.
+  > **Compatibility**: This replaces the old `enable_sports_mode` parameter.
 * **`depth_downscale`** / **`left_ir_downscale`** /**`right_ir_downscale`**
   * Set the downsampling multiple. You can use `ros2 run orbbec_camera list_camera_profile_mode_node` to view the settable resolution. **Default value:** `1`
   > **Supported Modules**: Gemini 305
-  > **Supported Versions**: Wrapper version 2.7.2 and above.
 * **`enable_false_positive_filter`**
   * Enable this option to reduce ghosting noise.
   > **Supported Modules**: DaBaiA / DaBaiAL / Gemini345 / Gemini345Lg
-  > **Supported Versions**: Wrapper version 2.7.6 and above; Firmware version 1.9.03 and above.
 #### Disparity
 *   **`disparity_to_depth_mode`**
     *   `HW`: use hardware disparity to depth conversion. `SW`: use software disparity to depth conversion.
@@ -214,13 +204,12 @@ The following are the launch parameters available:
   *   `DEPTH`: Align color to depth.
 - **`intra_camera_sync_reference`**
   - Sets the reference point for intra-camera synchronization. Applicable for Gemini 330 series devices when `sync_mode` is set to **software** or **hardware trigger** mode. **Options:** `Start`, `Middle`, `End`. When set to empty, the long baseline device defaults to End, and the short baseline device defaults to Middle.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 
 ### Basic & General Parameters
 
 #### Firmware & Backend
 * **`upgrade_firmware`**
-  * The input parameter is the firmware path.
+  * The input parameter is the firmware path. For new versions, use the standalone `firmware_update_tool` for firmware updates.
 * **`preset_firmware_path`**
   * The input parameter is the preset firmware path. If multiple paths are input, each path needs to be separated by `,` and a maximum of 3 firmware paths can be input.
 * **`uvc_backend`**
@@ -248,17 +237,22 @@ The following are the launch parameters available:
 * **`time_sync_period`**
   * Interval (in seconds) for synchronizing the camera time with the host system.
   > **Note**: This parameter only needs to be set when `enable_sync_host_time = true` and `time_domain = device`.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
 
 * **`enable_frame_sync`**
   * Enable the frame synchronization.
+* **`enable_frame_timestamp_csv`**
+  * Enable frame timestamp CSV logging. This is mainly used to analyze Color/Depth frame timestamps, publish latency, and synchronization issues.
+* **`frame_timestamp_csv_file`**
+  * Path of the frame timestamp CSV file. If empty, the default path is used; specify a writable path when debugging.
 
 #### Logging & Diagnostics
 * **`log_level`**
-  * SDK log level. Default is `info`. Optional values: `debug`, `info`, `warn`, `error`, `fatal`.
+  * Shared SDK and ROS node log level. By default, only current device status is printed; set it to `debug` for more debug logs. Optional values: `none`, `debug`, `info`, `warn`, `error`, `fatal`.
+  * SDK logs and crash files are saved to `~/.ros/Log` by default. ROS logs remain in `~/.ros/log`.
 * **`log_file_name`**
   * Saved SDK log file name. Effective when `log_level` is `debug`.
-  > **Supported Versions**: Wrapper version 2.6.3 and above.
+* **`enable_firmware_log`**
+  * Enable firmware logging. This switch is independent from `enable_heartbeat` and can be enabled only when firmware logs are needed.
 * **`diagnostic_period`**
   * Diagnostic period in seconds.
 * **`enable_heartbeat`**
@@ -311,6 +305,10 @@ The following are the launch parameters available:
     *   Enable the Depth spatial fast filter. Set with `spatial_fast_filter_radius`.
 *   **`enable_spatial_moderate_filter`**
     *   Enable the Depth spatial moderate filter. Set with `spatial_moderate_filter_diff_threshold`, etc.
+*   **`enable_mgc_noise_removal_filter`**
+    *   Enable the MGC noise removal filter, mainly for OpenNI devices that support this filter.
+*   **`enable_lut_noise_removal_filter`**
+    *   Enable the LUT noise removal filter, mainly for OpenNI devices that support this filter.
 
 ---
 

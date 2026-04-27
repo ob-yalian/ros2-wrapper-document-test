@@ -44,38 +44,80 @@ ros2 launch orbbec_camera femto_mega.launch.py enumerate_net_device:=false net_d
 ros2 launch orbbec_camera multi_net_camera.launch.py
 ```
 
-## set_device_ip 工具
+可以使用 `list_devices_node` 查看当前连接设备。v2.8.x 之后，该工具会额外输出固件版本、网口设备本地网卡名和 IP 来源类型（`NONE`、`LLA`、`DHCP`、`PERSISTENT`）。
 
-**`set_device_ip`** 可执行文件允许您直接从 ROS 2 配置网络相机的 IP 设置，包括在 DHCP 和静态 IP 之间切换，以及设置子网掩码和网关。这对于快速分配或更新 IP 地址而无需修改启动文件非常有用。
+## ip_config_tool 工具
 
-> **注意：**使用 `set_device_ip` 应用的 IP 设置是**永久性的**，如果设备断电或重启，**不会重置**。
-> **支持版本**： wrapper version 2.6.3 及以上。
+**`ip_config_tool`** 可执行文件允许您直接从 ROS 2 配置网络相机的 IP 设置，包括 DHCP、静态 IP、Force IP 和 DHCP 分配 IP 超时时间。这对于快速分配或更新 IP 地址而无需修改启动文件非常有用。
+
+> **注意：** 通过 `dhcp` 或 `set_ip` 应用的配置会写入设备。`force_ip` 是临时强制 IP，设备断电或重启后需要重新应用。
+> **兼容说明**：`set_device_ip` 仍作为兼容别名保留，实际调用 `ip_config_tool`。旧参数 `old_ip` 已更名为 `current_ip`。
 
 **示例用法**
 
+查看帮助：
+
 ```bash
-ros2 run orbbec_camera set_device_ip --ros-args \
--p old_ip:=192.168.1.10 \
--p dhcp:=false \
--p new_ip:=192.168.1.11 \
--p mask:=255.255.255.0 \
--p gateway:=192.168.1.1
+ros2 run orbbec_camera ip_config_tool -- --help
+```
+
+开启 DHCP：
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+dhcp \
+--current_ip 192.168.1.10 \
+--enable_dhcp true
+```
+
+关闭 DHCP 并设置静态 IP：
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+set_ip \
+--current_ip 192.168.1.10 \
+--new_ip 192.168.1.11 \
+--mask 255.255.255.0 \
+--gateway 192.168.1.1
+```
+
+通过 MAC 地址 Force IP：
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+force_ip \
+--force_ip_mac 54:14:FD:06:07:DA \
+--new_ip 192.168.1.50 \
+--mask 255.255.255.0 \
+--gateway 192.168.1.1
+```
+
+设置 DHCP 分配 IP 超时时间：
+
+```bash
+ros2 run orbbec_camera ip_config_tool -- \
+set_dhcp_timeout \
+--current_ip 192.168.1.10 \
+--timeout 10
 ```
 
 **参数**
 
-- **`old_ip`** – 设备的当前 IP 地址。
-- **`dhcp`** – 设置为 `true` 使用 DHCP 或 `false` 使用静态 IP。
-- **`new_ip`** – 禁用 DHCP 时要分配的静态 IP 地址。
+- **`current_ip`** – 设备的当前 IP 地址。
+- **`enable_dhcp`** – 在 `dhcp` 或 `force_ip` 子命令中设置是否启用 DHCP。
+- **`new_ip`** – 要分配的静态 IP 地址。
 - **`mask`** – 新 IP 的子网掩码。
 - **`gateway`** – 新 IP 的网关地址。
+- **`force_ip_mac`** – Force IP 目标设备 MAC 地址。
+- **`timeout`** / **`dhcp_assign_ip_timeout`** – DHCP 分配 IP 超时时间，单位为秒。
+
+> **版本说明**：`ip_config_tool` 在 wrapper version 2.8.0 集成；`LLA` 开关在 wrapper version 2.8.1 后已从该工具移除；`set_dhcp_timeout` 在 wrapper version 2.8.5 后支持。
 
 ## 强制 IP 功能
 
 **强制 IP** 功能允许您为网络相机分配**静态 IP 地址**，覆盖 DHCP 设置。当连接多个网络相机时，这非常有用，您需要每个设备具有固定的 IP 以实现可靠的通信。
 
 > **注意：**如果设备断电或重启，强制 IP 配置**将被重置**。您需要在重启后重新应用设置。
-> **支持版本**： wrapper version 2.6.3 及以上。
 
 **参数**
 

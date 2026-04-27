@@ -38,6 +38,16 @@
 | Binned Sparse Default |  小盲区、低功耗、高帧率 |
 | Unbinned Sparse Default |  平衡质量和功耗，提升低反和半室外效果 |
 
+### Gemini 2L 双 IR 模式
+
+Gemini 2L 支持通过 YAML 配置切换到双 IR 模式：
+
+```bash
+ros2 launch orbbec_camera gemini2L.launch.py config_file_path:=gemini2L_dual_ir.yaml
+```
+
+该配置文件位于 `orbbec_camera/config/gemini2L_dual_ir.yaml`，会将 `depth_work_mode` 设置为 `In-scene Calibration`，关闭普通 `ir` 流，并开启 `left_ir` 与 `right_ir`。
+
 ## Gemini 305
 
 | 预设 | 特点 |
