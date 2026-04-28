@@ -271,7 +271,7 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_precision', default_value=''),
         DeclareLaunchArgument('device_preset', default_value='Default'), # Default, High Accuracy, Close Range High Accuracy, Factory Calib, Dual Color Streams, Custom
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
-        DeclareLaunchArgument('enable_sync_host_time', default_value='true'),
+        DeclareLaunchArgument('enable_sync_host_time', default_value='false'),
         DeclareLaunchArgument('time_sync_period', default_value='6.0'), # seconds
         DeclareLaunchArgument('time_domain', default_value='global'),# global, device, system
         DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),

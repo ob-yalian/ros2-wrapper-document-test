@@ -254,7 +254,7 @@ def generate_launch_description():
         DeclareLaunchArgument('color_preset', default_value='Default'),# color preset: Default, Warm Biased AWB
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('laser_energy_level', default_value='-1'),
-        DeclareLaunchArgument('enable_sync_host_time', default_value='true'),
+        DeclareLaunchArgument('enable_sync_host_time', default_value='false'),
         DeclareLaunchArgument('time_sync_period', default_value='6.0'), # seconds
         DeclareLaunchArgument('time_domain', default_value='global'),# global, device, system
         DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
