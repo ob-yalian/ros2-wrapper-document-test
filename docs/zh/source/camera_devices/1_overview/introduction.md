@@ -19,8 +19,13 @@ OrbbecSDK ROS2 封装为 Orbbec 相机与 ROS 2 环境提供无缝集成。它�
   </thead>
   <tbody>
       <tr>
-      <td rowspan="1" style="text-align: center; font-weight: bold;">Gemini 305</td>
+      <td rowspan="2" style="text-align: center; font-weight: bold;">Gemini 305</td>
       <td>Gemini 305</td>
+      <td>not supported</td>
+      <td>recommended for new designs</td>
+    </tr>
+    <tr>
+      <td>Gemini 305G</td>
       <td>not supported</td>
       <td>recommended for new designs</td>
     </tr>
@@ -180,8 +185,8 @@ OrbbecSDK ROS2 封装为 Orbbec 相机与 ROS 2 环境提供无缝集成。它�
 
 | **产品列表** | **推荐固件版本**                                                             |  **启动文件**                                          |
 | ----------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| Gemini 305              | [1.0.30](https://doc.orbbec.com/documentation/Gemini%20305%20Series%20Documentation/Firmware%20Release%20of%20Gemini%20305)                  | gemini305.launch.py             |
-| Gemini 305G             | [1.0.54](https://doc.orbbec.com/documentation/Gemini%20305%20Series%20Documentation/Firmware%20Release%20of%20Gemini%20305)                  | gemini305_g.launch.py           |
+| Gemini 305              | [1.0.30](https://doc.orbbec.com/documentation/Gemini%20305%20Documentation/Firmware%20Release%20of%20Gemini%20305)                  | gemini305.launch.py             |
+| Gemini 305G             | [1.0.30](https://doc.orbbec.com/documentation/Gemini%20305%20Documentation/Firmware%20Release%20of%20Gemini%20305)                  | gemini305_g.launch.py           |
 | Astra Mini Pro          | [2.0.03](https://github.com/orbbec/OrbbecFirmware/releases/tag/Astra-Mini-Pro)                  | astra.launch.py             |
 | Astra Mini S Pro        | [2.0.03](https://github.com/orbbec/OrbbecFirmware/releases/tag/Astra-Mini-S-Pro)                | astra.launch.py             |
 | Gemini 435Le            | [1.3.6](https://github.com/orbbec/OrbbecFirmware/releases/tag/Gemin435Le-Firmware)              | gemini435_le.launch.py      |
