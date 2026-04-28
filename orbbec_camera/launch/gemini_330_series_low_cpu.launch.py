@@ -69,6 +69,7 @@ def load_parameters(context, args):
 
 def generate_launch_description():
     args = [
+        DeclareLaunchArgument('device_type', default_value='camera'),
         DeclareLaunchArgument('camera_name', default_value='camera'),
         DeclareLaunchArgument('depth_registration', default_value='false'),
         DeclareLaunchArgument('serial_number', default_value=''),
@@ -187,6 +188,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enumerate_net_device', default_value='true'),
         DeclareLaunchArgument('net_device_ip', default_value=''),
         DeclareLaunchArgument('net_device_port', default_value='0'),
+        DeclareLaunchArgument('device_access_mode', default_value='Default'), # Default, EA or CA . only for 335le
         DeclareLaunchArgument('exposure_range_mode', default_value='default'),#default, ultimate or regular
         DeclareLaunchArgument('log_level', default_value='none'),
         DeclareLaunchArgument('log_file_name', default_value=''),
@@ -254,6 +256,8 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_sync_host_time', default_value='false'),
         DeclareLaunchArgument('time_sync_period', default_value='6.0'), # seconds
         DeclareLaunchArgument('time_domain', default_value='global'),# global, device, system
+        DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
+        DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('config_file_path', default_value=''),
         DeclareLaunchArgument('enable_heartbeat', default_value='false'),
@@ -302,6 +306,7 @@ def generate_launch_description():
         DeclareLaunchArgument('left_ir.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
         #infra2
         DeclareLaunchArgument('right_ir.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
+        DeclareLaunchArgument('intra_camera_sync_reference', default_value=""),#Start, Middle or End
     ]
 
     def get_params(context, args):
