@@ -1392,7 +1392,7 @@ void OBCameraNode::setupDevices() {
   }
   if (!load_config_json_file_path_.empty()) {
     device_->loadPresetFromJsonFile(load_config_json_file_path_.c_str());
-    RCLCPP_INFO_STREAM(logger_, "Loading config json file path : " << load_config_json_file_path_);
+    RCLCPP_INFO_STREAM(logger_, "Loaded config json file path : " << load_config_json_file_path_);
   }
   if (!export_config_json_file_path_.empty()) {
     device_->exportSettingsAsPresetJsonFile(export_config_json_file_path_.c_str());
