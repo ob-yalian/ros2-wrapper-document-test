@@ -115,8 +115,6 @@ def generate_launch_description():
         DeclareLaunchArgument('color_fps', default_value='30'),
         DeclareLaunchArgument('color_format', default_value='YUYV'),
         DeclareLaunchArgument('enable_color', default_value='true'),
-        DeclareLaunchArgument('enable_left_color', default_value='true'),
-        DeclareLaunchArgument('enable_right_color', default_value='true'),
         DeclareLaunchArgument('color_qos', default_value='default'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
