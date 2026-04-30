@@ -40,4 +40,5 @@ Configuration & Modes
     configuration/disparity_search_offset.md
     configuration/interleave_ae_mode.md
     configuration/predefined_presets.md
+    configuration/firmware_update_tool.md
     configuration/net_camera.md

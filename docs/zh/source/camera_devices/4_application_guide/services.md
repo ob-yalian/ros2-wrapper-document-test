@@ -128,7 +128,6 @@
     ```bash
     ros2 service call /camera/get_laser_status orbbec_camera_msgs/srv/GetBool '{}'
     ```
-    > **支持版本**： wrapper version 2.6.3 及以上。
 *   `/camera/set_ldp_enable` & `/camera/get_ldp_status`
     ```bash
     ros2 service call /camera/set_ldp_enable std_srvs/srv/SetBool '{data: true}'
@@ -217,6 +216,26 @@
 
     # 设置 SpatialModerateFilter: [disp_diff, magnitude, radius]
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: SpatialModerateFilter, filter_enable: true, filter_param: [160,1,3]}'
+
+    # 设置 FalsePositiveFilter: []
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: FalsePositiveFilter, filter_enable: true, filter_param: []}'
+
+    # 设置 MgcNoiseRemovalFilter / LutNoiseRemovalFilter: []
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+    ```
+
+    滤波状态会在服务调用后同步更新到 `/camera/depth_filter_status` 和 `/camera/depth_filters/status`。其中 `/camera/depth_filters/status` 使用结构化消息 `orbbec_camera_msgs/msg/DepthFiltersStatus`，包含每个滤波器的使能状态和参数。
+
+### 视差配置
+
+*   `/camera/set_disparity_range_mode`
+    ```bash
+    ros2 service call /camera/set_disparity_range_mode orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
+    ```
+*   `/camera/set_disparity_search_offset`
+    ```bash
+    ros2 service call /camera/set_disparity_search_offset orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
     ```
 
 ### 数据捕获与校准管理
@@ -238,7 +257,6 @@
     ros2 service call /camera/read_customer_data orbbec_camera_msgs/srv/GetString '{}'
     ```
     > **支持模组**：Gemini 435Le。
-    > **支持版本**： wrapper version 2.5.4 及以上。
 *   `/camera/set_user_calib_params` & `/camera/get_user_calib_params`
     ```bash
     ros2 service call /camera/set_user_calib_params orbbec_camera_msgs/srv/SetUserCalibParams \
@@ -260,28 +278,27 @@
     ros2 service call /camera/get_user_calib_params orbbec_camera_msgs/srv/GetUserCalibParams '{}'
     ```
     > **支持模组**：Gemini 435Le。
-    > **支持版本**： wrapper version 2.5.4 及以上。
-*   `/camera/set_ae_mode`
+*   `/camera/set_ae_reference_stream`
     ```bash
-      # depthbased or colorbased
-      ros2 service call /camera/set_ae_mode orbbec_camera_msgs/srv/SetString "data: depthbased"
+      # depth or color
+      ros2 service call /camera/set_ae_reference_stream orbbec_camera_msgs/srv/SetString "{data: depth}"
     ```
-    > **支持模组**：Gemini 305。
-    > **支持版本**： wrapper version 2.7.2 及以上。
-*   `/camera/set_sports_mode`
+    > **支持模组**：Gemini 305 系列。
+    > **兼容说明**：替代旧服务 `/camera/set_ae_mode`，旧值 `depthbased/colorbased` 对应新值 `depth/color`。
+*   `/camera/set_ae_strategy`
     ```bash
-      ros2 service call /camera/set_sports_mode std_srvs/srv/SetBool "data: true"
+      # default or motion
+      ros2 service call /camera/set_ae_strategy orbbec_camera_msgs/srv/SetString "{data: motion}"
     ```
-    > **支持模组**：Gemini 305。
-    > **支持版本**： wrapper version 2.7.2 及以上。
+    > **支持模组**：Gemini 305 系列。
+    > **兼容说明**：替代旧服务 `/camera/set_sports_mode`。
+
 ### 点云下采样
 *   `/camera/set_point_cloud_decimation`
     ```bash
     ros2 service call /camera/set_point_cloud_decimation orbbec_camera_msgs/srv/SetInt32 '{data: 8}'
     ```
-    > **支持版本**： wrapper version 2.6.3 及以上。
 *   `/camera/get_point_cloud_decimation`
     ```bash
     ros2 service call /camera/get_point_cloud_decimation orbbec_camera_msgs/srv/GetInt32 '{}'
     ```
-    > **支持版本**： wrapper version 2.6.3 及以上。

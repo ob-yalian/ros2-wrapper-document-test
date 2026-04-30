@@ -38,6 +38,16 @@ This document lists available presets, features, and recommended scenarios by pr
 | Binned Sparse Default | Small dead zone, low power consumption, high frame rate |
 | Unbinned Sparse Default | Balance quality and power consumption, improve low-reflection and semi-outdoor effects |
 
+### Gemini 2L Dual IR Mode
+
+Gemini 2L can switch to Dual IR mode with a YAML configuration:
+
+```bash
+ros2 launch orbbec_camera gemini2L.launch.py config_file_path:=gemini2L_dual_ir.yaml
+```
+
+The configuration file is located at `orbbec_camera/config/gemini2L_dual_ir.yaml`. It sets `depth_work_mode` to `In-scene Calibration`, disables the normal `ir` stream, and enables `left_ir` and `right_ir`.
+
 ## Gemini 305
 
 | Defaults | Features |

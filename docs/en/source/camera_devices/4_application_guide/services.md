@@ -128,7 +128,6 @@
     ```bash
     ros2 service call /camera/get_laser_status orbbec_camera_msgs/srv/GetBool '{}'
     ```
-    > **Supported Versions**: Wrapper version 2.6.3 and above.
 *   `/camera/set_ldp_enable` & `/camera/get_ldp_status`
     ```bash
     ros2 service call /camera/set_ldp_enable std_srvs/srv/SetBool '{data: true}'
@@ -216,6 +215,26 @@
 
     # Set SpatialModerateFilter: [disp_diff, magnitude, radius]
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: SpatialModerateFilter, filter_enable: true, filter_param: [160,1,3]}'
+
+    # Set FalsePositiveFilter: []
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: FalsePositiveFilter, filter_enable: true, filter_param: []}'
+
+    # Set MgcNoiseRemovalFilter / LutNoiseRemovalFilter: []
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+    ```
+
+    Filter status is updated after service calls on `/camera/depth_filter_status` and `/camera/depth_filters/status`. `/camera/depth_filters/status` uses the structured `orbbec_camera_msgs/msg/DepthFiltersStatus` message and includes each filter's enabled state and parameters.
+
+### Disparity Configuration
+
+*   `/camera/set_disparity_range_mode`
+    ```bash
+    ros2 service call /camera/set_disparity_range_mode orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
+    ```
+*   `/camera/set_disparity_search_offset`
+    ```bash
+    ros2 service call /camera/set_disparity_search_offset orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
     ```
 
 ### Data Capture
@@ -237,7 +256,6 @@
     ros2 service call /camera/read_customer_data orbbec_camera_msgs/srv/GetString '{}'
     ```
     > **Supported Modules**: Gemini 435Le
-    > **Supported Versions**: Wrapper version 2.5.4 and above.
 *   `/camera/set_user_calib_params` & `/camera/get_user_calib_params`
     ```bash
     ros2 service call /camera/set_user_calib_params orbbec_camera_msgs/srv/SetUserCalibParams \
@@ -259,29 +277,28 @@
     ros2 service call /camera/get_user_calib_params orbbec_camera_msgs/srv/GetUserCalibParams '{}'
     ```
     > **Supported Modules**: Gemini 435Le
-    > **Supported Versions**: Wrapper version 2.5.4 and above.
 
-*   `/camera/set_ae_mode`
+*   `/camera/set_ae_reference_stream`
     ```bash
-      # depthbased or colorbased
-      ros2 service call /camera/set_ae_mode orbbec_camera_msgs/srv/SetString "data: depthbased"
+      # depth or color
+      ros2 service call /camera/set_ae_reference_stream orbbec_camera_msgs/srv/SetString "{data: depth}"
     ```
-    > **Supported Modules**: Gemini 305
-    > **Supported Versions**: Wrapper version 2.7.2 and above.
-*   `/camera/set_sports_mode`
+    > **Supported Modules**: Gemini 305 series.
+    > **Compatibility**: Replaces the old `/camera/set_ae_mode` service. The old values `depthbased/colorbased` map to `depth/color`.
+*   `/camera/set_ae_strategy`
     ```bash
-      ros2 service call /camera/set_sports_mode std_srvs/srv/SetBool "data: true"
+      # default or motion
+      ros2 service call /camera/set_ae_strategy orbbec_camera_msgs/srv/SetString "{data: motion}"
     ```
-    > **Supported Modules**: Gemini 305
-    > **Supported Versions**: Wrapper version 2.7.2 and above.
+    > **Supported Modules**: Gemini 305 series.
+    > **Compatibility**: Replaces the old `/camera/set_sports_mode` service.
+
 ### Point cloud decimation
 *   `/camera/set_point_cloud_decimation`
     ```bash
     ros2 service call /camera/set_point_cloud_decimation orbbec_camera_msgs/srv/SetInt32 '{data: 8}'
     ```
-    > **Supported Versions**: Wrapper version 2.6.3 and above.
 *   `/camera/get_point_cloud_decimation`
     ```bash
     ros2 service call /camera/get_point_cloud_decimation orbbec_camera_msgs/srv/GetInt32 '{}'
     ```
-    > **Supported Versions**: Wrapper version 2.6.3 and above.
