@@ -2,7 +2,7 @@
 
 ### 意外崩溃
 
-如果相机节点意外崩溃，它将在当前运行目录中生成崩溃日志：`Log/camera_crash_stack_trace_xx.log`。请将此日志发送给支持团队或提交到GitHub issue以获得进一步帮助。
+如果相机节点意外崩溃，它会在 `~/.ros/Log/<camera_name>/` 目录下生成崩溃日志，文件名类似 `camera_name_crash_stack_trace_xx.log`。请将此日志发送给支持团队或提交到 GitHub issue 以获得进一步帮助。
 
 ### 多相机无数据流
 
@@ -29,8 +29,10 @@
 
 **1. SDK debug 日志**
 
-将 launch 参数 `log_level` 设为 `debug` 运行后，会在当前工作目录下的 `Log/` 文件夹中生成 SDK 日志文件。如果需要为本次测试指定一个更易识别的日志文件名，可以修改参数 `log_file_name`。
+将 launch 参数 `log_level` 设为 `debug` 运行后，会在 `~/.ros/Log/<camera_name>/` 目录下生成 SDK 日志文件。如果需要为本次测试指定一个更易识别的日志文件名，可以修改参数 `log_file_name`。
 
+- `log_file_name` 对应的实际文件路径通常为 `~/.ros/Log/<camera_name>/<log_file_name>`。
+- 多相机场景下，SDK 日志按 `camera_name` 分目录保存，例如 `~/.ros/Log/camera_01/camera_01.log`、`~/.ros/Log/camera_02/camera_02.log`。
 - SDK 日志是追加写入的：多次启动会在同一个文件里不断累积日志。
 - 建议：在准备打包日志发给技术支持前，先删除旧的日志文件，然后重新复现问题并采集新的日志，这样日志更干净、定位更准确。
 
@@ -39,21 +41,14 @@
 在 launch 文件中，将节点（或可组合节点容器）的 `output` 参数设为 `"log"`，即可将 ROS2 日志保存到本地：
 
 - 设置为 `output="log"` 后，ROS2 日志将保存在 `~/.ros/log/` 目录下。
-- 如需提交问题，请同时打包 `Log/` 目录下的 SDK 日志和 `~/.ros/log/` 下对应时间的 ROS2 日志，一并提供。
-
-**3. 示例**
-
-在终端运行
-```
-ros2 launch orbbec_camera gemini_330_series.launch.py log_level:=debug
-```
-![alt text](../image/image-2.png)
-
-即可在当前工作目录下的 Log 文件夹下查看 SDK 日志
-![alt text](../image/image-1.png)
-
-ros2 log 默认开启，可在 `~/.ros/log/` 下查看
-![alt text](../image/image.png)
+- 每次 `ros2 launch` 会在 `~/.ros/log/` 下生成一个时间戳目录，里面有 `launch.log`；同时还会生成 `component_container_<pid>_<timestamp>.log` 一类的进程日志文件。
+- 二者区别如下：
+  - `launch.log` 包含所有相机容器输出汇总后的日志。
+  - `component_container_<pid>_<timestamp>.log` 记录的是某个容器进程本身的运行输出。
+- 多相机场景下，`component_container_<pid>_<timestamp>.log` 是按“容器进程”区分的。
+- 在一机一容器的多相机 launch 中，可以看做“一路相机对应一个 `component_container_*.log`”；如果你把多路相机加载到同一个容器里，那么同一个 `component_container_*.log` 里也就包含多路相机日志。
+- 区分具体是哪一路相机时，请以日志内容中的命名空间或节点名为准，例如 `camera_01.camera_01`、`camera_02.camera_02`。
+- 如需提交问题，请同时打包 `~/.ros/Log/` 目录下的 SDK 日志和 `~/.ros/log/` 下对应时间的 ROS2 日志，一并提供。
 
 ### 为什么有这么多启动文件？
 
@@ -141,5 +136,3 @@ ros2 launch orbbec_camera femto_bolt.launch.py serial_number:=CL8H741005J
   * `单位`：µs
 
   若 `software_trigger_period` 设置过小，将导致触发频率受限，从而丢帧。
-
-

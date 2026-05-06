@@ -2,7 +2,7 @@
 
 ### Unexpected Crash
 
-If the camera node crashes unexpectedly, it will generate a crash log in the current running directory: `Log/camera_crash_stack_trace_xx.log`. Please send this log to the support team or submit it to a GitHub issue for further assistance.
+If the camera node crashes unexpectedly, it will generate a crash log under `~/.ros/Log/<camera_name>/`, with a file name similar to `camera_name_crash_stack_trace_xx.log`. Please send this log to the support team or submit it to a GitHub issue for further assistance.
 
 ### No Data Stream from Multiple Cameras
 
@@ -29,8 +29,10 @@ If the camera node crashes unexpectedly, it will generate a crash log in the cur
 
 **1. SDK debug logs**
 
-Set the launch parameter `log_level` to `debug`. After running, the SDK will generate log files in the `Log/` folder under the current working directory. If you want a more recognizable file name for this test, you can set the parameter `log_file_name`.
+Set the launch parameter `log_level` to `debug`. After running, the SDK will generate log files under `~/.ros/Log/<camera_name>/`. If you want a more recognizable file name for this test, you can set the parameter `log_file_name`.
 
+- The actual SDK log file path is usually `~/.ros/Log/<camera_name>/<log_file_name>`.
+- In multi-camera setups, SDK logs are separated by `camera_name`, for example `~/.ros/Log/camera_01/camera_01.log` and `~/.ros/Log/camera_02/camera_02.log`.
 - SDK logs are appended to the same file: multiple launches will continue writing into the same log file.
 - Recommendation: before packaging logs to send to technical support, delete old log files, then reproduce the issue and collect new logs. This keeps the logs cleaner and makes troubleshooting more accurate.
 
@@ -39,21 +41,14 @@ Set the launch parameter `log_level` to `debug`. After running, the SDK will gen
 In the launch file, set the node (or composable node container) parameter `output` to `"log"` to save ROS 2 logs locally.
 
 - After setting `output="log"`, ROS 2 logs will be stored in the `~/.ros/log/` directory.
-- When submitting an issue, please package both the SDK logs under the `Log/` directory and the corresponding ROS 2 logs under `~/.ros/log/` for the same time period.
-
-**3. Example Tutorial**
-
-Run in the terminal
-```
-ros2 launch orbbec_camera gemini_330_series.launch.py log_level:=debug
-```
-![alt text](../../../../zh/source/camera_devices/image/image-2.png)
-
-You can find the SDK logs in the Log folder within the current working directory.
-![alt text](../../../../zh/source/camera_devices/image/image-1.png)
-
-ros2 log is enabled by default and can be viewed under `~/.ros/log/`
-![alt text](../../../../zh/source/camera_devices/image/image.png)
+- Each `ros2 launch` run creates a timestamped directory under `~/.ros/log/` containing `launch.log`, and also generates process log files such as `component_container_<pid>_<timestamp>.log`.
+- The difference is:
+  - `launch.log` contains the merged output from all camera containers.
+  - `component_container_<pid>_<timestamp>.log` records the runtime output of a specific container process.
+- In multi-camera setups, `component_container_<pid>_<timestamp>.log` is separated by container process.
+- In one-camera-per-container multi-camera launches, you can treat it as “one camera corresponds to one `component_container_*.log`”. If multiple cameras are loaded into the same container, that `component_container_*.log` will also contain logs from multiple cameras.
+- To identify the exact camera, rely on the namespace or node name in the log content, for example `camera_01.camera_01` and `camera_02.camera_02`.
+- When submitting an issue, please package both the SDK logs under `~/.ros/Log/` and the corresponding ROS 2 logs under `~/.ros/log/` for the same time period.
 
 ### Why Are There So Many Launch Files?
 
@@ -139,5 +134,3 @@ If the above methods still cannot solve the problem, please contact our company 
   * `Unit`: µs
 
   If `software_trigger_period` is set too small, the trigger frequency will be limited, resulting in frame loss.
-
-

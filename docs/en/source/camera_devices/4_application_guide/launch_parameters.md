@@ -252,7 +252,7 @@ The following are the launch parameters available:
   * Shared SDK and ROS node log level. By default, only current device status is printed; set it to `debug` for more debug logs. Optional values: `none`, `debug`, `info`, `warn`, `error`, `fatal`.
   * SDK logs and crash files are saved to `~/.ros/Log` by default. ROS logs remain in `~/.ros/log`.
 * **`log_file_name`**
-  * Saved SDK log file name. Effective when `log_level` is `debug`.
+  * Saved SDK log file name. Effective when `log_level` is `debug`; the actual path is usually `~/.ros/Log/<camera_name>/<log_file_name>`.
 * **`enable_firmware_log`**
   * Enable firmware logging. This switch is independent from `enable_heartbeat` and can be enabled only when firmware logs are needed.
 * **`diagnostic_period`**
