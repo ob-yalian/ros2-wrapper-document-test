@@ -4314,23 +4314,25 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     auto depth_scale = video_frame->as<ob::DepthFrame>()->getValueScale();
     image = image * depth_scale;
   }
-  sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
-
-  cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], image)
-      .toImageMsg(*image_msg);
-  CHECK_NOTNULL(image_msg.get());
-  image_msg->header.stamp = timestamp;
-  image_msg->is_bigendian = false;
-  image_msg->step = width * unit_step_size_[stream_index];
-  image_msg->header.frame_id = frame_id;
   CHECK(image_publishers_.count(stream_index) > 0);
-  saveImageToFile(stream_index, image, *image_msg);
   if (stream_index == COLOR) {
     fps_delay_status_color_->tick(frame_timestamp);
   } else if (stream_index == DEPTH) {
     fps_delay_status_depth_->tick(frame_timestamp);
   }
-  if (has_raw_image_subscriber) {
+  if (has_raw_image_subscriber || save_images_[stream_index]) {
+    sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
+    cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], image)
+        .toImageMsg(*image_msg);
+    CHECK_NOTNULL(image_msg.get());
+    image_msg->header.stamp = timestamp;
+    image_msg->is_bigendian = false;
+    image_msg->step = width * unit_step_size_[stream_index];
+    image_msg->header.frame_id = frame_id;
+    saveImageToFile(stream_index, image, *image_msg);
+    if (!has_raw_image_subscriber) {
+      return;
+    }
     if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
         (stream_index == COLOR || stream_index == DEPTH)) {
       frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
