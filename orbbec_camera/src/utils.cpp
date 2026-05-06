@@ -14,7 +14,10 @@
  * limitations under the License.
  *******************************************************************************/
 
+#include <algorithm>
+#include <mutex>
 #include <regex>
+#include <vector>
 #include "orbbec_camera/utils.h"
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include "orbbec_camera/constants.h"
@@ -995,30 +998,79 @@ OBStreamType obStreamTypeFromString(const std::string &stream_type) {
   }
 }
 
+namespace {
+bool isSameIntrinsic(const OBCameraIntrinsic &lhs, const OBCameraIntrinsic &rhs) {
+  return lhs.fx == rhs.fx && lhs.fy == rhs.fy && lhs.cx == rhs.cx && lhs.cy == rhs.cy &&
+         lhs.width == rhs.width && lhs.height == rhs.height;
+}
+
+bool isSameDistortion(const OBCameraDistortion &lhs, const OBCameraDistortion &rhs) {
+  return lhs.model == rhs.model && lhs.k1 == rhs.k1 && lhs.k2 == rhs.k2 && lhs.k3 == rhs.k3 &&
+         lhs.k4 == rhs.k4 && lhs.k5 == rhs.k5 && lhs.k6 == rhs.k6 && lhs.p1 == rhs.p1 &&
+         lhs.p2 == rhs.p2;
+}
+
+struct UndistortMapCacheEntry {
+  int width = 0;
+  int height = 0;
+  int image_type = 0;
+  OBCameraIntrinsic intrinsic{};
+  OBCameraDistortion distortion{};
+  cv::Mat map1;
+  cv::Mat map2;
+};
+}  // namespace
+
 UndistortedImageResult undistortImage(const cv::Mat &image, const OBCameraIntrinsic &intrinsic,
                                       const OBCameraDistortion &distortion) {
   UndistortedImageResult result;
-  cv::Mat camera_matrix = cv::Mat::eye(3, 3, CV_64F);
-  camera_matrix.at<double>(0, 0) = intrinsic.fx;
-  camera_matrix.at<double>(1, 1) = intrinsic.fy;
-  camera_matrix.at<double>(0, 2) = intrinsic.cx;
-  camera_matrix.at<double>(1, 2) = intrinsic.cy;
+  result.new_intrinsic = intrinsic;
 
-  // Create the distortion coefficients matrix using the extended distortion model
-  cv::Mat dist_coeffs = (cv::Mat_<float>(8, 1) << distortion.k1, distortion.k2, distortion.p1,
-                         distortion.p2, distortion.k3, distortion.k4, distortion.k5, distortion.k6);
-  cv::Size image_size(image.cols, image.rows);
-  // cv::Mat new_camera_matrix =
-  // cv::getOptimalNewCameraMatrix(camera_matrix, dist_coeffs, image_size, 0.0, image_size);
-  // Undistort the image using the new camera matrix
-  // cv::undistort(image, result.image, camera_matrix, dist_coeffs, new_camera_matrix);
-  cv::undistort(image, result.image, camera_matrix, dist_coeffs);
-  // Update the intrinsic parameters with the new camera matrix
-  result.new_intrinsic = intrinsic;  // Copy original values first
-  // result.new_intrinsic.fx = new_camera_matrix.at<double>(0, 0);
-  // result.new_intrinsic.fy = new_camera_matrix.at<double>(1, 1);
-  // result.new_intrinsic.cx = new_camera_matrix.at<double>(0, 2);
-  // result.new_intrinsic.cy = new_camera_matrix.at<double>(1, 2);
+  if (image.empty()) {
+    return result;
+  }
+
+  cv::Mat map1;
+  cv::Mat map2;
+  {
+    static std::mutex cache_mutex;
+    static std::vector<UndistortMapCacheEntry> map_cache;
+
+    std::lock_guard<std::mutex> lock(cache_mutex);
+    auto cache_it = std::find_if(
+        map_cache.begin(), map_cache.end(), [&](const UndistortMapCacheEntry &entry) {
+          return entry.width == image.cols && entry.height == image.rows &&
+                 entry.image_type == image.type() && isSameIntrinsic(entry.intrinsic, intrinsic) &&
+                 isSameDistortion(entry.distortion, distortion);
+        });
+
+    if (cache_it == map_cache.end()) {
+      UndistortMapCacheEntry entry;
+      entry.width = image.cols;
+      entry.height = image.rows;
+      entry.image_type = image.type();
+      entry.intrinsic = intrinsic;
+      entry.distortion = distortion;
+
+      cv::Mat camera_matrix =
+          (cv::Mat_<double>(3, 3) << intrinsic.fx, 0.0, intrinsic.cx, 0.0, intrinsic.fy,
+           intrinsic.cy, 0.0, 0.0, 1.0);
+      cv::Mat dist_coeffs =
+          (cv::Mat_<double>(8, 1) << distortion.k1, distortion.k2, distortion.p1, distortion.p2,
+           distortion.k3, distortion.k4, distortion.k5, distortion.k6);
+      cv::initUndistortRectifyMap(camera_matrix, dist_coeffs, cv::Mat(), camera_matrix,
+                                  cv::Size(image.cols, image.rows), CV_16SC2, entry.map1,
+                                  entry.map2);
+      map_cache.emplace_back(std::move(entry));
+      cache_it = std::prev(map_cache.end());
+    }
+
+    map1 = cache_it->map1;
+    map2 = cache_it->map2;
+  }
+
+  result.image.create(image.size(), image.type());
+  cv::remap(image, result.image, map1, map2, cv::INTER_LINEAR);
   result.new_intrinsic.width = image.cols;
   result.new_intrinsic.height = image.rows;
   return result;
