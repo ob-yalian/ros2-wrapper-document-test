@@ -827,7 +827,6 @@ std::string parseUsbPort(const std::string &line) {
 
   if (found_usb) {
     port_id = base_match[1].str();
-    std::cout << "USB port_id: " << port_id << std::endl;
 
     if (base_match[2].str().empty()) {
       std::regex end_regex(".+(-[0-9]+$)", std::regex_constants::ECMAScript);
@@ -835,7 +834,6 @@ std::string parseUsbPort(const std::string &line) {
 
       if (found_end) {
         port_id = port_id.substr(0, port_id.size() - base_match[1].str().size());
-        std::cout << "Modified USB port_id: " << port_id << std::endl;
       }
     }
 
