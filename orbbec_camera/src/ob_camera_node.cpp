@@ -3085,6 +3085,10 @@ void OBCameraNode::setupPublishers() {
                           camera_info_qos_profile));
     }
     if (stream_index == COLOR && enable_color_undistortion_) {
+      color_undistortion_camera_info_publisher_ = node_->create_publisher<CameraInfo>(
+          "color/camera_info_undistorted",
+          rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
+                      camera_info_qos_profile));
       if (use_intra_process_) {
         color_undistortion_publisher_ = std::make_shared<image_rcl_publisher>(
             *node_, "color/image_undistorted", image_qos_profile);
@@ -4299,11 +4303,28 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     undistorted_image_msg->step = width * unit_step_size_[stream_index];
     undistorted_image_msg->header.frame_id = frame_id;
     color_undistortion_publisher_->publish(std::move(undistorted_image_msg));
-    // Update intrinsic with the new camera matrix from undistortion
-    camera_info.p.at(0) = undistort_result.new_intrinsic.fx;
-    camera_info.p.at(5) = undistort_result.new_intrinsic.fy;
-    camera_info.p.at(2) = undistort_result.new_intrinsic.cx;
-    camera_info.p.at(6) = undistort_result.new_intrinsic.cy;
+
+    if (color_undistortion_camera_info_publisher_) {
+      auto undistorted_camera_info = camera_info;
+      const auto distortion_coeff_count =
+          undistorted_camera_info.d.empty() ? 5 : undistorted_camera_info.d.size();
+      undistorted_camera_info.d.assign(distortion_coeff_count, 0.0);
+      undistorted_camera_info.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
+      undistorted_camera_info.roi.do_rectify = false;
+      undistorted_camera_info.k.fill(0.0);
+      undistorted_camera_info.k.at(0) = undistort_result.new_intrinsic.fx;
+      undistorted_camera_info.k.at(4) = undistort_result.new_intrinsic.fy;
+      undistorted_camera_info.k.at(2) = undistort_result.new_intrinsic.cx;
+      undistorted_camera_info.k.at(5) = undistort_result.new_intrinsic.cy;
+      undistorted_camera_info.k.at(8) = 1.0;
+      undistorted_camera_info.p.fill(0.0);
+      undistorted_camera_info.p.at(0) = undistort_result.new_intrinsic.fx;
+      undistorted_camera_info.p.at(5) = undistort_result.new_intrinsic.fy;
+      undistorted_camera_info.p.at(2) = undistort_result.new_intrinsic.cx;
+      undistorted_camera_info.p.at(6) = undistort_result.new_intrinsic.cy;
+      undistorted_camera_info.p.at(10) = 1.0;
+      color_undistortion_camera_info_publisher_->publish(undistorted_camera_info);
+    }
   }
 
   CHECK(camera_info_publishers_.count(stream_index) > 0);
