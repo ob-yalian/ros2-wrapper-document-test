@@ -15,6 +15,11 @@
  *******************************************************************************/
 #include <rclcpp/rclcpp.hpp>
 
+#include <iomanip>
+#include <memory>
+#include <sstream>
+#include <string>
+
 #include <orbbec_camera/ob_camera_node_driver.h>
 #include <orbbec_camera/utils.h>
 
@@ -77,16 +82,14 @@ int main() {
         auto firmware_version = device_info_->getFirmwareVersion();
         std::stringstream pid_hex;
         pid_hex << std::hex << std::setw(4) << std::setfill('0') << list->getPid(i);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "- Name: " << list->getName(i) << ", PID: 0x" << pid_hex.str()
-                                      << ", SN/ID: " << serial
-                                      << ", Connection: " << connection_type);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "name: " << list->getName(i));
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "pid: 0x" << pid_hex.str());
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "serial: " << serial);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                           "connection: " << connection_type);
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                            "firmware version: " << firmware_version);
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "usb port: " << usb_port);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "usb connect type: " << connection_type);
         printPresetInfo(device_);
         std::cout << std::endl;
       } else {
@@ -96,16 +99,14 @@ int main() {
         std::stringstream pid_hex;
         auto firmware_version = device_info_->getFirmwareVersion();
         pid_hex << std::hex << std::setw(4) << std::setfill('0') << list->getPid(i);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "- Name: " << list->getName(i) << ", PID: 0x" << pid_hex.str()
-                                      << ", SN/ID: " << serial
-                                      << ", Connection: " << connection_type);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "name: " << list->getName(i));
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "pid: 0x" << pid_hex.str());
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "serial: " << serial);
+        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                           "connection: " << connection_type);
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                            "firmware version: " << firmware_version);
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "ip address: " << ip_address);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "usb connect type: " << connection_type);
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                            "MAC address: " << list->getUid(i));
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
