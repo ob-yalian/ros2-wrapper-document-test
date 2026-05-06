@@ -33,6 +33,32 @@ std::string ipSourceTypeToString(int ip_source_type) {
       return std::string("UNKNOWN(") + std::to_string(ip_source_type) + ")";
   }
 }
+
+void printPresetInfo(const std::shared_ptr<ob::Device>& device) {
+  auto logger = rclcpp::get_logger("list_device_node");
+  try {
+    auto preset_list = device->getAvailablePresetList();
+    RCLCPP_INFO_STREAM(logger, "Preset count: " << preset_list->getCount());
+    for (uint32_t i = 0; i < preset_list->getCount(); ++i) {
+      RCLCPP_INFO_STREAM(logger, "  - " << preset_list->getName(i));
+    }
+
+    std::string key = "PresetVer";
+    if (device->isExtensionInfoExist(key)) {
+      std::string value = device->getExtensionInfo(key);
+      RCLCPP_INFO_STREAM(logger, "Preset version: " << value);
+    } else {
+      RCLCPP_INFO_STREAM(logger, "Preset version: not available");
+    }
+  } catch (ob::Error& e) {
+    RCLCPP_WARN_STREAM(logger,
+                       "Failed to get preset info: " << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception& e) {
+    RCLCPP_WARN_STREAM(logger, "Failed to get preset info: " << e.what());
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger, "Failed to get preset info");
+  }
+}
 }  // namespace
 
 int main() {
@@ -61,6 +87,7 @@ int main() {
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "usb port: " << usb_port);
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                            "usb connect type: " << connection_type);
+        printPresetInfo(device_);
         std::cout << std::endl;
       } else {
         std::string serial = list->serialNumber(i);
@@ -91,6 +118,7 @@ int main() {
         RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                            "ip source type: " << ipSourceTypeToString(
                                static_cast<int>(list->getIpSourceType(static_cast<uint32_t>(i)))));
+        printPresetInfo(device_);
         std::cout << std::endl;
       }
     }
