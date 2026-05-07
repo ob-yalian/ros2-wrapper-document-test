@@ -460,6 +460,8 @@ class OBCameraNode {
   std::shared_ptr<ob::Frame> softwareDecodeColorFrame(const std::shared_ptr<ob::Frame>& frame,
                                                       const stream_index_pair& stream_index);
 
+  bool isColorFrameDecodeRequired(const std::shared_ptr<ob::Frame>& frame) const;
+
   bool decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame>& frame, uint8_t* buffer);
 
   std::shared_ptr<ob::Frame> decodeIRMJPGFrame(const std::shared_ptr<ob::Frame>& frame);

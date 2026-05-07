@@ -4019,6 +4019,19 @@ std::shared_ptr<ob::Frame> OBCameraNode::softwareDecodeColorFrame(
   return color_frame;
 }
 
+bool OBCameraNode::isColorFrameDecodeRequired(const std::shared_ptr<ob::Frame> &frame) const {
+  if (frame == nullptr) {
+    return false;
+  }
+  const auto format = frame->getFormat();
+  if (format == OB_FORMAT_RGB || format == OB_FORMAT_BGR || format == OB_FORMAT_RGB888 ||
+      format == OB_FORMAT_RGBA || format == OB_FORMAT_BGRA || format == OB_FORMAT_Y16 ||
+      format == OB_FORMAT_Y8) {
+    return false;
+  }
+  return true;
+}
+
 bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &frame,
                                             uint8_t *buffer) {
   if (frame == nullptr) {
@@ -4026,6 +4039,10 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
   }
   if (!buffer) {
     return false;
+  }
+
+  if (!isColorFrameDecodeRequired(frame)) {
+    return true;
   }
 
   stream_index_pair stream_index = COLOR;
@@ -4055,15 +4072,6 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
   if (frame->getType() == OB_FRAME_COLOR && enable_colored_point_cloud_ &&
       depth_registration_cloud_pub_ &&
       depth_registration_cloud_pub_->get_subscription_count() > 0) {
-    has_subscriber = true;
-  }
-
-  if (metadata_publishers_.count(stream_index) && metadata_publishers_[stream_index] &&
-      metadata_publishers_[stream_index]->get_subscription_count() > 0) {
-    has_subscriber = true;
-  }
-  if (camera_info_publishers_.count(stream_index) && camera_info_publishers_[stream_index] &&
-      camera_info_publishers_[stream_index]->get_subscription_count() > 0) {
     has_subscriber = true;
   }
 
@@ -4277,30 +4285,27 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (image.empty() || image.cols != width || image.rows != height) {
     image.create(height, width, image_format_[stream_index]);
   }
-  if (frame->getType() == OB_FRAME_COLOR && !is_color_frame_decoded_) {
-    RCLCPP_ERROR(logger_, "color frame is not decoded");
-    return;
-  }
-  if (frame->getType() == OB_FRAME_COLOR_LEFT && !is_left_color_frame_decoded_) {
-    RCLCPP_ERROR(logger_, "left color frame is not decoded");
-    return;
-  }
-  if (frame->getType() == OB_FRAME_COLOR_RIGHT && !is_right_color_frame_decoded_) {
-    RCLCPP_ERROR(logger_, "right color frame is not decoded");
-    return;
-  }
-  if (frame->getType() == OB_FRAME_COLOR && frame->format() != OB_FORMAT_Y8 &&
-      frame->format() != OB_FORMAT_Y16 && frame->format() != OB_FORMAT_BGRA &&
-      frame->format() != OB_FORMAT_RGBA && has_subscriber) {
-    memcpy(image.data, rgb_buffer_, video_frame->getWidth() * video_frame->getHeight() * 3);
-  } else if (frame->getType() == OB_FRAME_COLOR_LEFT && frame->format() != OB_FORMAT_Y8 &&
-             frame->format() != OB_FORMAT_Y16 && frame->format() != OB_FORMAT_BGRA &&
-             frame->format() != OB_FORMAT_RGBA && has_subscriber) {
-    memcpy(image.data, rgb_buffer_left_, video_frame->getWidth() * video_frame->getHeight() * 3);
-  } else if (frame->getType() == OB_FRAME_COLOR_RIGHT && frame->format() != OB_FORMAT_Y8 &&
-             frame->format() != OB_FORMAT_Y16 && frame->format() != OB_FORMAT_BGRA &&
-             frame->format() != OB_FORMAT_RGBA && has_subscriber) {
-    memcpy(image.data, rgb_buffer_right_, video_frame->getWidth() * video_frame->getHeight() * 3);
+  if (isColorFrameDecodeRequired(frame) &&
+      (has_raw_image_subscriber || enable_undistortion_publish)) {
+    if (frame->getType() == OB_FRAME_COLOR && !is_color_frame_decoded_) {
+      RCLCPP_ERROR(logger_, "color frame is not decoded");
+      return;
+    }
+    if (frame->getType() == OB_FRAME_COLOR_LEFT && !is_left_color_frame_decoded_) {
+      RCLCPP_ERROR(logger_, "left color frame is not decoded");
+      return;
+    }
+    if (frame->getType() == OB_FRAME_COLOR_RIGHT && !is_right_color_frame_decoded_) {
+      RCLCPP_ERROR(logger_, "right color frame is not decoded");
+      return;
+    }
+    if (frame->getType() == OB_FRAME_COLOR) {
+      memcpy(image.data, rgb_buffer_, video_frame->getWidth() * video_frame->getHeight() * 3);
+    } else if (frame->getType() == OB_FRAME_COLOR_LEFT) {
+      memcpy(image.data, rgb_buffer_left_, video_frame->getWidth() * video_frame->getHeight() * 3);
+    } else if (frame->getType() == OB_FRAME_COLOR_RIGHT) {
+      memcpy(image.data, rgb_buffer_right_, video_frame->getWidth() * video_frame->getHeight() * 3);
+    }
   } else {
     memcpy(image.data, video_frame->getData(), video_frame->getDataSize());
   }
@@ -4327,6 +4332,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   camera_info_publishers_[stream_index]->publish(camera_info);
   publishMetadata(frame, stream_index, camera_info.header);
 
+  if (!has_raw_image_subscriber && !save_images_[stream_index]) {
+    return;
+  }
   if (stream_index == DEPTH) {
     auto depth_scale = video_frame->as<ob::DepthFrame>()->getValueScale();
     image = image * depth_scale;
