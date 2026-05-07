@@ -4,4 +4,13 @@
      For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
 <robot name="gemini345Lg" xmlns:xacro="http://ros.org/wiki/xacro">
     <xacro:include filename="gemini345Lg.urdf.xacro"/>
+    <!-- Define a virtual root link -->
+  <link name="base_link"/>
+
+  <!-- Connect the virtual root to the actual base link -->
+  <joint name="base_link_to_camera_bottom_screw_frame" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_bottom_screw_frame"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
 </robot>
