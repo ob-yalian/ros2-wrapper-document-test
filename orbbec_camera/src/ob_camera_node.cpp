@@ -4281,6 +4281,14 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
   }
+
+  if (!has_raw_image_subscriber && !enable_undistortion_publish && !save_images_[stream_index]) {
+    CHECK(camera_info_publishers_.count(stream_index) > 0);
+    camera_info_publishers_[stream_index]->publish(camera_info);
+    publishMetadata(frame, stream_index, camera_info.header);
+    return;
+  }
+
   CHECK_NOTNULL(image_publishers_[stream_index]);
   if (image.empty() || image.cols != width || image.rows != height) {
     image.create(height, width, image_format_[stream_index]);
