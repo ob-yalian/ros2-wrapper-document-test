@@ -94,7 +94,7 @@ void printHelp() {
       << "      [--enable_dhcp <true|false>] [--new_ip <ip>] [--mask <ip>] [--gateway <ip>]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- set_dhcp_timeout\\\n"
       << "      [--current_ip <ip>] [--port <port>] --timeout <seconds>\n"
-      << "      [--enable_sdk_log] [--sdk_log_level debug]\n"
+      << "      [--sdk_log_level debug]\n"
       << "  (legacy alias: set_device_ip)\n\n"
       << "Subcommands:\n"
       << "  dhcp                       Configure DHCP only by current device address.\n"
@@ -121,7 +121,6 @@ void printHelp() {
       << "  --timeout <sec>            DHCP timeout in seconds for set_dhcp_timeout.\n"
       << "  --dhcp_assign_ip_timeout <sec>\n"
       << "                             Alias of --timeout.\n\n"
-      << "  --enable_sdk_log           Enable SDK file log at debug level under ~/.ros/Log.\n"
       << "  --sdk_log_level LEVEL      SDK file log level: debug/info/warn/error/fatal/off "
          "(default: off).\n\n"
       << "Examples:\n"
@@ -165,7 +164,7 @@ void printHelp() {
       << "  [SDK Log]\n"
       << "    Debug:   ros2 run orbbec_camera ip_config_tool -- \\\n"
       << "             dhcp --current_ip 192.168.1.10 --enable_dhcp true \\\n"
-      << "             --enable_sdk_log --sdk_log_level debug\n";
+      << "             --sdk_log_level debug\n";
 }
 
 bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
@@ -355,11 +354,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
         return false;
       }
       args.dhcp_assign_ip_timeout_set = true;
-      continue;
-    }
-
-    if (current == "--enable_sdk_log") {
-      args.sdk_log_level = "debug";
       continue;
     }
 

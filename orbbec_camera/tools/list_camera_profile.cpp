@@ -24,14 +24,12 @@ void printUsage() {
       << "      [--serial_number SN]\n\n"
       << "Parameters:\n"
       << "  --serial_number SN  Select a specific camera by serial number.\n"
-      << "  --enable_sdk_log    Enable SDK file log at debug level under ~/.ros/Log.\n"
       << "  --sdk_log_level LEVEL\n"
       << "                      SDK file log level: debug/info/warn/error/fatal/off "
          "(default: off).\n"
       << "  -h, --help          Show this help message.\n"
       << "Examples:\n"
-      << "  ros2 run orbbec_camera list_camera_profile_mode_node -- --enable_sdk_log "
-         "--sdk_log_level debug\n";
+      << "  ros2 run orbbec_camera list_camera_profile_mode_node -- --sdk_log_level debug\n";
 }
 
 bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
@@ -57,11 +55,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
         return false;
       }
       args.serial_number = argv[i];
-      continue;
-    }
-
-    if (current == "--enable_sdk_log") {
-      args.sdk_log_level = "debug";
       continue;
     }
 

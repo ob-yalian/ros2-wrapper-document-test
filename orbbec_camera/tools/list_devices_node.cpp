@@ -35,12 +35,10 @@ void printUsage() {
   std::cout << "Usage:\n"
             << "  ros2 run orbbec_camera list_devices_node -- [options]\n\n"
             << "Options:\n"
-            << "  --enable_sdk_log       Enable SDK file log at debug level under ~/.ros/Log.\n"
             << "  --sdk_log_level LEVEL  SDK file log level: debug/info/warn/error/fatal/off "
                "(default: off).\n\n"
             << "Examples:\n"
-            << "  ros2 run orbbec_camera list_devices_node -- --enable_sdk_log --sdk_log_level "
-               "debug\n";
+            << "  ros2 run orbbec_camera list_devices_node -- --sdk_log_level debug\n";
 }
 
 bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
@@ -49,10 +47,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
     if (current == "-h" || current == "--help") {
       args.help = true;
       return true;
-    }
-    if (current == "--enable_sdk_log") {
-      args.sdk_log_level = "debug";
-      continue;
     }
     if (current.rfind("--sdk_log_level=", 0) == 0) {
       args.sdk_log_level = current.substr(std::strlen("--sdk_log_level="));
