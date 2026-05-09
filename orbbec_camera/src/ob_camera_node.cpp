@@ -4068,6 +4068,9 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
   if (stream_index == COLOR && enable_color_undistortion_ && color_undistortion_publisher_) {
     has_subscriber = true;
   }
+  if (save_images_[stream_index]) {
+    has_subscriber = true;
+  }
 
   if (frame->getType() == OB_FRAME_COLOR && enable_colored_point_cloud_ &&
       depth_registration_cloud_pub_ &&
@@ -4173,8 +4176,8 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   const bool has_compressed_image_subscriber = hasCompressedImageSubscriber(stream_index);
   const bool enable_undistortion_publish =
       (stream_index == COLOR && enable_color_undistortion_ && color_undistortion_publisher_);
-  bool has_subscriber =
-      has_raw_image_subscriber || has_compressed_image_subscriber || enable_undistortion_publish;
+  bool has_subscriber = has_raw_image_subscriber || has_compressed_image_subscriber ||
+                        enable_undistortion_publish || save_images_[stream_index];
   has_subscriber =
       has_subscriber || camera_info_publishers_[stream_index]->get_subscription_count() > 0;
   has_subscriber =
@@ -4294,7 +4297,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     image.create(height, width, image_format_[stream_index]);
   }
   if (isColorFrameDecodeRequired(frame) &&
-      (has_raw_image_subscriber || enable_undistortion_publish)) {
+      (has_raw_image_subscriber || enable_undistortion_publish || save_images_[stream_index])) {
     if (frame->getType() == OB_FRAME_COLOR && !is_color_frame_decoded_) {
       RCLCPP_ERROR(logger_, "color frame is not decoded");
       return;
@@ -4390,7 +4393,7 @@ void OBCameraNode::publishCompressedColorImage(const std::shared_ptr<ob::Frame> 
   sensor_msgs::msg::CompressedImage msg;
   msg.header.stamp = timestamp;
   msg.header.frame_id = frame_id;
-  msg.format = "jpeg";
+  msg.format = encoding_[stream_index] + "; jpeg compressed " + encoding_[stream_index];
   const auto *data = static_cast<const uint8_t *>(frame->getData());
   msg.data.assign(data, data + frame->getDataSize());
   it->second->publish(std::move(msg));
