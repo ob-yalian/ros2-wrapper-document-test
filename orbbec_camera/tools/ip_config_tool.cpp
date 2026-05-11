@@ -377,7 +377,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
 void enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
   try {
     device->enableFirmwareLog(true);
-    RCLCPP_INFO(logger, "Set firmware log to ON");
   } catch (const ob::Error &e) {
     RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
                 orbbec_camera::formatObErrorWithStatus(e).c_str());

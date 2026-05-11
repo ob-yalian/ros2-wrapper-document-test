@@ -125,7 +125,6 @@ void enableFirmwareLog(const std::shared_ptr<ob::Device> &device) {
   auto logger = rclcpp::get_logger("list_device_node");
   try {
     device->enableFirmwareLog(true);
-    RCLCPP_INFO(logger, "Set firmware log to ON");
   } catch (const ob::Error &e) {
     RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
                 orbbec_camera::formatObErrorWithStatus(e).c_str());

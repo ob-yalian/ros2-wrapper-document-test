@@ -96,7 +96,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
 void enableFirmwareLog(const std::shared_ptr<ob::Device>& device) {
   try {
     device->enableFirmwareLog(true);
-    std::cout << "Set firmware log to ON" << std::endl;
   } catch (const ob::Error& e) {
     std::cerr << "Failed to enable firmware log: " << formatObErrorWithStatus(e) << std::endl;
   } catch (const std::exception& e) {
