@@ -14,7 +14,6 @@ using namespace ob;
 struct CliArgs {
   enum class Operation {
     NONE,
-    DHCP,
     SET_IP,
     FORCE_IP,
     SET_DHCP_TIMEOUT,
@@ -83,9 +82,7 @@ void printHelp() {
   std::cout
       << "Usage:\n"
       << "  ros2 run orbbec_camera ip_config_tool --\\\n"
-      << "      <dhcp|set_ip|force_ip|set_dhcp_timeout> [options]\n"
-      << "  ros2 run orbbec_camera ip_config_tool -- dhcp --enable_dhcp <true|false>\\\n"
-      << "      [--current_ip <ip>] [--port <port>]\n"
+      << "      <set_ip|force_ip|set_dhcp_timeout> [options]\n"
       << "  ros2 run orbbec_camera ip_config_tool -- set_ip\\\n"
       << "      [--current_ip <ip>] [--port <port>] [--enable_dhcp <true|false>]\\\n"
       << "      [--enable_persistent_ip <true|false>]\\\n"
@@ -97,20 +94,19 @@ void printHelp() {
       << "      [--sdk_log_level debug]\n"
       << "  (legacy alias: set_device_ip)\n\n"
       << "Subcommands:\n"
-      << "  dhcp                       Configure DHCP only by current device address.\n"
-      << "  set_ip                     Configure persistent IP on device by current device "
+      << "  set_ip                     Configure DHCP and persistent IP by current device "
          "address.\n"
       << "  force_ip                   Force IP by MAC address.\n"
       << "  set_dhcp_timeout           Configure DHCP address assignment timeout.\n\n"
       << "Parameters:\n"
-      << "  --enable_dhcp <bool>       DHCP flag for dhcp/set-ip/force-ip "
+      << "  --enable_dhcp <bool>       DHCP flag for set-ip/force-ip "
          "(default: false).\n"
       << "  --enable_persistent_ip <bool>\n"
       << "                             Persistent IP flag for set-ip "
          "(V2 independent flag, legacy requires mutual exclusion with DHCP).\n"
-      << "  --current_ip <ip>          Current device IP for dhcp/set-ip/set_dhcp_timeout "
+      << "  --current_ip <ip>          Current device IP for set-ip/set_dhcp_timeout "
          "(default: 192.168.1.10).\n"
-      << "  --port <port>              Device port for dhcp/set-ip/set_dhcp_timeout "
+      << "  --port <port>              Device port for set-ip/set_dhcp_timeout "
          "(default: 8090).\n"
       << "  --new_ip <ip>              Persistent IP for set-ip/force-ip "
          "(default: 192.168.1.200).\n"
@@ -163,7 +159,8 @@ void printHelp() {
       << "             --timeout 10\n"
       << "  [SDK Log]\n"
       << "    Debug:   ros2 run orbbec_camera ip_config_tool -- \\\n"
-      << "             dhcp --current_ip 192.168.1.10 --enable_dhcp true \\\n"
+      << "             set_ip --current_ip 192.168.1.10 --enable_dhcp true "
+         "--enable_persistent_ip false \\\n"
       << "             --sdk_log_level debug\n";
 }
 
@@ -174,14 +171,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
     if (current == "-h" || current == "--help") {
       args.help = true;
       return true;
-    }
-    if (current == "dhcp") {
-      if (args.operation != CliArgs::Operation::NONE) {
-        error = "Only one subcommand is allowed";
-        return false;
-      }
-      args.operation = CliArgs::Operation::DHCP;
-      continue;
     }
     if (current == "set_ip" || current == "set-ip") {
       if (args.operation != CliArgs::Operation::NONE) {
@@ -375,11 +364,7 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
   }
 
   if (args.operation == CliArgs::Operation::NONE) {
-    error = "Missing subcommand. Use one of: dhcp, set_ip, force_ip, set_dhcp_timeout";
-    return false;
-  }
-  if (args.operation == CliArgs::Operation::DHCP && !args.dhcp_option_set) {
-    error = "dhcp requires --enable_dhcp <true|false>";
+    error = "Missing subcommand. Use one of: set_ip, force_ip, set_dhcp_timeout";
     return false;
   }
   if (args.operation != CliArgs::Operation::SET_IP && args.persistent_ip_option_set) {
@@ -427,58 +412,6 @@ int main(int argc, char **argv) {
       RCLCPP_INFO(logger, "SDK file log enabled: %s", sdk_log_path.c_str());
     }
     auto context = std::make_shared<ob::Context>();
-
-    if (args.operation == CliArgs::Operation::DHCP) {
-      RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
-      auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
-
-      uint8_t current_ip_bytes[4] = {0};
-      if (args.dhcp && !parseIpString(args.current_ip, current_ip_bytes)) {
-        RCLCPP_ERROR(logger, "Invalid current_ip format: %s", args.current_ip.c_str());
-        rclcpp::shutdown();
-        return 1;
-      }
-
-      const bool v2_supported =
-          device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
-      if (v2_supported) {
-        OBNetIpConfigV2 ip_config_v2{};
-        uint32_t data_size = sizeof(ip_config_v2);
-        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
-                                  reinterpret_cast<uint8_t *>(&ip_config_v2), &data_size);
-
-        if (args.dhcp) {
-          ip_config_v2.flags = static_cast<uint16_t>(ip_config_v2.flags | OB_NET_IP_FLAG_DHCP);
-        } else {
-          ip_config_v2.flags = static_cast<uint16_t>(ip_config_v2.flags & ~OB_NET_IP_FLAG_DHCP);
-        }
-
-        RCLCPP_INFO(logger, "Applying dhcp configuration with V2 property (1088)...");
-        device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
-                                  reinterpret_cast<const uint8_t *>(&ip_config_v2),
-                                  sizeof(ip_config_v2));
-        RCLCPP_INFO(logger, "DHCP configuration applied successfully (V2).");
-      } else {
-        OBNetIpConfig ip_config{};
-        uint32_t data_size = sizeof(ip_config);
-        device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
-                                  reinterpret_cast<uint8_t *>(&ip_config), &data_size);
-        ip_config.dhcp = args.dhcp ? 1 : 0;
-        if (args.dhcp) {
-          // Some devices reject all-zero IP payload when enabling DHCP.
-          std::memcpy(ip_config.address, current_ip_bytes, sizeof(current_ip_bytes));
-        }
-
-        RCLCPP_WARN(
-            logger,
-            "Device does not support IP config V2 (1088), fallback to legacy property (1041).");
-        RCLCPP_INFO(logger, "Applying dhcp configuration...");
-        device->setStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
-                                  reinterpret_cast<const uint8_t *>(&ip_config), sizeof(ip_config));
-        RCLCPP_INFO(logger, "DHCP configuration applied successfully.");
-      }
-      RCLCPP_INFO(logger, "DHCP target state: %s", args.dhcp ? "enabled" : "disabled");
-    }
 
     if (args.operation == CliArgs::Operation::SET_IP) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
