@@ -374,6 +374,18 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
   return true;
 }
 
+void enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
+  try {
+    device->enableFirmwareLog(true);
+    RCLCPP_INFO(logger, "Set firmware log to ON");
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
+                orbbec_camera::formatObErrorWithStatus(e).c_str());
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s", e.what());
+  }
+}
+
 int main(int argc, char **argv) {
   CliArgs args;
   std::string parse_error;
@@ -401,6 +413,7 @@ int main(int argc, char **argv) {
     if (args.operation == CliArgs::Operation::DHCP) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
+      enableFirmwareLog(logger, device);
 
       uint8_t current_ip_bytes[4] = {0};
       if (args.dhcp && !parseIpString(args.current_ip, current_ip_bytes)) {
@@ -454,6 +467,7 @@ int main(int argc, char **argv) {
     if (args.operation == CliArgs::Operation::SET_IP) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
+      enableFirmwareLog(logger, device);
 
       const bool v2_supported =
           device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
@@ -595,6 +609,7 @@ int main(int argc, char **argv) {
     if (args.operation == CliArgs::Operation::SET_DHCP_TIMEOUT) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
+      enableFirmwareLog(logger, device);
 
       if (!device->isPropertySupported(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT, OB_PERMISSION_WRITE)) {
         RCLCPP_ERROR(logger, "Current device or firmware does not support DHCP assign IP timeout");

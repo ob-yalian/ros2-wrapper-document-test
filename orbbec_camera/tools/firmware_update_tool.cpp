@@ -458,18 +458,34 @@ std::shared_ptr<ob::Device> selectDeviceFromList(const std::shared_ptr<ob::Devic
   throw std::runtime_error("Multiple devices detected without explicit selector");
 }
 
+void enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
+  try {
+    device->enableFirmwareLog(true);
+    RCLCPP_INFO(logger, "Set firmware log to ON");
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
+                orbbec_camera::formatObErrorWithStatus(e).c_str());
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s", e.what());
+  }
+}
+
 std::shared_ptr<ob::Device> connectDevice(const rclcpp::Logger &logger,
                                           const std::shared_ptr<ob::Context> &ctx,
                                           const CliArgs &args) {
+  std::shared_ptr<ob::Device> device;
   if (!args.device_ip.empty()) {
     RCLCPP_INFO(logger, "Connecting network device %s:%d", args.device_ip.c_str(),
                 args.device_port);
-    return ctx->createNetDevice(args.device_ip.c_str(), static_cast<uint16_t>(args.device_port),
-                                OB_DEVICE_DEFAULT_ACCESS);
+    device = ctx->createNetDevice(args.device_ip.c_str(), static_cast<uint16_t>(args.device_port),
+                                  OB_DEVICE_DEFAULT_ACCESS);
+  } else {
+    auto list = ctx->queryDeviceList();
+    device = selectDeviceFromList(list, args);
   }
 
-  auto list = ctx->queryDeviceList();
-  return selectDeviceFromList(list, args);
+  enableFirmwareLog(logger, device);
+  return device;
 }
 
 std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,

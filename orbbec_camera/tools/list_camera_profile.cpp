@@ -1,6 +1,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <orbbec_camera/ob_camera_node_driver.h>
 #include <orbbec_camera/ob_camera_node.h>
+#include <orbbec_camera/utils.h>
 #include <magic_enum/magic_enum.hpp>
 #include <cstring>
 #include <iostream>
@@ -90,6 +91,17 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
   }
 
   return true;
+}
+
+void enableFirmwareLog(const std::shared_ptr<ob::Device>& device) {
+  try {
+    device->enableFirmwareLog(true);
+    std::cout << "Set firmware log to ON" << std::endl;
+  } catch (const ob::Error& e) {
+    std::cerr << "Failed to enable firmware log: " << formatObErrorWithStatus(e) << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to enable firmware log: " << e.what() << std::endl;
+  }
 }
 
 std::shared_ptr<ob::Device> initializeDevice(const std::string& serial_number) {
@@ -206,6 +218,7 @@ int main(int argc, char **argv) {
   if (!device) {
     return -1;
   }
+  enableFirmwareLog(device);
   listSensorProfiles(device);
   printDeviceProperties(device);
   printPreset(device);

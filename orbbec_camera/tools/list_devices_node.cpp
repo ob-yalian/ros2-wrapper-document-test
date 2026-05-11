@@ -120,6 +120,19 @@ void printPresetInfo(const std::shared_ptr<ob::Device>& device) {
     RCLCPP_WARN_STREAM(logger, "Failed to get preset info");
   }
 }
+
+void enableFirmwareLog(const std::shared_ptr<ob::Device> &device) {
+  auto logger = rclcpp::get_logger("list_device_node");
+  try {
+    device->enableFirmwareLog(true);
+    RCLCPP_INFO(logger, "Set firmware log to ON");
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
+                orbbec_camera::formatObErrorWithStatus(e).c_str());
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s", e.what());
+  }
+}
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -146,6 +159,7 @@ int main(int argc, char **argv) {
     auto list = context->queryDeviceList();
     for (size_t i = 0; i < list->deviceCount(); i++) {
       auto device_ = list->getDevice(i);
+      enableFirmwareLog(device_);
       auto device_info_ = device_->getDeviceInfo();
       if (std::string(list->getConnectionType(i)) != "Ethernet") {
         std::string serial = list->serialNumber(i);
