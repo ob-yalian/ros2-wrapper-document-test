@@ -37,6 +37,12 @@ FrameTimestampCsvLogger::FrameTimestampCsvLogger(bool enabled, const std::string
     return;
   }
 
+  if (csv_file_path_.empty()) {
+    RCLCPP_INFO_STREAM(logger_,
+                       "Frame timestamp CSV file is empty; only frame lost logs are enabled.");
+    return;
+  }
+
   try {
     auto path = std::filesystem::path(csv_file_path_);
     if (path.has_parent_path() && !std::filesystem::exists(path.parent_path())) {
@@ -300,7 +306,10 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
   state.publish_expected = publish_expected;
   state.frame_index = frame->getIndex();
   state.device_ts_us = static_cast<int64_t>(frame->getTimeStampUs());
-  state.expected_interval_us = getExpectedIntervalUs(frame);
+  if (previous.expected_interval_us <= 0) {
+    previous.expected_interval_us = getExpectedIntervalUs(frame);
+  }
+  state.expected_interval_us = previous.expected_interval_us;
   if (previous.device_ts_us.has_value() && state.expected_interval_us > 0) {
     const auto device_ts_delta_us = state.device_ts_us - previous.device_ts_us.value();
     if (device_ts_delta_us > state.expected_interval_us * 3 / 2) {
@@ -387,6 +396,9 @@ bool FrameTimestampCsvLogger::isRowReady(const PendingRow &row) const {
 }
 
 void FrameTimestampCsvLogger::enqueueCompletedRow(const PendingRow &row) {
+  if (csv_file_path_.empty()) {
+    return;
+  }
   std::lock_guard<std::mutex> queue_lock(completed_rows_mutex_);
   completed_rows_.push_back(row);
   if (completed_rows_.size() > kCompletedQueueSoftLimit) {

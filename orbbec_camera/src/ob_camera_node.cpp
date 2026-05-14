@@ -400,11 +400,6 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   setupTopics();
 
   if (enable_frame_timestamp_csv_) {
-    if (frame_timestamp_csv_file_.empty()) {
-      frame_timestamp_csv_file_ =
-          (std::filesystem::current_path() / (camera_name_ + "_frame_timestamp_stats.csv"))
-              .string();
-    }
     frame_timestamp_csv_logger_ =
         std::make_unique<FrameTimestampCsvLogger>(true, frame_timestamp_csv_file_, logger_);
     if (!frame_timestamp_csv_logger_->enabled()) {
