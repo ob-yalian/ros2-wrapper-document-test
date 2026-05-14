@@ -3735,8 +3735,22 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
   if (frame_set == nullptr) {
     return;
   }
-  const auto frame_set_arrival_system_us = getSystemNowUs();
-  const auto frame_set_arrival_steady_us = getSteadyNowUs();
+  if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) {
+    const auto frame_set_arrival_system_us = getSystemNowUs();
+    const auto frame_set_arrival_steady_us = getSteadyNowUs();
+    auto final_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
+    auto final_depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
+    const bool track_color = enable_stream_[COLOR] && static_cast<bool>(final_color_frame);
+    const bool track_depth = enable_stream_[DEPTH] && static_cast<bool>(final_depth_frame);
+    const bool color_publish_expected = track_color;
+    const bool depth_publish_expected = track_depth;
+
+    frame_timestamp_csv_logger_->recordFrameSet(
+        final_color_frame, final_depth_frame, frame_set_arrival_system_us,
+        frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
+        depth_publish_expected);
+  }
+
   try {
     if (!tf_published_) {
       publishStaticTransforms();
@@ -3799,19 +3813,6 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       RCLCPP_DEBUG_ONCE(logger_,
                         "Depth registration is disabled or align filter is null or depth frame is "
                         "null or color frame is null");
-    }
-
-    auto final_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
-    auto final_depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
-    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) {
-      const bool track_color = enable_stream_[COLOR] && static_cast<bool>(final_color_frame);
-      const bool track_depth = enable_stream_[DEPTH] && static_cast<bool>(final_depth_frame);
-      const bool color_publish_expected = track_color;
-      const bool depth_publish_expected = track_depth;
-      frame_timestamp_csv_logger_->recordFrameSet(
-          final_color_frame, final_depth_frame, frame_set_arrival_system_us,
-          frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
-          depth_publish_expected);
     }
 
     // Refresh frame from current frameset before logging to reflect post-filter/alignment output.

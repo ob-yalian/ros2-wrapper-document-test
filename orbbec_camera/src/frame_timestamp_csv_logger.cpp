@@ -310,7 +310,7 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
   }
   state.global_ts_delta_us = updateDelta(previous.global_ts_us, state.global_ts_us);
   state.sdk_system_ts_delta_us = updateDelta(previous.sdk_system_ts_us, state.sdk_system_ts_us);
-  state.arrival_system_delta_us = updateDelta(previous.arrival_system_us, state.arrival_system_us);
+  previous.arrival_system_us = state.arrival_system_us;
   state.arrival_steady_delta_us = updateDelta(previous.arrival_steady_us, state.arrival_steady_us);
   state.sdk_delay_from_global_us = state.arrival_system_us - state.global_ts_us;
   state.sdk_delay_from_system_us = state.arrival_system_us - state.sdk_system_ts_us;
@@ -323,11 +323,9 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
 
   state.publish_system_us = publish_system_us;
   state.publish_steady_us = publish_steady_us;
-  state.publish_system_delta_us =
-      updateDelta(previous.publish_system_us, state.publish_system_us.value());
+  previous.publish_system_us = state.publish_system_us.value();
   state.publish_steady_delta_us =
       updateDelta(previous.publish_steady_us, state.publish_steady_us.value());
-  state.arrival_to_publish_system_us = state.publish_system_us.value() - state.arrival_system_us;
   state.arrival_to_publish_steady_us = state.publish_steady_us.value() - state.arrival_steady_us;
 }
 
@@ -393,7 +391,7 @@ std::string FrameTimestampCsvLogger::serializeRow(const PendingRow &row) const {
 }
 
 std::string FrameTimestampCsvLogger::serializeStreamColumns(const StreamState &state) const {
-  std::vector<std::string> fields(22, "");
+  std::vector<std::string> fields(15, "");
   if (state.has_frame) {
     fields[0] = std::to_string(state.frame_index);
     fields[1] = formatOptionalIntColumn(state.metadata_frame_number);
@@ -407,22 +405,11 @@ std::string FrameTimestampCsvLogger::serializeStreamColumns(const StreamState &s
     fields[7] = formatOptionalIntColumn(state.global_ts_delta_us);
     fields[8] = formatSecondsColumn(state.sdk_system_ts_us);
     fields[9] = formatOptionalIntColumn(state.sdk_system_ts_delta_us);
-    fields[10] = formatSecondsColumn(state.arrival_system_us);
-    fields[11] = formatOptionalIntColumn(state.arrival_system_delta_us);
-    fields[12] = formatSecondsColumn(state.arrival_steady_us);
-    fields[13] = formatOptionalIntColumn(state.arrival_steady_delta_us);
-    if (state.publish_system_us.has_value()) {
-      fields[14] = formatSecondsColumn(state.publish_system_us.value());
-    }
-    fields[15] = formatOptionalIntColumn(state.publish_system_delta_us);
-    if (state.publish_steady_us.has_value()) {
-      fields[16] = formatSecondsColumn(state.publish_steady_us.value());
-    }
-    fields[17] = formatOptionalIntColumn(state.publish_steady_delta_us);
-    fields[18] = formatOptionalIntColumn(state.arrival_to_publish_system_us);
-    fields[19] = formatOptionalIntColumn(state.arrival_to_publish_steady_us);
-    fields[20] = formatOptionalIntColumn(state.sdk_delay_from_global_us);
-    fields[21] = formatOptionalIntColumn(state.sdk_delay_from_system_us);
+    fields[10] = formatOptionalIntColumn(state.arrival_steady_delta_us);
+    fields[11] = formatOptionalIntColumn(state.publish_steady_delta_us);
+    fields[12] = formatOptionalIntColumn(state.arrival_to_publish_steady_us);
+    fields[13] = formatOptionalIntColumn(state.sdk_delay_from_global_us);
+    fields[14] = formatOptionalIntColumn(state.sdk_delay_from_system_us);
   }
 
   std::ostringstream ss;
@@ -461,15 +448,8 @@ std::string FrameTimestampCsvLogger::csvHeader() {
     ss << prefix << "_global_ts_delta_us,";
     ss << prefix << "_system_ts_sec,";
     ss << prefix << "_system_ts_delta_us,";
-    ss << prefix << "_arrival_system_sec,";
-    ss << prefix << "_arrival_system_delta_us,";
-    ss << prefix << "_arrival_steady_sec,";
     ss << prefix << "_arrival_steady_delta_us,";
-    ss << prefix << "_publish_system_sec,";
-    ss << prefix << "_publish_system_delta_us,";
-    ss << prefix << "_publish_steady_sec,";
     ss << prefix << "_publish_steady_delta_us,";
-    ss << prefix << "_arrival_to_publish_system_us,";
     ss << prefix << "_arrival_to_publish_steady_us,";
     ss << prefix << "_sdk_delay_from_global_us,";
     ss << prefix << "_sdk_delay_from_system_us";
