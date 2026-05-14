@@ -11,6 +11,22 @@
 
 using namespace ob;
 
+namespace {
+
+constexpr int kFirmwareLogDrainDelaySec = 5;
+
+void waitForFirmwareLogDrain(const rclcpp::Logger &logger) {
+  RCLCPP_INFO(logger, "Waiting %d seconds to keep firmware log alive...",
+              kFirmwareLogDrainDelaySec);
+  std::this_thread::sleep_for(std::chrono::seconds(kFirmwareLogDrainDelaySec));
+}
+
+bool isSdkLogEnabled(const std::string &log_level) {
+  return orbbec_camera::obLogSeverityFromString(log_level) != OBLogSeverity::OB_LOG_SEVERITY_OFF;
+}
+
+}  // namespace
+
 struct CliArgs {
   enum class Operation {
     NONE,
@@ -389,15 +405,18 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
   return true;
 }
 
-void enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
+bool enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
   try {
     device->enableFirmwareLog(true);
+    RCLCPP_INFO(logger, "Firmware log enabled.");
+    return true;
   } catch (const ob::Error &e) {
     RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
                 orbbec_camera::formatObErrorWithStatus(e).c_str());
   } catch (const std::exception &e) {
     RCLCPP_WARN(logger, "Failed to enable firmware log: %s", e.what());
   }
+  return false;
 }
 
 int main(int argc, char **argv) {
@@ -415,6 +434,7 @@ int main(int argc, char **argv) {
 
   rclcpp::init(argc, argv);
   auto logger = rclcpp::get_logger("ip_config_tool");
+  bool firmware_log_enabled = false;
 
   try {
     const auto sdk_log_path =
@@ -427,7 +447,9 @@ int main(int argc, char **argv) {
     if (args.operation == CliArgs::Operation::SET_IP) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
-      enableFirmwareLog(logger, device);
+      if (isSdkLogEnabled(args.sdk_log_level)) {
+        firmware_log_enabled = enableFirmwareLog(logger, device);
+      }
 
       const bool v2_supported =
           device->isPropertySupported(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2, OB_PERMISSION_READ_WRITE);
@@ -593,7 +615,9 @@ int main(int argc, char **argv) {
     if (args.operation == CliArgs::Operation::SET_DHCP_TIMEOUT) {
       RCLCPP_INFO(logger, "Connecting to device %s:%d ...", args.current_ip.c_str(), args.port);
       auto device = context->createNetDevice(args.current_ip.c_str(), args.port);
-      enableFirmwareLog(logger, device);
+      if (isSdkLogEnabled(args.sdk_log_level)) {
+        firmware_log_enabled = enableFirmwareLog(logger, device);
+      }
 
       if (!device->isPropertySupported(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT, OB_PERMISSION_WRITE)) {
         RCLCPP_ERROR(logger, "Current device or firmware does not support DHCP assign IP timeout");
@@ -613,6 +637,10 @@ int main(int argc, char **argv) {
       const int current_timeout = device->getIntProperty(OB_PROP_DHCP_ASSIGN_IP_TIMEOUT_INT);
       RCLCPP_INFO(logger, "DHCP assign IP timeout applied successfully: %d second(s)",
                   current_timeout);
+    }
+
+    if (firmware_log_enabled) {
+      waitForFirmwareLogDrain(logger);
     }
 
   } catch (ob::Error &e) {

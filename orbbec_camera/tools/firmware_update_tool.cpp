@@ -35,6 +35,18 @@
 namespace {
 
 constexpr int kProgressLogBucketPercent = 25;
+constexpr int kFirmwareLogDrainDelaySec = 5;
+
+void waitForFirmwareLogDrain(const rclcpp::Logger &logger) {
+  RCLCPP_INFO(logger, "Waiting %d seconds to keep firmware log alive...",
+              kFirmwareLogDrainDelaySec);
+  std::this_thread::sleep_for(std::chrono::seconds(kFirmwareLogDrainDelaySec));
+}
+
+bool isSdkLogEnabled(const std::string &log_level) {
+  return orbbec_camera::obLogSeverityFromString(log_level) !=
+         OBLogSeverity::OB_LOG_SEVERITY_OFF;
+}
 
 struct CliArgs {
   std::string serial_number;
@@ -452,15 +464,18 @@ std::shared_ptr<ob::Device> selectDeviceFromList(const std::shared_ptr<ob::Devic
   throw std::runtime_error("Multiple devices detected without explicit selector");
 }
 
-void enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
+bool enableFirmwareLog(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device) {
   try {
     device->enableFirmwareLog(true);
+    RCLCPP_INFO(logger, "Firmware log enabled.");
+    return true;
   } catch (const ob::Error &e) {
     RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
                 orbbec_camera::formatObErrorWithStatus(e).c_str());
   } catch (const std::exception &e) {
     RCLCPP_WARN(logger, "Failed to enable firmware log: %s", e.what());
   }
+  return false;
 }
 
 std::shared_ptr<ob::Device> connectDevice(const rclcpp::Logger &logger,
@@ -477,7 +492,6 @@ std::shared_ptr<ob::Device> connectDevice(const rclcpp::Logger &logger,
     device = selectDeviceFromList(list, args);
   }
 
-  enableFirmwareLog(logger, device);
   return device;
 }
 
@@ -534,7 +548,8 @@ std::shared_ptr<ob::Device> waitForReconnectUntil(
 }
 
 bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device,
-                          const std::string &path_arg, std::string *error_message = nullptr) {
+                          const std::string &path_arg, bool firmware_log_enabled,
+                          std::string *error_message = nullptr) {
   auto set_error = [&](const std::string &message) {
     if (error_message != nullptr) {
       *error_message = message;
@@ -601,6 +616,9 @@ bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob
 
   if (final_state == STAT_DONE || final_state == STAT_DONE_WITH_DUPLICATES) {
     logCurrentPresetList(logger, device, "after preset update");
+    if (firmware_log_enabled) {
+      waitForFirmwareLogDrain(logger);
+    }
     RCLCPP_INFO(logger, "Preset update succeeded.");
     return true;
   }
@@ -611,7 +629,8 @@ bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob
 
 FirmwareUpdateResult updateFirmware(const rclcpp::Logger &logger,
                                     const std::shared_ptr<ob::Device> &device,
-                                    const std::string &firmware_path) {
+                                    const std::string &firmware_path,
+                                    bool firmware_log_enabled) {
   FirmwareUpdateResult result;
   if (firmware_path.empty()) {
     result.success = true;
@@ -658,6 +677,9 @@ FirmwareUpdateResult updateFirmware(const rclcpp::Logger &logger,
     return result;
   }
 
+  if (firmware_log_enabled) {
+    waitForFirmwareLogDrain(logger);
+  }
   RCLCPP_INFO(logger, "Rebooting device after firmware update...");
   device->reboot();
   RCLCPP_INFO(logger, "Device reboot command sent.");
@@ -723,11 +745,13 @@ int main(int argc, char **argv) {
         auto device_info = device->getDeviceInfo();
         RCLCPP_INFO(logger, "Selected device: %s, SN: %s, UID: %s", device_info->getName(),
                     device_info->getSerialNumber(), device_info->getUid());
+        const bool enable_firmware_log = isSdkLogEnabled(run_args.sdk_log_level);
+        bool firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
 
         if (!run_args.preset_path.empty()) {
           std::string preset_error;
-          const bool preset_ok =
-              updatePresetFirmware(logger, device, run_args.preset_path, &preset_error);
+          const bool preset_ok = updatePresetFirmware(logger, device, run_args.preset_path,
+                                                      firmware_log_enabled, &preset_error);
           if (!preset_ok) {
             throw std::runtime_error(preset_error.empty() ? "Preset firmware update failed"
                                                           : preset_error);
@@ -735,7 +759,8 @@ int main(int argc, char **argv) {
         }
 
         if (!run_args.firmware_path.empty()) {
-          auto first_update = updateFirmware(logger, device, run_args.firmware_path);
+          auto first_update =
+              updateFirmware(logger, device, run_args.firmware_path, firmware_log_enabled);
           if (!first_update.success) {
             throw std::runtime_error(first_update.error_message.empty()
                                          ? "First firmware update failed"
@@ -749,10 +774,12 @@ int main(int argc, char **argv) {
             const auto second_deadline = std::chrono::steady_clock::now() +
                                          std::chrono::seconds(run_args.reconnect_timeout_sec);
             device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+            firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
             bool second_ok = false;
             while (std::chrono::steady_clock::now() < second_deadline) {
               try {
-                auto second_update = updateFirmware(logger, device, run_args.firmware_path);
+                auto second_update =
+                    updateFirmware(logger, device, run_args.firmware_path, firmware_log_enabled);
                 if (!second_update.success) {
                   if (!second_update.retryable) {
                     throw std::runtime_error(second_update.error_message.empty()
@@ -766,12 +793,14 @@ int main(int argc, char **argv) {
                                 second_update.error_message.c_str());
                   }
                   device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+                  firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
                   continue;
                 }
                 if (second_update.need_reupdate) {
                   RCLCPP_WARN(logger,
                               "Second attempt still requires reupdate, waiting and retrying...");
                   device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+                  firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
                   continue;
                 }
                 second_ok = true;
@@ -780,6 +809,7 @@ int main(int argc, char **argv) {
                 RCLCPP_WARN(logger, "Second update transient error: %s, retrying...",
                             orbbec_camera::formatObErrorWithStatus(e).c_str());
                 device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+                firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
               }
             }
             if (!second_ok) {
