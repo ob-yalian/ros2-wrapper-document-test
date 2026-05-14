@@ -13,6 +13,21 @@ constexpr size_t kCompletedQueueSoftLimit = 1000;
 constexpr size_t kFlushBatchSize = 100;
 constexpr auto kFlushInterval = std::chrono::seconds(1);
 
+int64_t getExpectedIntervalUs(const std::shared_ptr<ob::Frame> &frame) {
+  if (!frame || !frame->is<ob::VideoFrame>()) {
+    return 0;
+  }
+  auto stream_profile = frame->getStreamProfile();
+  if (!stream_profile || !stream_profile->is<ob::VideoStreamProfile>()) {
+    return 0;
+  }
+  const auto fps = stream_profile->as<ob::VideoStreamProfile>()->getFps();
+  if (fps == 0) {
+    return 0;
+  }
+  return static_cast<int64_t>(1000000.0 / static_cast<double>(fps));
+}
+
 }  // namespace
 
 FrameTimestampCsvLogger::FrameTimestampCsvLogger(bool enabled, const std::string &csv_file_path,
@@ -284,6 +299,18 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
   state.has_frame = true;
   state.publish_expected = publish_expected;
   state.frame_index = frame->getIndex();
+  state.device_ts_us = static_cast<int64_t>(frame->getTimeStampUs());
+  state.expected_interval_us = getExpectedIntervalUs(frame);
+  if (previous.device_ts_us.has_value() && state.expected_interval_us > 0) {
+    const auto device_ts_delta_us = state.device_ts_us - previous.device_ts_us.value();
+    if (device_ts_delta_us > state.expected_interval_us * 3 / 2) {
+      RCLCPP_WARN_STREAM(logger_, "SDK " << (stream == TrackedStream::COLOR ? "color" : "depth")
+                                         << " lost frame: interval=" << device_ts_delta_us << "us"
+                                         << " ideal=" << state.expected_interval_us << "us"
+                                         << " frame_index=" << state.frame_index
+                                         << " device_timestamp=" << state.device_ts_us << "us");
+    }
+  }
   if (frame->hasMetadata(OB_FRAME_METADATA_TYPE_FRAME_NUMBER)) {
     state.metadata_frame_number =
         static_cast<int64_t>(frame->getMetadataValue(OB_FRAME_METADATA_TYPE_FRAME_NUMBER));
@@ -296,7 +323,6 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
   } else {
     state.sensor_ts_us.reset();
   }
-  state.device_ts_us = static_cast<int64_t>(frame->getTimeStampUs());
   state.global_ts_us = static_cast<int64_t>(frame->getGlobalTimeStampUs());
   state.sdk_system_ts_us = static_cast<int64_t>(frame->getSystemTimeStampUs());
   state.arrival_system_us = arrival_system_us;
@@ -320,6 +346,19 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
                                                   int64_t publish_system_us,
                                                   int64_t publish_steady_us) {
   auto &previous = stream == TrackedStream::COLOR ? color_previous_ : depth_previous_;
+
+  if (previous.publish_device_ts_us.has_value()) {
+    const auto device_ts_delta_us = state.device_ts_us - previous.publish_device_ts_us.value();
+    if (state.expected_interval_us > 0 && device_ts_delta_us > state.expected_interval_us * 3 / 2) {
+      RCLCPP_WARN_STREAM(
+          logger_, (stream == TrackedStream::COLOR ? "color" : "depth")
+                       << " lost frame before publish: interval=" << device_ts_delta_us << "us"
+                       << " ideal=" << state.expected_interval_us << "us"
+                       << " frame_index=" << state.frame_index
+                       << " device_timestamp=" << state.device_ts_us << "us");
+    }
+  }
+  previous.publish_device_ts_us = state.device_ts_us;
 
   state.publish_system_us = publish_system_us;
   state.publish_steady_us = publish_steady_us;
