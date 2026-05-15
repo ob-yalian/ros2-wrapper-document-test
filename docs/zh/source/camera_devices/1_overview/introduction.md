@@ -10,7 +10,7 @@ OrbbecSDK ROS2 封装为 Orbbec 相机与 ROS 2 环境提供无缝集成。它�
 
 <table border="1" style="border-collapse: collapse; text-align: left; width: 100%;">
   <thead>
-    <tr style="background-color: #1f4e78; color: white; text-align: center;">
+    <tr style="background-color: #1f4e78; color: black; text-align: center;">
       <th>产品系列</th>
       <th>产品</th>
       <th><a href="https://github.com/orbbec/OrbbecSDK_ROS2/tree/main" style="color: black; text-decoration: none;">Orbbec SDK v1.x</a></th>
@@ -355,7 +355,7 @@ th, td {
 }
 thead th {
   background-color: #1f4e78;
-  color: white;
+  color: black;
   text-align: center;
   vertical-align: middle;
 }
