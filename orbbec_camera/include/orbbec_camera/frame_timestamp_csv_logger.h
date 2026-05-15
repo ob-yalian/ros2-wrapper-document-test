@@ -88,6 +88,8 @@ class FrameTimestampCsvLogger {
     std::optional<int64_t> device_ts_us;
     std::optional<int64_t> publish_device_ts_us;
     int64_t expected_interval_us = 0;
+    int64_t dropped_frames = 0;
+    int64_t publish_dropped_frames = 0;
     std::optional<int64_t> sensor_ts_us;
     std::optional<int64_t> global_ts_us;
     std::optional<int64_t> sdk_system_ts_us;
