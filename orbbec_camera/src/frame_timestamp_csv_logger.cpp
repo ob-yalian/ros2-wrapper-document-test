@@ -38,13 +38,6 @@ FrameTimestampCsvLogger::FrameTimestampCsvLogger(bool enabled, const std::string
     return;
   }
 
-  RCLCPP_INFO_STREAM(
-      logger_,
-      "Frame drop log enabled. Format: <SDK|PUB> drop <color|depth>: idx=<frame_index> "
-      "ts=<device_timestamp_us> gap=<actual_interval_ms> ideal=<expected_interval_ms> "
-      "total=<total_dropped_frames>. SDK means frame arrival from SDK; PUB means before ROS "
-      "image publish.");
-
   if (csv_file_path_.empty()) {
     RCLCPP_INFO_STREAM(logger_,
                        "Frame timestamp CSV file is empty; only frame lost logs are enabled.");
@@ -324,6 +317,7 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
       const auto lost_frames =
           std::max<int64_t>(1, device_ts_delta_us / state.expected_interval_us - 1);
       previous.dropped_frames += lost_frames;
+      reportDropLogFormatOnce();
       RCLCPP_WARN_STREAM(
           logger_, "SDK drop " << (stream == TrackedStream::COLOR ? "color" : "depth") << ": idx="
                                << state.frame_index << " ts=" << state.device_ts_us << "us"
@@ -376,6 +370,7 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
       const auto lost_frames =
           std::max<int64_t>(1, device_ts_delta_us / state.expected_interval_us - 1);
       previous.publish_dropped_frames += lost_frames;
+      reportDropLogFormatOnce();
       RCLCPP_WARN_STREAM(
           logger_, "PUB drop " << (stream == TrackedStream::COLOR ? "color" : "depth") << ": idx="
                                << state.frame_index << " ts=" << state.device_ts_us << "us"
@@ -394,6 +389,19 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
   state.publish_steady_delta_us =
       updateDelta(previous.publish_steady_us, state.publish_steady_us.value());
   state.arrival_to_publish_steady_us = state.publish_steady_us.value() - state.arrival_steady_us;
+}
+
+void FrameTimestampCsvLogger::reportDropLogFormatOnce() {
+  if (drop_log_format_reported_) {
+    return;
+  }
+  drop_log_format_reported_ = true;
+  RCLCPP_INFO_STREAM(
+      logger_,
+      "Frame drop log enabled. Format: <SDK|PUB> drop <color|depth>: idx=<frame_index> "
+      "ts=<device_timestamp_us> gap=<actual_interval_ms> ideal=<expected_interval_ms> "
+      "total=<total_dropped_frames>. SDK means frame arrival from SDK; PUB means before ROS "
+      "image publish.");
 }
 
 std::optional<int64_t> FrameTimestampCsvLogger::updateDelta(std::optional<int64_t> &previous,
