@@ -4283,6 +4283,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
+    if (!has_raw_image_subscriber && stream_index == COLOR) {
+      fps_delay_status_color_->tick(frame_timestamp);
+    }
   }
 
   if (!has_raw_image_subscriber && !enable_undistortion_publish && !save_images_[stream_index]) {
@@ -4368,11 +4371,6 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     image = image * depth_scale;
   }
   CHECK(image_publishers_.count(stream_index) > 0);
-  if (stream_index == COLOR) {
-    fps_delay_status_color_->tick(frame_timestamp);
-  } else if (stream_index == DEPTH) {
-    fps_delay_status_depth_->tick(frame_timestamp);
-  }
   if (has_raw_image_subscriber || save_images_[stream_index]) {
     sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
     cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], image)
@@ -4390,6 +4388,11 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
         (stream_index == COLOR || stream_index == DEPTH)) {
       frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
                                                          getSystemNowUs(), getSteadyNowUs());
+    }
+    if (stream_index == COLOR) {
+      fps_delay_status_color_->tick(frame_timestamp);
+    } else if (stream_index == DEPTH) {
+      fps_delay_status_depth_->tick(frame_timestamp);
     }
     image_publishers_[stream_index]->publish(std::move(image_msg));
   }
