@@ -319,7 +319,7 @@ OrbbecSDK ROS2 封装为 Orbbec 相机与 ROS 2 环境提供无缝集成。它�
     <tr><td>Gemini 330L</td><td>-</td></tr>
     <tr><td>Gemini 335Lg</td><td>gemini_335_Lg.urdf.xacro</td></tr>
     <tr><td>Gemini 335Le</td><td>gemini_335_Le.urdf.xacro</td></tr>
-    <tr><td style="text-align: center; font-weight: bold;">Gemini 340</td><td>Gemini 345Lg</td><td>-</td></tr>
+    <tr><td style="text-align: center; font-weight: bold;">Gemini 340</td><td>Gemini 345Lg</td><td>gemini_345_Lg.urdf.xacro</td></tr>
     <tr><td rowspan="4" style="text-align: center; font-weight: bold;">Gemini 2</td><td>Gemini 2</td><td>gemini_2.urdf.xacro</td></tr>
     <tr><td>Gemini 2 L</td><td>gemini_2_L.urdf.xacro</td></tr>
     <tr><td>Gemini 215</td><td>-</td></tr>
