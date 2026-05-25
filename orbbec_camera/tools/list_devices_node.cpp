@@ -15,17 +15,21 @@
  *******************************************************************************/
 #include <rclcpp/rclcpp.hpp>
 
-#include <iomanip>
+#include <chrono>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <thread>
 
 #include <orbbec_camera/ob_camera_node_driver.h>
 #include <orbbec_camera/utils.h>
 
 namespace {
+constexpr int kFirmwareLogDrainDelaySec = 5;
+
 struct CliArgs {
   bool help = false;
   std::string sdk_log_level = "off";
@@ -35,12 +39,10 @@ void printUsage() {
   std::cout << "Usage:\n"
             << "  ros2 run orbbec_camera list_devices_node -- [options]\n\n"
             << "Options:\n"
-            << "  --enable_sdk_log       Enable SDK file log at debug level under ~/.ros/Log.\n"
             << "  --sdk_log_level LEVEL  SDK file log level: debug/info/warn/error/fatal/off "
                "(default: off).\n\n"
             << "Examples:\n"
-            << "  ros2 run orbbec_camera list_devices_node -- --enable_sdk_log --sdk_log_level "
-               "debug\n";
+            << "  ros2 run orbbec_camera list_devices_node -- --sdk_log_level debug\n";
 }
 
 bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
@@ -49,10 +51,6 @@ bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
     if (current == "-h" || current == "--help") {
       args.help = true;
       return true;
-    }
-    if (current == "--enable_sdk_log") {
-      args.sdk_log_level = "debug";
-      continue;
     }
     if (current.rfind("--sdk_log_level=", 0) == 0) {
       args.sdk_log_level = current.substr(std::strlen("--sdk_log_level="));
@@ -95,7 +93,7 @@ std::string ipSourceTypeToString(int ip_source_type) {
   }
 }
 
-void printPresetInfo(const std::shared_ptr<ob::Device>& device) {
+void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
   auto logger = rclcpp::get_logger("list_device_node");
   try {
     auto preset_list = device->getAvailablePresetList();
@@ -111,14 +109,40 @@ void printPresetInfo(const std::shared_ptr<ob::Device>& device) {
     } else {
       RCLCPP_INFO_STREAM(logger, "Preset version: not available");
     }
-  } catch (ob::Error& e) {
+  } catch (ob::Error &e) {
     RCLCPP_WARN_STREAM(logger,
                        "Failed to get preset info: " << orbbec_camera::formatObErrorWithStatus(e));
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     RCLCPP_WARN_STREAM(logger, "Failed to get preset info: " << e.what());
   } catch (...) {
     RCLCPP_WARN_STREAM(logger, "Failed to get preset info");
   }
+}
+
+void waitForFirmwareLogDrain() {
+  auto logger = rclcpp::get_logger("list_device_node");
+  RCLCPP_INFO(logger, "Waiting %d seconds to keep firmware log alive...",
+              kFirmwareLogDrainDelaySec);
+  std::this_thread::sleep_for(std::chrono::seconds(kFirmwareLogDrainDelaySec));
+}
+
+bool enableFirmwareLog(const std::shared_ptr<ob::Device> &device) {
+  auto logger = rclcpp::get_logger("list_device_node");
+  try {
+    device->enableFirmwareLog(true);
+    RCLCPP_INFO(logger, "Firmware log enabled.");
+    return true;
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s",
+                orbbec_camera::formatObErrorWithStatus(e).c_str());
+  } catch (const std::exception &e) {
+    RCLCPP_WARN(logger, "Failed to enable firmware log: %s", e.what());
+  }
+  return false;
+}
+
+bool isSdkLogEnabled(const std::string &log_level) {
+  return orbbec_camera::obLogSeverityFromString(log_level) != OBLogSeverity::OB_LOG_SEVERITY_OFF;
 }
 }  // namespace
 
@@ -144,8 +168,12 @@ int main(int argc, char **argv) {
     }
     auto context = std::make_unique<ob::Context>();
     auto list = context->queryDeviceList();
+    bool firmware_log_enabled = false;
     for (size_t i = 0; i < list->deviceCount(); i++) {
       auto device_ = list->getDevice(i);
+      if (isSdkLogEnabled(args.sdk_log_level)) {
+        firmware_log_enabled = enableFirmwareLog(device_) || firmware_log_enabled;
+      }
       auto device_info_ = device_->getDeviceInfo();
       if (std::string(list->getConnectionType(i)) != "Ethernet") {
         std::string serial = list->serialNumber(i);
@@ -196,10 +224,13 @@ int main(int argc, char **argv) {
         std::cout << std::endl;
       }
     }
-  } catch (ob::Error& e) {
+    if (firmware_log_enabled) {
+      waitForFirmwareLogDrain();
+    }
+  } catch (ob::Error &e) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"),
                         orbbec_camera::formatObErrorWithStatus(e));
-  } catch (const std::exception& e) {
+  } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), e.what());
   } catch (...) {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"), "unknown error");
