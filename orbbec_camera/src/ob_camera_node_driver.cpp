@@ -263,6 +263,19 @@ void OBCameraNodeDriver::init() {
   } else {
     ctx_ = std::make_unique<ob::Context>(config_path_.c_str());
   }
+  timestamp_clock_type_str_ = declare_parameter<std::string>("timestamp_clock_type", "");
+  if (!timestamp_clock_type_str_.empty()) {
+    auto timestamp_clock_type = timestampClockTypeFromString(timestamp_clock_type_str_);
+    try {
+      ctx_->setTimestampClockType(timestamp_clock_type);
+      auto actual_timestamp_clock_type = ctx_->getTimestampClockType();
+      RCLCPP_INFO_STREAM(logger_, "Set timestamp clock type to "
+                                      << timestampClockTypeToString(actual_timestamp_clock_type));
+    } catch (const ob::Error &e) {
+      RCLCPP_WARN_STREAM(logger_, "Failed to set SDK timestamp clock type: "
+                                      << orbbec_camera::formatObErrorWithStatus(e));
+    }
+  }
   applyForceIpConfig();
 
   device_type_ = declare_parameter<std::string>("device_type", "camera");
@@ -1574,6 +1587,33 @@ OBDeviceAccessMode OBCameraNodeDriver::stringToAccessMode(const std::string &mod
   } else {
     RCLCPP_WARN_STREAM(logger_, "Unknown access mode: " << mode_str << ", using default");
     return OB_DEVICE_DEFAULT_ACCESS;
+  }
+}
+
+OBClockType OBCameraNodeDriver::timestampClockTypeFromString(const std::string &clock_type_str) {
+  std::string lower_type;
+  std::transform(clock_type_str.begin(), clock_type_str.end(), std::back_inserter(lower_type),
+                 [](auto ch) { return tolower(ch); });
+
+  if (lower_type == "realtime") {
+    return OB_CLOCK_TYPE_REALTIME;
+  }
+  if (lower_type == "monotonic") {
+    return OB_CLOCK_TYPE_MONOTONIC;
+  }
+
+  RCLCPP_WARN_STREAM(logger_,
+                     "Unknown timestamp_clock_type: " << clock_type_str << ", using realtime");
+  return OB_CLOCK_TYPE_REALTIME;
+}
+
+std::string OBCameraNodeDriver::timestampClockTypeToString(OBClockType clock_type) {
+  switch (clock_type) {
+    case OB_CLOCK_TYPE_MONOTONIC:
+      return "monotonic";
+    case OB_CLOCK_TYPE_REALTIME:
+    default:
+      return "realtime";
   }
 }
 

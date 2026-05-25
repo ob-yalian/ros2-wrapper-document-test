@@ -182,6 +182,11 @@ def generate_launch_description():
             description='Timestamp domain: device (device clock), global (time sync), or system (host clock).'
         ),
         DeclareLaunchArgument(
+            'timestamp_clock_type',
+            default_value='',
+            description='SDK timestamp clock type: realtime or monotonic, default is realtime.'
+        ),
+        DeclareLaunchArgument(
             'config_file_path',
             default_value='',
             description='Path to a YAML config file. If provided, overrides same-name launch arguments; otherwise defaults apply.'

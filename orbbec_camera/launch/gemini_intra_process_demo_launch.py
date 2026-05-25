@@ -162,6 +162,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_sync_host_time', default_value='true'),
         DeclareLaunchArgument('time_sync_period', default_value='6.0'), # seconds
         DeclareLaunchArgument('time_domain', default_value='device'),
+        DeclareLaunchArgument('timestamp_clock_type', default_value=''),# realtime or monotonic, default is realtime.
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('config_file_path', default_value=''),
         DeclareLaunchArgument('enable_heartbeat', default_value='false'),
