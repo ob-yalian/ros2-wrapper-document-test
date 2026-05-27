@@ -235,6 +235,15 @@ class OBCameraNode {
 
   void setupDevices();
 
+  void loadConfigJson();
+
+  bool isConfigJsonLoaded() const;
+
+  void syncConfigJsonDeviceSettings();
+
+  void syncConfigJsonFilterSettings(const std::vector<std::shared_ptr<ob::Filter>> &filters,
+                                    const std::string &sensor_name);
+
   void setupProfiles();
 
   void updateImageConfig(const stream_index_pair& stream_index);
@@ -857,6 +866,7 @@ class OBCameraNode {
   std::unique_ptr<ob::Align> align_filter_ = nullptr;
   OBStreamType align_target_stream_ = OB_STREAM_COLOR;
   bool retry_on_usb3_detection_failure_ = false;
+  bool config_json_loaded_ = false;
   std::atomic_bool is_camera_node_initialized_{false};
   int laser_energy_level_ = -1;
   ob::PointCloudFilter depth_point_cloud_filter_;
