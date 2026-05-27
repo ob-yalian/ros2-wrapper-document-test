@@ -286,6 +286,12 @@ class OBCameraNode {
   static void appendDepthFilterParam(DepthFilterState &filter_state, const std::string &name,
                                      const std::string &value);
 
+  void updateDepthFilterEnabledCache(const std::string &filter_name, bool enabled);
+
+  bool applyNamedDepthFilterConfig(
+      const std::string &filter_name, bool enabled,
+      const std::vector<orbbec_camera_msgs::msg::DepthFilterParam> &params, std::string &message);
+
   void setupCameraInfo();
 
   void publishStaticTF(const rclcpp::Time& t, const tf2::Vector3& trans, const tf2::Quaternion& q,

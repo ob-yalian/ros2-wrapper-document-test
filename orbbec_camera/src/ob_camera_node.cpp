@@ -81,10 +81,31 @@ std::string getDepthFilterStatusParamName(const std::string &filter_name,
   return param_name;
 }
 
+std::string getDepthFilterConfigParamName(const std::string &filter_name,
+                                          const std::string &param_name) {
+  if ((filter_name == "SpatialAdvancedFilter" || filter_name == "SpatialModerateFilter") &&
+      param_name == "diff_threshold") {
+    return "disp_diff";
+  }
+  if (filter_name == "TemporalFilter" && param_name == "diff_threshold") {
+    return "diff_scale";
+  }
+  if (filter_name == "DecimationFilter" && param_name == "scale") {
+    return "decimate";
+  }
+  if (filter_name == "SequenceIdFilter" && (param_name == "id" || param_name == "sequence_id" ||
+                                            param_name == "sequence_id_filter_id")) {
+    return "sequenceid";
+  }
+  if (filter_name == "HoleFillingFilter" && param_name == "mode") {
+    return "hole_filling_mode";
+  }
+  return param_name;
+}
+
 bool shouldExposeDepthFilterParams(const std::string &filter_name) {
   return filter_name != "MgcNoiseRemovalFilter" && filter_name != "LutNoiseRemovalFilter" &&
-         filter_name != "DisparityTransform" && filter_name != "FalsePositiveFilter" &&
-         filter_name != "EdgeNoiseRemovalFilter";
+         filter_name != "DisparityTransform" && filter_name != "EdgeNoiseRemovalFilter";
 }
 
 std::string formatFilterConfigValue(const OBFilterConfigSchemaItem &config_schema, double value) {
@@ -101,6 +122,83 @@ std::string formatFilterConfigValue(const OBFilterConfigSchemaItem &config_schem
       return ss.str();
     }
   }
+}
+
+std::string trimFilterConfigValue(const std::string &value) {
+  auto begin = value.begin();
+  while (begin != value.end() && std::isspace(static_cast<unsigned char>(*begin))) {
+    ++begin;
+  }
+  auto end = value.end();
+  while (end != begin && std::isspace(static_cast<unsigned char>(*(end - 1)))) {
+    --end;
+  }
+  return std::string(begin, end);
+}
+
+std::string lowerFilterConfigValue(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
+}
+
+bool parseFilterConfigDouble(const std::string &raw_value, double &parsed_value,
+                             std::string &message) {
+  const auto value = trimFilterConfigValue(raw_value);
+  if (value.empty()) {
+    message = "Filter config value is empty";
+    return false;
+  }
+
+  try {
+    size_t parsed_chars = 0;
+    parsed_value = std::stod(value, &parsed_chars);
+    if (parsed_chars != value.size()) {
+      message = "Filter config value '" + raw_value + "' is not a valid number";
+      return false;
+    }
+  } catch (const std::exception &) {
+    message = "Filter config value '" + raw_value + "' is not a valid number";
+    return false;
+  }
+  return true;
+}
+
+bool parseFilterConfigValue(const OBFilterConfigSchemaItem &schema, const std::string &raw_value,
+                            double &parsed_value, std::string &message) {
+  const auto value = trimFilterConfigValue(raw_value);
+  if (schema.type == OB_FILTER_CONFIG_VALUE_TYPE_BOOLEAN) {
+    const auto lower_value = lowerFilterConfigValue(value);
+    if (lower_value == "true" || lower_value == "1") {
+      parsed_value = 1.0;
+      return true;
+    }
+    if (lower_value == "false" || lower_value == "0") {
+      parsed_value = 0.0;
+      return true;
+    }
+    message = "Filter config '" + std::string(schema.name) + "' expects a boolean value";
+    return false;
+  }
+
+  if (!parseFilterConfigDouble(value, parsed_value, message)) {
+    return false;
+  }
+
+  if (schema.type == OB_FILTER_CONFIG_VALUE_TYPE_INT && std::floor(parsed_value) != parsed_value) {
+    message = "Filter config '" + std::string(schema.name) + "' expects an integer value";
+    return false;
+  }
+
+  if (parsed_value < schema.min || parsed_value > schema.max) {
+    std::ostringstream ss;
+    ss << "Filter config '" << schema.name << "' value " << parsed_value << " is out of range ["
+       << schema.min << ", " << schema.max << "]";
+    message = ss.str();
+    return false;
+  }
+
+  return true;
 }
 
 int64_t getSystemNowUs() {
@@ -5716,6 +5814,229 @@ orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
 
   return imu_info;
 }
+
+void OBCameraNode::updateDepthFilterEnabledCache(const std::string &filter_name, bool enabled) {
+  const auto normalized_filter_name = normalizeDepthFilterName(filter_name);
+  if (normalized_filter_name == "DecimationFilter") {
+    enable_decimation_filter_ = enabled;
+  } else if (normalized_filter_name == "HDRMerge") {
+    enable_hdr_merge_ = enabled;
+  } else if (normalized_filter_name == "SequenceIdFilter") {
+    enable_sequence_id_filter_ = enabled;
+  } else if (normalized_filter_name == "ThresholdFilter") {
+    enable_threshold_filter_ = enabled;
+  } else if (normalized_filter_name == "SpatialAdvancedFilter") {
+    enable_spatial_filter_ = enabled;
+  } else if (normalized_filter_name == "TemporalFilter") {
+    enable_temporal_filter_ = enabled;
+  } else if (normalized_filter_name == "HoleFillingFilter") {
+    enable_hole_filling_filter_ = enabled;
+  } else if (normalized_filter_name == "SpatialFastFilter") {
+    enable_spatial_fast_filter_ = enabled;
+  } else if (normalized_filter_name == "SpatialModerateFilter") {
+    enable_spatial_moderate_filter_ = enabled;
+  } else if (normalized_filter_name == "FalsePositiveFilter") {
+    enable_false_positive_filter_ = enabled;
+  } else if (normalized_filter_name == "MgcNoiseRemovalFilter") {
+    enable_mgc_noise_removal_filter_ = enabled;
+  } else if (normalized_filter_name == "LutNoiseRemovalFilter") {
+    enable_lut_noise_removal_filter_ = enabled;
+  } else if (normalized_filter_name == "NoiseRemovalFilter") {
+    enable_noise_removal_filter_ = enabled;
+  } else if (normalized_filter_name == "HardwareNoiseRemovalFilter") {
+    enable_hardware_noise_removal_filter_ = enabled;
+  }
+}
+
+bool OBCameraNode::applyNamedDepthFilterConfig(
+    const std::string &filter_name, bool enabled,
+    const std::vector<orbbec_camera_msgs::msg::DepthFilterParam> &params, std::string &message) {
+  const auto normalized_filter_name = normalizeDepthFilterName(filter_name);
+  std::unordered_set<std::string> requested_param_names;
+  auto check_duplicate_param = [&requested_param_names, &message](const std::string &param_name) {
+    if (param_name.empty()) {
+      message = "Filter config param name is empty";
+      return false;
+    }
+    if (!requested_param_names.insert(param_name).second) {
+      message = "Duplicate filter config param '" + param_name + "'";
+      return false;
+    }
+    return true;
+  };
+
+  if (normalized_filter_name == "NoiseRemovalFilter") {
+    const bool supported =
+        device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
+        device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE) ||
+        device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, OB_PERMISSION_WRITE);
+    if (!supported) {
+      message = "Filter '" + normalized_filter_name + "' is not supported by this device";
+      return false;
+    }
+
+    bool has_min_diff = false;
+    bool has_max_size = false;
+    int min_diff = 0;
+    int max_size = 0;
+    for (const auto &param : params) {
+      const auto param_name = getDepthFilterConfigParamName(normalized_filter_name, param.name);
+      if (!check_duplicate_param(param_name)) {
+        return false;
+      }
+
+      double parsed_value = 0.0;
+      if (!parseFilterConfigDouble(param.value, parsed_value, message)) {
+        return false;
+      }
+      if (std::floor(parsed_value) != parsed_value) {
+        message = "Filter config '" + param_name + "' expects an integer value";
+        return false;
+      }
+
+      if (param_name == "min_diff") {
+        if (!device_->isPropertySupported(OB_PROP_DEPTH_MAX_DIFF_INT, OB_PERMISSION_WRITE)) {
+          message = "Filter config 'min_diff' is not supported by this device";
+          return false;
+        }
+        has_min_diff = true;
+        min_diff = static_cast<int>(parsed_value);
+      } else if (param_name == "max_size") {
+        if (!device_->isPropertySupported(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT,
+                                          OB_PERMISSION_WRITE)) {
+          message = "Filter config 'max_size' is not supported by this device";
+          return false;
+        }
+        has_max_size = true;
+        max_size = static_cast<int>(parsed_value);
+      } else {
+        message = "Unknown filter config '" + param.name + "' for " + normalized_filter_name;
+        return false;
+      }
+    }
+
+    if (device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
+      device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, enabled);
+    }
+    if (has_min_diff) {
+      device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, min_diff);
+      noise_removal_filter_min_diff_ = min_diff;
+    }
+    if (has_max_size) {
+      device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, max_size);
+      noise_removal_filter_max_size_ = max_size;
+    }
+    updateDepthFilterEnabledCache(normalized_filter_name, enabled);
+    return true;
+  }
+
+  if (normalized_filter_name == "HardwareNoiseRemovalFilter") {
+    const bool supported =
+        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                     OB_PERMISSION_READ_WRITE) ||
+        device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                     OB_PERMISSION_READ_WRITE);
+    if (!supported) {
+      message = "Filter '" + normalized_filter_name + "' is not supported by this device";
+      return false;
+    }
+
+    bool has_threshold = false;
+    double threshold = 0.0;
+    for (const auto &param : params) {
+      const auto param_name = getDepthFilterConfigParamName(normalized_filter_name, param.name);
+      if (!check_duplicate_param(param_name)) {
+        return false;
+      }
+      if (param_name != "threshold") {
+        message = "Unknown filter config '" + param.name + "' for " + normalized_filter_name;
+        return false;
+      }
+      if (!device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                        OB_PERMISSION_READ_WRITE)) {
+        message = "Filter config 'threshold' is not supported by this device";
+        return false;
+      }
+      if (!parseFilterConfigDouble(param.value, threshold, message)) {
+        return false;
+      }
+      has_threshold = true;
+    }
+
+    if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                                     OB_PERMISSION_READ_WRITE)) {
+      device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL, enabled);
+    }
+    if (has_threshold) {
+      device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                static_cast<float>(threshold));
+      hardware_noise_removal_filter_threshold_ = static_cast<float>(threshold);
+    }
+    updateDepthFilterEnabledCache(normalized_filter_name, enabled);
+    return true;
+  }
+
+  std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
+  auto is_same_filter = [&normalized_filter_name](const std::shared_ptr<ob::Filter> &filter) {
+    if (!filter) {
+      return false;
+    }
+    return normalizeDepthFilterName(filter->getName()) == normalized_filter_name ||
+           normalizeDepthFilterName(filter->type()) == normalized_filter_name;
+  };
+
+  auto first_match_it =
+      std::find_if(depth_filter_list_.begin(), depth_filter_list_.end(),
+                   [&is_same_filter](const auto &filter) { return is_same_filter(filter); });
+  if (first_match_it == depth_filter_list_.end() || !(*first_match_it)) {
+    message = "Filter '" + normalized_filter_name + "' is not supported by this device";
+    return false;
+  }
+
+  const auto &existing_filter = *first_match_it;
+  std::vector<OBFilterConfigSchemaItem> schema_vec;
+  std::unordered_map<std::string, OBFilterConfigSchemaItem> schema_by_name;
+  if (!params.empty()) {
+    schema_vec = existing_filter->getConfigSchemaVec();
+    for (const auto &schema : schema_vec) {
+      if (schema.name == nullptr || schema.name[0] == '\0') {
+        continue;
+      }
+      schema_by_name.emplace(schema.name, schema);
+    }
+  }
+
+  std::vector<std::pair<std::string, double>> parsed_params;
+  parsed_params.reserve(params.size());
+  for (const auto &param : params) {
+    const auto param_name = getDepthFilterConfigParamName(normalized_filter_name, param.name);
+    if (!check_duplicate_param(param_name)) {
+      return false;
+    }
+
+    const auto schema_it = schema_by_name.find(param_name);
+    if (schema_it == schema_by_name.end()) {
+      message = "Unknown filter config '" + param.name + "' for " + normalized_filter_name;
+      return false;
+    }
+
+    double parsed_value = 0.0;
+    if (!parseFilterConfigValue(schema_it->second, param.value, parsed_value, message)) {
+      return false;
+    }
+    parsed_params.emplace_back(param_name, parsed_value);
+  }
+
+  existing_filter->enable(enabled);
+  for (const auto &parsed_param : parsed_params) {
+    existing_filter->setConfigValue(parsed_param.first, parsed_param.second);
+    RCLCPP_INFO_STREAM(logger_, "Set " << normalized_filter_name << " config "
+                                       << parsed_param.first << " to " << parsed_param.second);
+  }
+  updateDepthFilterEnabledCache(normalized_filter_name, enabled);
+  return true;
+}
+
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
@@ -5745,6 +6066,33 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
 
     RCLCPP_INFO_STREAM(logger_, "filter_name: " << request->filter_name << "  filter_enable: "
                                                 << (request->filter_enable ? "true" : "false"));
+    const bool has_positional_params = !request->filter_param.empty();
+    const bool has_named_params = !request->filter_config.empty();
+    if (has_positional_params && has_named_params) {
+      fail("filter_param and filter_config cannot be used at the same time");
+      return;
+    }
+
+    if (has_named_params || !has_positional_params) {
+      std::string message;
+      if (!applyNamedDepthFilterConfig(normalized_request_filter_name, request->filter_enable,
+                                       request->filter_config, message)) {
+        fail(message);
+        return;
+      }
+
+      filter_status_[normalized_request_filter_name] = static_cast<bool>(request->filter_enable);
+      if (filter_status_pub_) {
+        std_msgs::msg::String msg;
+        msg.data = filter_status_.dump(2);
+        filter_status_pub_->publish(msg);
+      }
+      publishDepthFiltersStatus();
+
+      response->success = true;
+      return;
+    }
+
     if (is_noise_removal_filter || is_hardware_noise_removal_filter) {
       if (!is_supported_by_property) {
         fail("Filter '" + normalized_request_filter_name + "' is not supported by this device");
