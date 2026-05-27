@@ -223,6 +223,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_hole_filling_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_fast_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_moderate_filter', default_value='false'),
+        DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),
