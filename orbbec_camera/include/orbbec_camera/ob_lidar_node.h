@@ -48,10 +48,8 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include "libobsensor/ObSensor.hpp"
 
-#include "orbbec_camera_msgs/msg/device_info.hpp"
 #include "orbbec_camera_msgs/srv/get_device_info.hpp"
 #include "orbbec_camera_msgs/msg/extrinsics.hpp"
-#include "orbbec_camera_msgs/msg/metadata.hpp"
 #include "orbbec_camera_msgs/msg/imu_info.hpp"
 #include "orbbec_camera_msgs/srv/get_int32.hpp"
 #include "orbbec_camera_msgs/srv/get_string.hpp"
