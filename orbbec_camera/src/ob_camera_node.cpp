@@ -1514,7 +1514,7 @@ void OBCameraNode::setupDevices() {
       }
     }
   }
-  if (exposure_range_mode_ != "default" &&
+  if (!exposure_range_mode_.empty() && exposure_range_mode_ != "default" &&
       device_->isPropertySupported(OB_PROP_DEVICE_PERFORMANCE_MODE_INT, OB_PERMISSION_WRITE)) {
     if (exposure_range_mode_ == "ultimate") {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEVICE_PERFORMANCE_MODE_INT, 1);
@@ -2868,46 +2868,58 @@ void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {
   }
 }
 int OBCameraNode::init_interleave_hdr_param() {
+  auto set_int_if_provided = [this](OBPropertyID property_id, int value) {
+    if (value != -1) {
+      device_->setIntProperty(property_id, value);
+    }
+  };
+
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 1);
-  if (!isnotLaserDevices(pid_)) {
+  if (!isnotLaserDevices(pid_) && hdr_index1_laser_control_ != -1) {
     device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index1_laser_control_);
   }
-  device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index1_depth_exposure_);
-  device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, hdr_index1_depth_exposure_);
-  device_->setIntProperty(OB_PROP_DEPTH_GAIN_INT, hdr_index1_depth_gain_);
-  device_->setIntProperty(OB_PROP_IR_BRIGHTNESS_INT, hdr_index1_ir_brightness_);
-  device_->setIntProperty(OB_PROP_IR_AE_MAX_EXPOSURE_INT, hdr_index1_ir_ae_max_exposure_);
+  set_int_if_provided(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index1_depth_exposure_);
+  set_int_if_provided(OB_PROP_IR_EXPOSURE_INT, hdr_index1_depth_exposure_);
+  set_int_if_provided(OB_PROP_DEPTH_GAIN_INT, hdr_index1_depth_gain_);
+  set_int_if_provided(OB_PROP_IR_BRIGHTNESS_INT, hdr_index1_ir_brightness_);
+  set_int_if_provided(OB_PROP_IR_AE_MAX_EXPOSURE_INT, hdr_index1_ir_ae_max_exposure_);
 
   // set interleaveae
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 0);
-  if (!isnotLaserDevices(pid_)) {
+  if (!isnotLaserDevices(pid_) && hdr_index0_laser_control_ != -1) {
     device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, hdr_index0_laser_control_);
   }
-  device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index0_depth_exposure_);
-  device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, hdr_index0_depth_exposure_);
-  device_->setIntProperty(OB_PROP_DEPTH_GAIN_INT, hdr_index0_depth_gain_);
-  device_->setIntProperty(OB_PROP_IR_BRIGHTNESS_INT, hdr_index0_ir_brightness_);
-  device_->setIntProperty(OB_PROP_IR_AE_MAX_EXPOSURE_INT, hdr_index0_ir_ae_max_exposure_);
+  set_int_if_provided(OB_PROP_DEPTH_EXPOSURE_INT, hdr_index0_depth_exposure_);
+  set_int_if_provided(OB_PROP_IR_EXPOSURE_INT, hdr_index0_depth_exposure_);
+  set_int_if_provided(OB_PROP_DEPTH_GAIN_INT, hdr_index0_depth_gain_);
+  set_int_if_provided(OB_PROP_IR_BRIGHTNESS_INT, hdr_index0_ir_brightness_);
+  set_int_if_provided(OB_PROP_IR_AE_MAX_EXPOSURE_INT, hdr_index0_ir_ae_max_exposure_);
   return 0;
 }
 
 int OBCameraNode::init_interleave_laser_param() {
+  auto set_int_if_provided = [this](OBPropertyID property_id, int value) {
+    if (value != -1) {
+      device_->setIntProperty(property_id, value);
+    }
+  };
+
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 1);
-  device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_index1_laser_control_);
-  device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, laser_index1_depth_exposure_);
-  device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, laser_index1_depth_exposure_);
-  device_->setIntProperty(OB_PROP_DEPTH_GAIN_INT, laser_index1_depth_gain_);
-  device_->setIntProperty(OB_PROP_IR_BRIGHTNESS_INT, laser_index1_ir_brightness_);
-  device_->setIntProperty(OB_PROP_IR_AE_MAX_EXPOSURE_INT, laser_index1_ir_ae_max_exposure_);
+  set_int_if_provided(OB_PROP_LASER_CONTROL_INT, laser_index1_laser_control_);
+  set_int_if_provided(OB_PROP_DEPTH_EXPOSURE_INT, laser_index1_depth_exposure_);
+  set_int_if_provided(OB_PROP_IR_EXPOSURE_INT, laser_index1_depth_exposure_);
+  set_int_if_provided(OB_PROP_DEPTH_GAIN_INT, laser_index1_depth_gain_);
+  set_int_if_provided(OB_PROP_IR_BRIGHTNESS_INT, laser_index1_ir_brightness_);
+  set_int_if_provided(OB_PROP_IR_AE_MAX_EXPOSURE_INT, laser_index1_ir_ae_max_exposure_);
 
   // set interleaveae
   device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT, 0);
-  device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_index0_laser_control_);
-  device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, laser_index0_depth_exposure_);
-  device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, laser_index0_depth_exposure_);
-  device_->setIntProperty(OB_PROP_DEPTH_GAIN_INT, laser_index0_depth_gain_);
-  device_->setIntProperty(OB_PROP_IR_BRIGHTNESS_INT, laser_index0_ir_brightness_);
-  device_->setIntProperty(OB_PROP_IR_AE_MAX_EXPOSURE_INT, laser_index0_ir_ae_max_exposure_);
+  set_int_if_provided(OB_PROP_LASER_CONTROL_INT, laser_index0_laser_control_);
+  set_int_if_provided(OB_PROP_DEPTH_EXPOSURE_INT, laser_index0_depth_exposure_);
+  set_int_if_provided(OB_PROP_IR_EXPOSURE_INT, laser_index0_depth_exposure_);
+  set_int_if_provided(OB_PROP_DEPTH_GAIN_INT, laser_index0_depth_gain_);
+  set_int_if_provided(OB_PROP_IR_BRIGHTNESS_INT, laser_index0_ir_brightness_);
+  set_int_if_provided(OB_PROP_IR_AE_MAX_EXPOSURE_INT, laser_index0_ir_ae_max_exposure_);
   return 0;
 }
 void OBCameraNode::startStreams() {
@@ -3341,7 +3353,7 @@ void OBCameraNode::getParameters() {
                               "point_cloud_decimation_filter_factor", 1);
   setAndGetNodeParameter<std::string>(point_cloud_qos_, "point_cloud_qos", "default");
   setAndGetNodeParameter<bool>(enable_d2c_viewer_, "enable_d2c_viewer", false);
-  setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "HW");
+  setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
   setAndGetNodeParameter<std::string>(depth_filter_config_, "depth_filter_config", "");
   if (!depth_filter_config_.empty()) {
     enable_depth_filter_ = true;
@@ -3372,7 +3384,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(color_anti_flicker_, "color_anti_flicker", false);
   setAndGetNodeParameter<int>(color_denoising_level_, "color_denoising_level", -1);
   setAndGetNodeParameter<std::string>(color_powerline_freq_, "color_powerline_freq", "");
-  setAndGetNodeParameter<std::string>(color_preset_, "color_preset", "Default");
+  setAndGetNodeParameter<std::string>(color_preset_, "color_preset", "");
   setAndGetNodeParameter<bool>(enable_color_decimation_filter_, "enable_color_decimation_filter",
                                false);
   setAndGetNodeParameter<int>(color_decimation_filter_scale_, "color_decimation_filter_scale", -1);
@@ -3466,8 +3478,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(threshold_filter_min_, "threshold_filter_min", -1);
   setAndGetNodeParameter<float>(hardware_noise_removal_filter_threshold_,
                                 "hardware_noise_removal_filter_threshold", -1.0);
-  setAndGetNodeParameter<int>(noise_removal_filter_min_diff_, "noise_removal_filter_min_diff", 256);
-  setAndGetNodeParameter<int>(noise_removal_filter_max_size_, "noise_removal_filter_max_size", 80);
+  setAndGetNodeParameter<int>(noise_removal_filter_min_diff_, "noise_removal_filter_min_diff", -1);
+  setAndGetNodeParameter<int>(noise_removal_filter_max_size_, "noise_removal_filter_max_size", -1);
   setAndGetNodeParameter<float>(spatial_filter_alpha_, "spatial_filter_alpha", -1.0);
   setAndGetNodeParameter<int>(spatial_filter_diff_threshold_, "spatial_filter_diff_threshold", -1);
   setAndGetNodeParameter<int>(spatial_filter_magnitude_, "spatial_filter_magnitude", -1);
@@ -3499,7 +3511,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
   setAndGetNodeParameter<bool>(enable_frame_timestamp_csv_, "enable_frame_timestamp_csv", false);
   setAndGetNodeParameter<std::string>(frame_timestamp_csv_file_, "frame_timestamp_csv_file", "");
-  setAndGetNodeParameter<std::string>(exposure_range_mode_, "exposure_range_mode", "default");
+  setAndGetNodeParameter<std::string>(exposure_range_mode_, "exposure_range_mode", "");
   setAndGetNodeParameter<std::string>(load_config_json_file_path_, "load_config_json_file_path",
                                       "");
   setAndGetNodeParameter<std::string>(export_config_json_file_path_, "export_config_json_file_path",
@@ -3541,37 +3553,35 @@ void OBCameraNode::getParameters() {
   software_trigger_period_ = std::chrono::milliseconds(software_trigger_period);
   setAndGetNodeParameter<int>(gmsl_trigger_fps_, "gmsl_trigger_fps", 3000);
   setAndGetNodeParameter<bool>(enable_gmsl_trigger_, "enable_gmsl_trigger", false);
-  setAndGetNodeParameter<std::string>(interleave_ae_mode_, "interleave_ae_mode", "hdr");
+  setAndGetNodeParameter<std::string>(interleave_ae_mode_, "interleave_ae_mode", "");
   setAndGetNodeParameter<bool>(interleave_frame_enable_, "interleave_frame_enable", false);
   setAndGetNodeParameter<bool>(interleave_skip_enable_, "interleave_skip_enable", false);
-  setAndGetNodeParameter<int>(interleave_skip_index_, "interleave_skip_index", 1);
+  setAndGetNodeParameter<int>(interleave_skip_index_, "interleave_skip_index", -1);
 
   // hdr and laser interleave params
-  setAndGetNodeParameter<int>(hdr_index1_laser_control_, "hdr_index1_laser_control", 1);
-  setAndGetNodeParameter<int>(hdr_index1_depth_exposure_, "hdr_index1_depth_exposure", 1);
-  setAndGetNodeParameter<int>(hdr_index1_depth_gain_, "hdr_index1_depth_gain", 16);
-  setAndGetNodeParameter<int>(hdr_index1_ir_brightness_, "hdr_index1_ir_brightness", 30);
-  setAndGetNodeParameter<int>(hdr_index1_ir_ae_max_exposure_, "hdr_index1_ir_ae_max_exposure",
-                              30458);
-  setAndGetNodeParameter<int>(hdr_index0_laser_control_, "hdr_index0_laser_control", 1);
-  setAndGetNodeParameter<int>(hdr_index0_depth_exposure_, "hdr_index0_depth_exposure", 7500);
-  setAndGetNodeParameter<int>(hdr_index0_depth_gain_, "hdr_index0_depth_gain", 16);
-  setAndGetNodeParameter<int>(hdr_index0_ir_brightness_, "hdr_index0_ir_brightness", 90);
-  setAndGetNodeParameter<int>(hdr_index0_ir_ae_max_exposure_, "hdr_index0_ir_ae_max_exposure",
-                              30458);
+  setAndGetNodeParameter<int>(hdr_index1_laser_control_, "hdr_index1_laser_control", -1);
+  setAndGetNodeParameter<int>(hdr_index1_depth_exposure_, "hdr_index1_depth_exposure", -1);
+  setAndGetNodeParameter<int>(hdr_index1_depth_gain_, "hdr_index1_depth_gain", -1);
+  setAndGetNodeParameter<int>(hdr_index1_ir_brightness_, "hdr_index1_ir_brightness", -1);
+  setAndGetNodeParameter<int>(hdr_index1_ir_ae_max_exposure_, "hdr_index1_ir_ae_max_exposure", -1);
+  setAndGetNodeParameter<int>(hdr_index0_laser_control_, "hdr_index0_laser_control", -1);
+  setAndGetNodeParameter<int>(hdr_index0_depth_exposure_, "hdr_index0_depth_exposure", -1);
+  setAndGetNodeParameter<int>(hdr_index0_depth_gain_, "hdr_index0_depth_gain", -1);
+  setAndGetNodeParameter<int>(hdr_index0_ir_brightness_, "hdr_index0_ir_brightness", -1);
+  setAndGetNodeParameter<int>(hdr_index0_ir_ae_max_exposure_, "hdr_index0_ir_ae_max_exposure", -1);
 
-  setAndGetNodeParameter<int>(laser_index1_laser_control_, "laser_index1_laser_control", 0);
-  setAndGetNodeParameter<int>(laser_index1_depth_exposure_, "laser_index1_depth_exposure", 3000);
-  setAndGetNodeParameter<int>(laser_index1_depth_gain_, "laser_index1_depth_gain", 16);
-  setAndGetNodeParameter<int>(laser_index1_ir_brightness_, "laser_index1_ir_brightness", 60);
+  setAndGetNodeParameter<int>(laser_index1_laser_control_, "laser_index1_laser_control", -1);
+  setAndGetNodeParameter<int>(laser_index1_depth_exposure_, "laser_index1_depth_exposure", -1);
+  setAndGetNodeParameter<int>(laser_index1_depth_gain_, "laser_index1_depth_gain", -1);
+  setAndGetNodeParameter<int>(laser_index1_ir_brightness_, "laser_index1_ir_brightness", -1);
   setAndGetNodeParameter<int>(laser_index1_ir_ae_max_exposure_, "laser_index1_ir_ae_max_exposure",
-                              7000);
-  setAndGetNodeParameter<int>(laser_index0_laser_control_, "laser_index0_laser_control", 1);
-  setAndGetNodeParameter<int>(laser_index0_depth_exposure_, "laser_index0_depth_exposure", 3000);
-  setAndGetNodeParameter<int>(laser_index0_depth_gain_, "laser_index0_depth_gain", 16);
-  setAndGetNodeParameter<int>(laser_index0_ir_brightness_, "laser_index0_ir_brightness", 60);
+                              -1);
+  setAndGetNodeParameter<int>(laser_index0_laser_control_, "laser_index0_laser_control", -1);
+  setAndGetNodeParameter<int>(laser_index0_depth_exposure_, "laser_index0_depth_exposure", -1);
+  setAndGetNodeParameter<int>(laser_index0_depth_gain_, "laser_index0_depth_gain", -1);
+  setAndGetNodeParameter<int>(laser_index0_ir_brightness_, "laser_index0_ir_brightness", -1);
   setAndGetNodeParameter<int>(laser_index0_ir_ae_max_exposure_, "laser_index0_ir_ae_max_exposure",
-                              17000);
+                              -1);
   setAndGetNodeParameter<int>(disparity_range_mode_, "disparity_range_mode", -1);
   setAndGetNodeParameter<int>(disparity_search_offset_, "disparity_search_offset", -1);
   setAndGetNodeParameter<bool>(disparity_offset_config_, "disparity_offset_config", false);
@@ -3584,8 +3594,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
   setAndGetNodeParameter<std::string>(intra_camera_sync_reference_, "intra_camera_sync_reference",
                                       "Middle");
-  setAndGetNodeParameter<std::string>(ae_reference_stream_, "ae_reference_stream", "depth");
-  setAndGetNodeParameter<std::string>(ae_strategy_, "ae_strategy", "motion");
+  setAndGetNodeParameter<std::string>(ae_reference_stream_, "ae_reference_stream", "");
+  setAndGetNodeParameter<std::string>(ae_strategy_, "ae_strategy", "");
 
   RCLCPP_INFO_STREAM(logger_, "Current time domain: " << time_domain_);
   RCLCPP_DEBUG_STREAM(logger_, "hdr_index1_laser_control_ "
