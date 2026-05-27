@@ -237,6 +237,10 @@ class OBCameraNode {
 
   void loadConfigJson();
 
+  bool exportConfigJsonToFile(const std::string &file_path, std::string &message);
+
+  void exportConfigJsonIfRequested();
+
   bool isConfigJsonLoaded() const;
 
   void syncConfigJsonDeviceSettings();
@@ -420,6 +424,9 @@ class OBCameraNode {
 
   void switchIRCameraCallback(const std::shared_ptr<SetString::Request>& request,
                               std::shared_ptr<SetString::Response>& response);
+
+  void exportConfigJsonCallback(const std::shared_ptr<SetString::Request> &request,
+                                std::shared_ptr<SetString::Response> &response);
 
   bool writeCustomerData(const std::string& data);
 
@@ -624,6 +631,7 @@ class OBCameraNode {
   rclcpp::Service<SetBool>::SharedPtr set_auto_white_balance_srv_;
   rclcpp::Service<GetString>::SharedPtr get_sdk_version_srv_;
   rclcpp::Service<SetString>::SharedPtr switch_ir_camera_srv_;
+  rclcpp::Service<SetString>::SharedPtr export_config_json_srv_;
   rclcpp::Service<SetString>::SharedPtr write_customerdata_srv_;
   rclcpp::Service<GetString>::SharedPtr read_customerdata_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ir_long_exposure_srv_;

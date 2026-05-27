@@ -1405,11 +1405,6 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Current exposure range mode: "
                                     << exposureRangeModeToString(current_exposure_range_mode));
   }
-  if (!export_config_json_file_path_.empty()) {
-    device_->exportSettingsAsPresetJsonFile(export_config_json_file_path_.c_str());
-    RCLCPP_INFO_STREAM(logger_,
-                       "Exporting config json file path : " << export_config_json_file_path_);
-  }
   if (device_->isPropertySupported(OB_PROP_SDK_ACCEL_FRAME_TRANSFORMED_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_ACCEL_FRAME_TRANSFORMED_BOOL,
                         enable_accel_data_correction_);
@@ -1463,6 +1458,39 @@ void OBCameraNode::setupDevices() {
                                       << (current_ae_reference == 0 ? "depthbased" : "colorbased"));
     }
   }
+}
+
+bool OBCameraNode::exportConfigJsonToFile(const std::string &file_path, std::string &message) {
+  if (file_path.empty()) {
+    message = "Config json export file path is empty";
+    RCLCPP_ERROR_STREAM(logger_, message);
+    return false;
+  }
+
+  try {
+    device_->exportSettingsAsPresetJsonFile(file_path.c_str());
+    message = "Exported config json file path: " + file_path;
+    RCLCPP_INFO_STREAM(logger_, message);
+    return true;
+  } catch (const ob::Error &e) {
+    message = "Failed to export config json file: " + orbbec_camera::formatObErrorWithStatus(e);
+    RCLCPP_ERROR_STREAM(logger_, message);
+  } catch (const std::exception &e) {
+    message = std::string("Failed to export config json file: ") + e.what();
+    RCLCPP_ERROR_STREAM(logger_, message);
+  } catch (...) {
+    message = "Failed to export config json file";
+    RCLCPP_ERROR_STREAM(logger_, message);
+  }
+  return false;
+}
+
+void OBCameraNode::exportConfigJsonIfRequested() {
+  if (export_config_json_file_path_.empty()) {
+    return;
+  }
+  std::string message;
+  exportConfigJsonToFile(export_config_json_file_path_, message);
 }
 
 bool OBCameraNode::isConfigJsonLoaded() const { return config_json_loaded_; }
@@ -3442,6 +3470,7 @@ void OBCameraNode::setupTopics() {
     setupCameraCtrlServices();
     setupPublishers();
     setupDiagnosticUpdater();
+    exportConfigJsonIfRequested();
   } catch (const ob::Error &e) {
     RCLCPP_ERROR_STREAM(logger_,
                         "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));

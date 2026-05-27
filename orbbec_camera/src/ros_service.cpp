@@ -227,6 +227,11 @@ void OBCameraNode::setupCameraCtrlServices() {
                                  std::shared_ptr<std_srvs::srv::Empty::Response> response) {
         savePointCloudCallback(request, response);
       });
+  export_config_json_srv_ = node_->create_service<SetString>(
+      "export_config_json", [this](const std::shared_ptr<SetString::Request> request,
+                                   std::shared_ptr<SetString::Response> response) {
+        exportConfigJsonCallback(request, response);
+      });
   switch_ir_camera_srv_ = node_->create_service<SetString>(
       "switch_ir", [this](const std::shared_ptr<SetString::Request> request,
                           std::shared_ptr<SetString::Response> response) {
@@ -1422,6 +1427,12 @@ void OBCameraNode::switchIRCameraCallback(const std::shared_ptr<SetString::Reque
     response->success = false;
   }
 }
+
+void OBCameraNode::exportConfigJsonCallback(const std::shared_ptr<SetString::Request> &request,
+                                            std::shared_ptr<SetString::Response> &response) {
+  response->success = exportConfigJsonToFile(request->data, response->message);
+}
+
 void OBCameraNode::setIRLongExposureCallback(
     const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
     std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
