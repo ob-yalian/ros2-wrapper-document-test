@@ -170,58 +170,70 @@ int main(int argc, char **argv) {
     auto list = context->queryDeviceList();
     bool firmware_log_enabled = false;
     for (size_t i = 0; i < list->deviceCount(); i++) {
-      auto device_ = list->getDevice(i);
-      if (isSdkLogEnabled(args.sdk_log_level)) {
-        firmware_log_enabled = enableFirmwareLog(device_) || firmware_log_enabled;
-      }
-      auto device_info_ = device_->getDeviceInfo();
-      if (std::string(list->getConnectionType(i)) != "Ethernet") {
-        std::string serial = list->serialNumber(i);
-        std::string uid = list->uid(i);
-        auto usb_port = orbbec_camera::parseUsbPort(uid);
-        auto connection_type = list->getConnectionType(i);
-        auto firmware_version = device_info_->getFirmwareVersion();
-        std::stringstream pid_hex;
-        pid_hex << std::hex << std::setw(4) << std::setfill('0') << list->getPid(i);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "name: " << list->getName(i));
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "pid: 0x" << pid_hex.str());
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "serial: " << serial);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "connection: " << connection_type);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "firmware version: " << firmware_version);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "usb port: " << usb_port);
-        printPresetInfo(device_);
-        std::cout << std::endl;
-      } else {
-        std::string serial = list->serialNumber(i);
-        auto connection_type = list->getConnectionType(i);
-        auto ip_address = list->getIpAddress(i);
-        std::stringstream pid_hex;
-        auto firmware_version = device_info_->getFirmwareVersion();
-        pid_hex << std::hex << std::setw(4) << std::setfill('0') << list->getPid(i);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "name: " << list->getName(i));
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "pid: 0x" << pid_hex.str());
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "serial: " << serial);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "connection: " << connection_type);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "firmware version: " << firmware_version);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "ip address: " << ip_address);
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "MAC address: " << list->getUid(i));
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "subnet mask: " << list->getSubnetMask(i));
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "gateway: " << list->getGateway(i));
-        RCLCPP_INFO_STREAM(
-            rclcpp::get_logger("list_device_node"),
-            "local net interface: " << list->getLocalNetInterfaceName(static_cast<uint32_t>(i)));
-        RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                           "ip source type: " << ipSourceTypeToString(
-                               static_cast<int>(list->getIpSourceType(static_cast<uint32_t>(i)))));
-        printPresetInfo(device_);
-        std::cout << std::endl;
+      try {
+        auto device_ = list->getDevice(i);
+        if (isSdkLogEnabled(args.sdk_log_level)) {
+          firmware_log_enabled = enableFirmwareLog(device_) || firmware_log_enabled;
+        }
+        auto device_info_ = device_->getDeviceInfo();
+        if (std::string(list->getConnectionType(i)) != "Ethernet") {
+          std::string serial = list->serialNumber(i);
+          std::string uid = list->uid(i);
+          auto usb_port = orbbec_camera::parseUsbPort(uid);
+          auto connection_type = list->getConnectionType(i);
+          auto firmware_version = device_info_->getFirmwareVersion();
+          std::stringstream pid_hex;
+          pid_hex << std::hex << std::setw(4) << std::setfill('0') << list->getPid(i);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "name: " << list->getName(i));
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "pid: 0x" << pid_hex.str());
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "serial: " << serial);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "connection: " << connection_type);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "firmware version: " << firmware_version);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "usb port: " << usb_port);
+          printPresetInfo(device_);
+          std::cout << std::endl;
+        } else {
+          std::string serial = list->serialNumber(i);
+          auto connection_type = list->getConnectionType(i);
+          auto ip_address = list->getIpAddress(i);
+          std::stringstream pid_hex;
+          auto firmware_version = device_info_->getFirmwareVersion();
+          pid_hex << std::hex << std::setw(4) << std::setfill('0') << list->getPid(i);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "name: " << list->getName(i));
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "pid: 0x" << pid_hex.str());
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "serial: " << serial);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "connection: " << connection_type);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "firmware version: " << firmware_version);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "ip address: " << ip_address);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "MAC address: " << list->getUid(i));
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "subnet mask: " << list->getSubnetMask(i));
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "gateway: " << list->getGateway(i));
+          RCLCPP_INFO_STREAM(
+              rclcpp::get_logger("list_device_node"),
+              "local net interface: " << list->getLocalNetInterfaceName(static_cast<uint32_t>(i)));
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "ip source type: " << ipSourceTypeToString(static_cast<int>(
+                                 list->getIpSourceType(static_cast<uint32_t>(i)))));
+          printPresetInfo(device_);
+          std::cout << std::endl;
+        }
+      } catch (ob::Error &e) {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"),
+                            "Failed to list device at index "
+                                << i << ": " << orbbec_camera::formatObErrorWithStatus(e));
+      } catch (const std::exception &e) {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"),
+                            "Failed to list device at index " << i << ": " << e.what());
+      } catch (...) {
+        RCLCPP_ERROR_STREAM(rclcpp::get_logger("list_device_node"),
+                            "Failed to list device at index " << i << ": unknown error");
       }
     }
     if (firmware_log_enabled) {
