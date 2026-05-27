@@ -237,6 +237,10 @@ class OBCameraNode {
 
   void loadConfigJson();
 
+  void captureInitialRosParameters();
+
+  bool isLaunchParamProvided(const std::string &param_name) const;
+
   bool exportConfigJsonToFile(const std::string &file_path, std::string &message);
 
   void exportConfigJsonIfRequested();
@@ -881,6 +885,7 @@ class OBCameraNode {
   OBStreamType align_target_stream_ = OB_STREAM_COLOR;
   bool retry_on_usb3_detection_failure_ = false;
   bool config_json_loaded_ = false;
+  std::unordered_set<std::string> initial_ros_params_;
   std::atomic_bool is_camera_node_initialized_{false};
   int laser_energy_level_ = -1;
   ob::PointCloudFilter depth_point_cloud_filter_;
