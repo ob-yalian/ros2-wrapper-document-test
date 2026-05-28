@@ -3937,7 +3937,7 @@ void OBCameraNode::setupPublishers() {
       image_publishers_[stream_index] =
           std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
     }
-    if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
+    if ((is_mjpg_color_stream) &&
         format_[stream_index] == OB_FORMAT_MJPG) {
       compressed_image_publishers_[stream_index] =
           node_->create_publisher<sensor_msgs::msg::CompressedImage>(
@@ -5154,6 +5154,11 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
+    if (!has_raw_image_subscriber && stream_index == COLOR && frame_timestamp_csv_logger_ &&
+        frame_timestamp_csv_logger_->enabled()) {
+      frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
+                                                         getSystemNowUs(), getSteadyNowUs());
+    }
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
     if (!has_raw_image_subscriber && stream_index == COLOR) {
       fps_delay_status_color_->tick(frame_timestamp);
