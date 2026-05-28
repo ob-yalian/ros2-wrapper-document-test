@@ -37,6 +37,10 @@ std::string g_camera_name = "orbbec_camera";  // Assuming this is declared elsew
 std::string g_time_domain = "global";         // Assuming this is declared elsewhere
 namespace {
 std::string getLogDirectoryForCamera(const std::string &camera_name) {
+  const char *log_dir_override = std::getenv("ORBBEC_LOG_DIR");
+  if (log_dir_override && log_dir_override[0] != '\0') {
+    return (std::filesystem::path(log_dir_override) / camera_name).string();
+  }
   std::string home_dir = std::getenv("HOME") ? std::getenv("HOME") : "";
   return (std::filesystem::path(home_dir) / ".ros" / "Log" / camera_name).string();
 }
