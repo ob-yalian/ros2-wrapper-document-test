@@ -49,7 +49,7 @@ OBLogSeverity obLogSeverityFromString(const std::string_view &log_level) {
 std::string getObSdkLogDirectory() {
   const char *log_dir_override = std::getenv("ORBBEC_LOG_DIR");
   if (log_dir_override && log_dir_override[0] != '\0') {
-    return std::string(log_dir_override);
+    return (std::filesystem::path(log_dir_override) / "Log").string();
   }
   const char *home = std::getenv("HOME");
   const std::filesystem::path home_dir = home != nullptr ? home : "";
@@ -1102,8 +1102,8 @@ UndistortedImageResult undistortImage(const cv::Mat &image, const OBCameraIntrin
     static std::vector<UndistortMapCacheEntry> map_cache;
 
     std::lock_guard<std::mutex> lock(cache_mutex);
-    auto cache_it = std::find_if(
-        map_cache.begin(), map_cache.end(), [&](const UndistortMapCacheEntry &entry) {
+    auto cache_it =
+        std::find_if(map_cache.begin(), map_cache.end(), [&](const UndistortMapCacheEntry &entry) {
           return entry.width == image.cols && entry.height == image.rows &&
                  entry.image_type == image.type() && isSameIntrinsic(entry.intrinsic, intrinsic) &&
                  isSameDistortion(entry.distortion, distortion);
@@ -1117,9 +1117,8 @@ UndistortedImageResult undistortImage(const cv::Mat &image, const OBCameraIntrin
       entry.intrinsic = intrinsic;
       entry.distortion = distortion;
 
-      cv::Mat camera_matrix =
-          (cv::Mat_<double>(3, 3) << intrinsic.fx, 0.0, intrinsic.cx, 0.0, intrinsic.fy,
-           intrinsic.cy, 0.0, 0.0, 1.0);
+      cv::Mat camera_matrix = (cv::Mat_<double>(3, 3) << intrinsic.fx, 0.0, intrinsic.cx, 0.0,
+                               intrinsic.fy, intrinsic.cy, 0.0, 0.0, 1.0);
       cv::Mat dist_coeffs =
           (cv::Mat_<double>(8, 1) << distortion.k1, distortion.k2, distortion.p1, distortion.p2,
            distortion.k3, distortion.k4, distortion.k5, distortion.k6);
