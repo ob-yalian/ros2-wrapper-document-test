@@ -2791,7 +2791,8 @@ void OBCameraNode::setupProfiles() {
 
       } catch (const ob::Error &ex) {
         RCLCPP_ERROR_STREAM(
-            logger_, "Failed to get " << stream_name_[elem] << "  profile: " << ex.getMessage());
+            logger_, "Failed to get " << stream_name_[elem]
+                                      << "  profile: " << orbbec_camera::formatObErrorWithStatus(ex));
         RCLCPP_ERROR_STREAM(
             logger_, "Stream: " << magic_enum::enum_name(elem.first)
                                 << ", Stream Index: " << elem.second << ", Width: " << width_[elem]
