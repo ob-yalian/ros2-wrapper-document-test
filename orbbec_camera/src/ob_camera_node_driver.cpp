@@ -1086,8 +1086,8 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
       }
     } catch (ob::Error &e) {
       // Some devices don't support ISP firmware version query
-      RCLCPP_DEBUG_STREAM(
-          logger_, "Current device not support ISP firmware version query: " << e.getMessage());
+      RCLCPP_DEBUG_STREAM(logger_, "Current device not support ISP firmware version query: "
+                                       << orbbec_camera::formatObErrorWithStatus(e));
     }
     RCLCPP_INFO_STREAM(logger_, "usb connect type: " << device_info_->getConnectionType());
   });
