@@ -37,6 +37,11 @@ def generate_launch_arguments():
         DeclareLaunchArgument('trigger_out_enabled', default_value='true'),
         DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
+        DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_depth_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_ir_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_left_ir_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_right_ir_undistortion', default_value='false'),
         #instra-process demo set
         DeclareLaunchArgument('use_intra_process_comms', default_value='false'),
         DeclareLaunchArgument('attach_component_container_enable', default_value='false'),

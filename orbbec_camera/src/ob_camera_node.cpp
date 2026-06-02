@@ -2409,6 +2409,136 @@ void OBCameraNode::setupColorPostProcessFilter() {
     }
   }
 }
+
+void OBCameraNode::setupIrPostProcessFilter() {
+  try {
+    auto ir_sensor = device_->getSensor(OB_SENSOR_IR);
+    ir_filter_list_ = ir_sensor->createRecommendedFilters();
+    if (ir_filter_list_.empty()) {
+      RCLCPP_WARN_STREAM(logger_, "Failed to get ir sensor filter list");
+    }
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to setup ir filters: "
+                                    << orbbec_camera::formatObErrorWithStatus(e));
+  }
+}
+
+void OBCameraNode::setupUndistortionFilters() {
+  auto remove_undistortion_filter = [](std::vector<std::shared_ptr<ob::Filter>> &filters) {
+    filters.erase(std::remove_if(filters.begin(), filters.end(),
+                                 [](const std::shared_ptr<ob::Filter> &filter) {
+                                   return filter && std::string(filter->type()) ==
+                                                        "UnDistortionFilter";
+                                 }),
+                  filters.end());
+  };
+
+  auto find_or_create_filter =
+      [&](std::vector<std::shared_ptr<ob::Filter>> &filters,
+          OBStreamType stream_type) -> std::shared_ptr<ob::UnDistortionFilter> {
+    for (auto &filter : filters) {
+      if (filter && std::string(filter->type()) == "UnDistortionFilter") {
+        auto undistortion_filter = filter->as<ob::UnDistortionFilter>();
+        undistortion_filter->setStreamType(stream_type);
+        undistortion_filter->enable(true);
+        return undistortion_filter;
+      }
+    }
+    auto undistortion_filter = std::make_shared<ob::UnDistortionFilter>(stream_type);
+    undistortion_filter->enable(true);
+    filters.push_back(undistortion_filter);
+    return undistortion_filter;
+  };
+
+  auto setup_stream_filter = [&](const stream_index_pair &stream_index,
+                                 std::vector<std::shared_ptr<ob::Filter>> &filters) {
+    if (!enable_stream_[stream_index] || !enable_undistortion_[stream_index]) {
+      return;
+    }
+    if (stream_index == LIDAR) {
+      RCLCPP_WARN_STREAM(logger_, "Undistortion is not supported for lidar stream");
+      return;
+    }
+    if (stream_index == COLOR && shouldUseHwD2CColorUndistortion()) {
+      remove_undistortion_filter(filters);
+      hw_d2c_color_undistortion_filter_ =
+          std::make_shared<ob::UnDistortionFilter>(OB_STREAM_COLOR);
+      hw_d2c_color_undistortion_filter_->enable(true);
+      RCLCPP_INFO_STREAM(logger_,
+                         "Enable color undistortion with HW D2C depth intrinsic projection");
+      return;
+    }
+    auto undistortion_filter = find_or_create_filter(filters, stream_index.first);
+    undistortion_filter->clearNewCameraMatrix();
+    RCLCPP_INFO_STREAM(logger_, "Enable " << stream_name_[stream_index] << " undistortion");
+  };
+
+  setup_stream_filter(COLOR, color_filter_list_);
+  setup_stream_filter(COLOR_LEFT, left_color_filter_list_);
+  setup_stream_filter(COLOR_RIGHT, right_color_filter_list_);
+  setup_stream_filter(DEPTH, depth_filter_list_);
+  setup_stream_filter(INFRA0, ir_filter_list_);
+  setup_stream_filter(INFRA1, left_ir_filter_list_);
+  setup_stream_filter(INFRA2, right_ir_filter_list_);
+}
+
+bool OBCameraNode::shouldUseHwD2CColorUndistortion() const {
+  auto color_undistortion = enable_undistortion_.find(COLOR);
+  return color_undistortion != enable_undistortion_.end() && color_undistortion->second &&
+         isDabaiASeriesForHwD2C(pid_) && depth_registration_ && align_mode_ == "HW" &&
+         align_target_stream_ == OB_STREAM_COLOR && enable_stream_.at(COLOR) &&
+         enable_stream_.at(DEPTH);
+}
+
+void OBCameraNode::configureHwD2CColorUndistortion(const std::shared_ptr<ob::Frame> &depth_frame) {
+  if (!hw_d2c_color_undistortion_filter_ || hw_d2c_color_undistortion_configured_) {
+    return;
+  }
+  if (!depth_frame) {
+    RCLCPP_WARN_ONCE(logger_,
+                     "Skip HW D2C color undistortion setup because depth frame is not available");
+    return;
+  }
+  auto stream_profile = depth_frame->getStreamProfile();
+  if (!stream_profile) {
+    RCLCPP_WARN_ONCE(logger_,
+                     "Skip HW D2C color undistortion setup because depth stream profile is null");
+    return;
+  }
+  auto video_profile = stream_profile->as<ob::VideoStreamProfile>();
+  if (!video_profile) {
+    RCLCPP_WARN_ONCE(logger_,
+                     "Skip HW D2C color undistortion setup because depth profile is not video");
+    return;
+  }
+  hw_d2c_color_undistortion_filter_->setNewCameraMatrix(video_profile->getIntrinsic());
+  hw_d2c_color_undistortion_configured_ = true;
+  RCLCPP_INFO_STREAM(logger_,
+                     "Configured HW D2C color undistortion with depth camera intrinsic");
+}
+
+void OBCameraNode::applyHwD2CColorUndistortion(std::shared_ptr<ob::FrameSet> &frame_set,
+                                               const std::shared_ptr<ob::Frame> &depth_frame) {
+  if (!frame_set || !hw_d2c_color_undistortion_filter_) {
+    return;
+  }
+  configureHwD2CColorUndistortion(depth_frame);
+  if (!hw_d2c_color_undistortion_configured_) {
+    return;
+  }
+  auto undistorted_frame = hw_d2c_color_undistortion_filter_->process(frame_set);
+  if (!undistorted_frame) {
+    RCLCPP_WARN_STREAM(logger_, "HW D2C color undistortion filter returned null frame");
+    return;
+  }
+  auto undistorted_frame_set = undistorted_frame->as<ob::FrameSet>();
+  if (!undistorted_frame_set) {
+    RCLCPP_WARN_STREAM(logger_, "HW D2C color undistortion filter returned non-frameset output");
+    return;
+  }
+  frame_set = undistorted_frame_set;
+}
+
 void OBCameraNode::setupLeftIrPostProcessFilter() {
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
@@ -3341,6 +3471,8 @@ void OBCameraNode::getParameters() {
     setAndGetNodeParameter<std::string>(image_qos_[stream_index], param_name, "default");
     param_name = stream_name_[stream_index] + "_camera_info_qos";
     setAndGetNodeParameter<std::string>(camera_info_qos_[stream_index], param_name, "default");
+    param_name = "enable_" + stream_name_[stream_index] + "_undistortion";
+    setAndGetNodeParameter<bool>(enable_undistortion_[stream_index], param_name, false);
   }
 
   for (auto stream_index : IMAGE_STREAMS) {
@@ -3539,7 +3671,6 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(max_depth_limit_, "max_depth_limit", 0);
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
-  setAndGetNodeParameter<bool>(enable_color_undistortion_, "enable_color_undistortion", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
   setAndGetNodeParameter<bool>(enable_frame_timestamp_csv_, "enable_frame_timestamp_csv", false);
   setAndGetNodeParameter<std::string>(frame_timestamp_csv_file_, "frame_timestamp_csv_file", "");
@@ -3570,7 +3701,7 @@ void OBCameraNode::getParameters() {
     depth_registration_ = false;
     enable_d2c_viewer_ = false;
     enable_depth_filter_ = false;
-    enable_color_undistortion_ = false;
+    enable_undistortion_[COLOR] = false;
   }
 
   if (isOpenNIDevice(pid_)) {
@@ -3672,12 +3803,16 @@ void OBCameraNode::setupTopics() {
     if (enable_stream_[COLOR] || enable_stream_[COLOR_LEFT] || enable_stream_[COLOR_RIGHT]) {
       setupColorPostProcessFilter();
     }
+    if (enable_stream_[INFRA0]) {
+      setupIrPostProcessFilter();
+    }
     if (enable_stream_[INFRA2]) {
       setupRightIrPostProcessFilter();
     }
     if (enable_stream_[INFRA1]) {
       setupLeftIrPostProcessFilter();
     }
+    setupUndistortionFilters();
     syncConfigJsonDeviceSettings();
     syncConfigJsonFilterSettings(depth_filter_list_, "depth");
     syncConfigJsonFilterSettings(color_filter_list_, "color");
@@ -3962,19 +4097,6 @@ void OBCameraNode::setupPublishers() {
               name + "/metadata",
               rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
                           camera_info_qos_profile));
-    }
-    if (stream_index == COLOR && enable_color_undistortion_) {
-      color_undistortion_camera_info_publisher_ = node_->create_publisher<CameraInfo>(
-          "color/camera_info_undistorted",
-          rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
-                      camera_info_qos_profile));
-      if (use_intra_process_) {
-        color_undistortion_publisher_ = std::make_shared<image_rcl_publisher>(
-            *node_, "color/image_undistorted", image_qos_profile);
-      } else {
-        color_undistortion_publisher_ = std::make_shared<image_transport_publisher>(
-            *node_, "color/image_undistorted", image_qos_profile);
-      }
     }
   }
 
@@ -4370,6 +4492,24 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
 
   depth_registration_cloud_pub_->publish(std::move(point_cloud_msg));
 }
+std::shared_ptr<ob::Frame> OBCameraNode::processIrFrameFilter(std::shared_ptr<ob::Frame> &frame) {
+  if (frame == nullptr || frame->getType() != OB_FRAME_IR) {
+    return nullptr;
+  }
+  for (size_t i = 0; i < ir_filter_list_.size(); i++) {
+    auto filter = ir_filter_list_[i];
+    CHECK_NOTNULL(filter.get());
+    if (filter->isEnabled() && frame != nullptr) {
+      frame = filter->process(frame);
+      if (frame == nullptr) {
+        RCLCPP_ERROR_STREAM(logger_, "Ir filter process failed");
+        break;
+      }
+    }
+  }
+  return frame;
+}
+
 std::shared_ptr<ob::Frame> OBCameraNode::processRightIrFrameFilter(
     std::shared_ptr<ob::Frame> &frame) {
   if (frame == nullptr || frame->getType() != OB_FRAME_IR_RIGHT) {
@@ -4644,6 +4784,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     auto left_color_frame = frame_set->getFrame(OB_FRAME_COLOR_LEFT);
     auto right_color_frame = frame_set->getFrame(OB_FRAME_COLOR_RIGHT);
     auto ir_frame = frame_set->getFrame(OB_FRAME_IR);
+    auto depth_frame_for_hw_d2c_undistortion = depth_frame;
     if (depth_frame) {
       setDisparitySearchOffset();
       setDepthAutoExposureROI();
@@ -4652,6 +4793,11 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
         frame_set->pushFrame(depth_frame);
         fps_counter_depth_->tick();
       }
+    }
+    if (shouldUseHwD2CColorUndistortion() && color_frame) {
+      applyHwD2CColorUndistortion(frame_set, depth_frame_for_hw_d2c_undistortion);
+      depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
+      color_frame = frame_set->getFrame(OB_FRAME_COLOR);
     }
     if (color_frame) {
       setColorAutoExposureROI();
@@ -4677,6 +4823,12 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       right_ir_frame = processRightIrFrameFilter(right_ir_frame);
       frame_set->pushFrame(right_ir_frame);
       fps_counter_right_ir_->tick();
+    }
+    if (ir_frame) {
+      ir_frame = processIrFrameFilter(ir_frame);
+      if (ir_frame) {
+        frame_set->pushFrame(ir_frame);
+      }
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
       publishRawDepthImage(depth_frame);
@@ -4938,9 +5090,6 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
   if (image_publishers_.count(stream_index) && image_publishers_.at(stream_index)) {
     has_subscriber = image_publishers_.at(stream_index)->get_subscription_count() > 0;
   }
-  if (stream_index == COLOR && enable_color_undistortion_ && color_undistortion_publisher_) {
-    has_subscriber = true;
-  }
   if (save_images_[stream_index]) {
     has_subscriber = true;
   }
@@ -5047,10 +5196,8 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   const bool has_raw_image_subscriber =
       image_publishers_[stream_index]->get_subscription_count() > 0;
   const bool has_compressed_image_subscriber = hasCompressedImageSubscriber(stream_index);
-  const bool enable_undistortion_publish =
-      (stream_index == COLOR && enable_color_undistortion_ && color_undistortion_publisher_);
   bool has_subscriber = has_raw_image_subscriber || has_compressed_image_subscriber ||
-                        enable_undistortion_publish || save_images_[stream_index];
+                        save_images_[stream_index];
   has_subscriber =
       has_subscriber || camera_info_publishers_[stream_index]->get_subscription_count() > 0;
   has_subscriber =
@@ -5166,7 +5313,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     }
   }
 
-  if (!has_raw_image_subscriber && !enable_undistortion_publish && !save_images_[stream_index]) {
+  if (!has_raw_image_subscriber && !save_images_[stream_index]) {
     CHECK(camera_info_publishers_.count(stream_index) > 0);
     camera_info_publishers_[stream_index]->publish(camera_info);
     publishMetadata(frame, stream_index, camera_info.header);
@@ -5177,8 +5324,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (image.empty() || image.cols != width || image.rows != height) {
     image.create(height, width, image_format_[stream_index]);
   }
-  if (isColorFrameDecodeRequired(frame) &&
-      (has_raw_image_subscriber || enable_undistortion_publish || save_images_[stream_index])) {
+  if (isColorFrameDecodeRequired(frame) && (has_raw_image_subscriber || save_images_[stream_index])) {
     if (frame->getType() == OB_FRAME_COLOR && !is_color_frame_decoded_) {
       RCLCPP_ERROR(logger_, "color frame is not decoded");
       return;
@@ -5200,41 +5346,6 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     }
   } else {
     memcpy(image.data, video_frame->getData(), video_frame->getDataSize());
-  }
-
-  if (enable_undistortion_publish) {
-    auto undistort_result = undistortImage(image, intrinsic, distortion);
-    sensor_msgs::msg::Image::UniquePtr undistorted_image_msg(new sensor_msgs::msg::Image());
-    cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], undistort_result.image)
-        .toImageMsg(*undistorted_image_msg);
-    CHECK_NOTNULL(undistorted_image_msg.get());
-    undistorted_image_msg->header.stamp = timestamp;
-    undistorted_image_msg->is_bigendian = false;
-    undistorted_image_msg->step = width * unit_step_size_[stream_index];
-    undistorted_image_msg->header.frame_id = frame_id;
-    color_undistortion_publisher_->publish(std::move(undistorted_image_msg));
-
-    if (color_undistortion_camera_info_publisher_) {
-      auto undistorted_camera_info = camera_info;
-      const auto distortion_coeff_count =
-          undistorted_camera_info.d.empty() ? 5 : undistorted_camera_info.d.size();
-      undistorted_camera_info.d.assign(distortion_coeff_count, 0.0);
-      undistorted_camera_info.distortion_model = sensor_msgs::distortion_models::PLUMB_BOB;
-      undistorted_camera_info.roi.do_rectify = false;
-      undistorted_camera_info.k.fill(0.0);
-      undistorted_camera_info.k.at(0) = undistort_result.new_intrinsic.fx;
-      undistorted_camera_info.k.at(4) = undistort_result.new_intrinsic.fy;
-      undistorted_camera_info.k.at(2) = undistort_result.new_intrinsic.cx;
-      undistorted_camera_info.k.at(5) = undistort_result.new_intrinsic.cy;
-      undistorted_camera_info.k.at(8) = 1.0;
-      undistorted_camera_info.p.fill(0.0);
-      undistorted_camera_info.p.at(0) = undistort_result.new_intrinsic.fx;
-      undistorted_camera_info.p.at(5) = undistort_result.new_intrinsic.fy;
-      undistorted_camera_info.p.at(2) = undistort_result.new_intrinsic.cx;
-      undistorted_camera_info.p.at(6) = undistort_result.new_intrinsic.cy;
-      undistorted_camera_info.p.at(10) = 1.0;
-      color_undistortion_camera_info_publisher_->publish(undistorted_camera_info);
-    }
   }
 
   CHECK(camera_info_publishers_.count(stream_index) > 0);
@@ -5889,6 +6000,11 @@ bool OBCameraNode::isGemini335PID(uint32_t pid) {
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 bool OBCameraNode::isPublishMetaData(uint32_t pid) {
   return isGemini335PID(pid) || isGemini435LePID(pid) || isGemini305SeriesPID(pid);
+}
+
+bool OBCameraNode::isDabaiASeriesForHwD2C(uint32_t pid) {
+  return pid == DABAI_A_PID || pid == DABAI_AL_PID || pid == GEMINI_345_PID ||
+         pid == GEMINI_345LG_PID;
 }
 
 bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) { return pid == GEMINI_435Le_PID; }

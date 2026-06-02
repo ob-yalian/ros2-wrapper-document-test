@@ -143,6 +143,10 @@ def generate_launch_description():
         DeclareLaunchArgument('time_domain', default_value='global'),
         DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
+        DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_depth_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_left_ir_undistortion', default_value='false'),
+        DeclareLaunchArgument('enable_right_ir_undistortion', default_value='false'),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
         DeclareLaunchArgument('show_fps_enable', default_value='false'),
 
