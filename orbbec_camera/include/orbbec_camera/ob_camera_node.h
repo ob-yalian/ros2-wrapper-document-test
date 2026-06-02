@@ -479,6 +479,8 @@ class OBCameraNode {
 
   std::shared_ptr<ob::Frame> processLeftIrFrameFilter(std::shared_ptr<ob::Frame>& frame);
 
+  std::shared_ptr<ob::Frame> processIrFrameFilter(std::shared_ptr<ob::Frame>& frame);
+
   uint64_t getFrameTimestampUs(const std::shared_ptr<ob::Frame>& frame);
 
   void onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set);
@@ -538,14 +540,21 @@ class OBCameraNode {
 
   static bool isGemini435LePID(uint32_t pid);
   static bool isPublishMetaData(uint32_t pid);
+  static bool isDabaiASeriesForHwD2C(uint32_t pid);
 
   static bool isDepthWorkModeDevices(uint32_t pid);
   static bool isnotLaserDevices(uint32_t pid);
 
   void setupDepthPostProcessFilter();
   void setupColorPostProcessFilter();
+  void setupIrPostProcessFilter();
   void setupRightIrPostProcessFilter();
   void setupLeftIrPostProcessFilter();
+  void setupUndistortionFilters();
+  bool shouldUseHwD2CColorUndistortion() const;
+  void configureHwD2CColorUndistortion(const std::shared_ptr<ob::Frame>& depth_frame);
+  void applyHwD2CColorUndistortion(std::shared_ptr<ob::FrameSet>& frame_set,
+                                   const std::shared_ptr<ob::Frame>& depth_frame);
 
   // interleave AE
   int init_interleave_hdr_param();
@@ -919,10 +928,9 @@ class OBCameraNode {
   std::chrono::milliseconds software_trigger_period_{33};
   bool enable_heartbeat_ = false;
   bool enable_firmware_log_ = false;
-  bool enable_color_undistortion_ = false;
-  std::shared_ptr<image_publisher> color_undistortion_publisher_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr
-      color_undistortion_camera_info_publisher_;
+  std::map<stream_index_pair, bool> enable_undistortion_;
+  std::shared_ptr<ob::UnDistortionFilter> hw_d2c_color_undistortion_filter_;
+  bool hw_d2c_color_undistortion_configured_ = false;
   bool has_first_color_frame_ = false;
   bool use_intra_process_ = false;
   std::string cloud_frame_id_;
@@ -931,6 +939,7 @@ class OBCameraNode {
   std::vector<std::shared_ptr<ob::Filter>> color_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_color_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> right_color_filter_list_;
+  std::vector<std::shared_ptr<ob::Filter>> ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> right_ir_filter_list_;
 

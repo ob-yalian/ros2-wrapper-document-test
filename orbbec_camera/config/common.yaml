@@ -122,6 +122,8 @@ orbbec_ros:
       depth_flip: false
       # If false, the depth scale will not be enabled
       enable_depth_scale: true
+      # If true, the depth image will be undistorted
+      enable_depth_undistortion: false
       # Depth accuracy, the format should be 1mm. The default value is 1mm.
       depth_precision: ""
 
@@ -260,6 +262,8 @@ orbbec_ros:
       left_ir_fps: 0
       # Format of the left IR image. Supported formats are 'Y8'
       left_ir_format: "ANY"
+      # If true, the left IR image will be undistorted
+      enable_left_ir_undistortion: false
 
     rightir:
       # If false, the right IR image will not be enabled
@@ -278,6 +282,8 @@ orbbec_ros:
       right_ir_fps: 0
       # Format of the right IR image. Supported formats are 'Y8'
       right_ir_format: "ANY"
+      # If true, the right IR image will be undistorted
+      enable_right_ir_undistortion: false
 
     ir:
       # If false, the left IR image will not be enabled
@@ -296,6 +302,8 @@ orbbec_ros:
       ir_fps: 0
       # Format of the IR image. Supported formats are 'Y8'
       ir_format: "Y8"
+      # If true, the IR image will be undistorted
+      enable_ir_undistortion: false
 
     ir_parameters:
       # If false, the IR image auto exposure will not be enabled
