@@ -87,6 +87,8 @@ class OBCameraNodeDriver : public rclcpp::Node {
 
   OBDeviceAccessMode stringToAccessMode(const std::string& mode_str);
   std::string accessModeToString(OBDeviceAccessMode mode);
+  OBClockType timestampClockTypeFromString(const std::string& clock_type_str);
+  std::string timestampClockTypeToString(OBClockType clock_type);
 
  private:
   const rclcpp::NodeOptions node_options_;
@@ -131,6 +133,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
   int connection_delay_ = 100;
   bool enable_sync_host_time_ = true;
   std::chrono::milliseconds time_sync_period_{6000};
+  std::string timestamp_clock_type_str_;
   std::string preset_firmware_path_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr reboot_device_srv_ = nullptr;
   std::chrono::time_point<std::chrono::system_clock> start_time_;

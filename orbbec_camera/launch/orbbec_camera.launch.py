@@ -28,6 +28,7 @@ def generate_launch_arguments():
         DeclareLaunchArgument('camera_model', default_value=default_camera_model),
         DeclareLaunchArgument('config_file_path', default_value=''),
         DeclareLaunchArgument('log_level', default_value='none'),
+        DeclareLaunchArgument('timestamp_clock_type', default_value=''),  # realtime or monotonic, default is realtime.
         #multi-device sync param
         DeclareLaunchArgument('camera_name', default_value='camera'),
         DeclareLaunchArgument('usb_port', default_value=''),
