@@ -967,6 +967,7 @@ void OBCameraNode::setupDevices() {
     sync_config.framesPerTrigger = frames_per_trigger_;
     TRY_EXECUTE_BLOCK(device_->setMultiDeviceSyncConfig(sync_config));
     sync_config = device_->getMultiDeviceSyncConfig();
+    RCLCPP_INFO_STREAM(logger_, "Current device preset: " << device_->getCurrentPresetName());
     RCLCPP_INFO_STREAM(logger_,
                        "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
     if (sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING) {
@@ -1676,9 +1677,8 @@ void OBCameraNode::loadConfigJson() {
                                      << orbbec_camera::formatObErrorWithStatus(e) << "\"");
   } catch (const std::exception &e) {
     config_json_loaded_ = false;
-    RCLCPP_ERROR_STREAM(logger_, "Config JSON load failed file=" << resolved_file_path_str
-                                                                 << " error=\"" << e.what()
-                                                                 << "\"");
+    RCLCPP_ERROR_STREAM(logger_, "Config JSON load failed file="
+                                     << resolved_file_path_str << " error=\"" << e.what() << "\"");
   } catch (...) {
     config_json_loaded_ = false;
     RCLCPP_ERROR_STREAM(logger_, "Config JSON load failed file=" << resolved_file_path_str);
@@ -1713,12 +1713,11 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
     return device_->isPropertySupported(property_id, OB_PERMISSION_WRITE) ||
            device_->isPropertySupported(property_id, OB_PERMISSION_READ_WRITE);
   };
-  auto log_readback = [this](const std::string &scope, const std::string &name,
-                             const auto &value) {
+  auto log_readback = [this](const std::string &scope, const std::string &name, const auto &value) {
     std::ostringstream ss;
     ss << std::boolalpha << value;
-    RCLCPP_INFO_STREAM(logger_, "Config final readback [" << scope << "] " << name << "="
-                                                          << ss.str());
+    RCLCPP_INFO_STREAM(logger_,
+                       "Config final readback [" << scope << "] " << name << "=" << ss.str());
   };
   auto log_readback_fields = [this](const std::string &scope, const std::string &fields) {
     RCLCPP_INFO_STREAM(logger_, "Config final readback [" << scope << "] " << fields);
@@ -1805,8 +1804,8 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
     device_preset_ = device_->getCurrentPresetName();
     log_readback("depth", "device_preset", device_preset_);
   } catch (const std::exception &e) {
-    RCLCPP_DEBUG_STREAM(logger_, "Config final readback failed [depth] device_preset error=\""
-                                    << e.what() << "\"");
+    RCLCPP_DEBUG_STREAM(
+        logger_, "Config final readback failed [depth] device_preset error=\"" << e.what() << "\"");
   }
 
   if (can_read(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT)) {
@@ -1834,7 +1833,8 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
   sync_int("depth", "ir_gain", ir_gain_, OB_PROP_IR_GAIN_INT);
   if (can_read(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT)) {
     try {
-      const auto depth_unit = device_->getFloatProperty(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT);
+      const auto depth_unit =
+          device_->getFloatProperty(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT);
       depth_precision_str_ = std::to_string(depth_unit) + "mm";
       log_readback("depth", "depth_unit", depth_unit);
       log_readback("depth", "depth_precision", depth_precision_str_);
@@ -1930,7 +1930,7 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
                             fields.str());
       } catch (const std::exception &e) {
         RCLCPP_DEBUG_STREAM(logger_, "Config final readback failed [depth.interleave.params."
-                                        << config_index << "] error=\"" << e.what() << "\"");
+                                         << config_index << "] error=\"" << e.what() << "\"");
       }
     };
 
@@ -1955,8 +1955,8 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
         device_->setIntProperty(OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT,
                                 original_interleave_index);
       } catch (const std::exception &e) {
-        RCLCPP_DEBUG_STREAM(logger_, "Failed to restore frame_interleave.config_index: "
-                                        << e.what());
+        RCLCPP_DEBUG_STREAM(logger_,
+                            "Failed to restore frame_interleave.config_index: " << e.what());
       }
     }
   }
@@ -2075,12 +2075,11 @@ void OBCameraNode::syncConfigJsonFilterSettings(
   auto filter_scope = [&](const std::string &filter_name) {
     return "filter." + sensor_name + "." + normalizeDepthFilterName(filter_name);
   };
-  auto log_readback = [this](const std::string &scope, const std::string &name,
-                             const auto &value) {
+  auto log_readback = [this](const std::string &scope, const std::string &name, const auto &value) {
     std::ostringstream ss;
     ss << std::boolalpha << value;
-    RCLCPP_INFO_STREAM(logger_, "Config final readback [" << scope << "] " << name << "="
-                                                          << ss.str());
+    RCLCPP_INFO_STREAM(logger_,
+                       "Config final readback [" << scope << "] " << name << "=" << ss.str());
   };
   auto log_readback_fields = [this](const std::string &scope, const std::string &fields) {
     RCLCPP_INFO_STREAM(logger_, "Config final readback [" << scope << "] " << fields);
@@ -2390,7 +2389,8 @@ void OBCameraNode::setupColorPostProcessFilter() {
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
   if (pid_ == GEMINI2_PID || pid_ == GEMINI2L_PID) {
-    if (isLaunchParamProvided("enable_color_decimation_filter") && enable_color_decimation_filter_) {
+    if (isLaunchParamProvided("enable_color_decimation_filter") &&
+        enable_color_decimation_filter_) {
       auto decimation_filter = std::make_shared<ob::DecimationFilter>();
       decimation_filter->enable(true);
       color_filter_list_.push_back(decimation_filter);
@@ -2418,8 +2418,8 @@ void OBCameraNode::setupIrPostProcessFilter() {
       RCLCPP_WARN_STREAM(logger_, "Failed to get ir sensor filter list");
     }
   } catch (const ob::Error &e) {
-    RCLCPP_WARN_STREAM(logger_, "Failed to setup ir filters: "
-                                    << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_WARN_STREAM(logger_,
+                       "Failed to setup ir filters: " << orbbec_camera::formatObErrorWithStatus(e));
   }
 }
 
@@ -2427,8 +2427,8 @@ void OBCameraNode::setupUndistortionFilters() {
   auto remove_undistortion_filter = [](std::vector<std::shared_ptr<ob::Filter>> &filters) {
     filters.erase(std::remove_if(filters.begin(), filters.end(),
                                  [](const std::shared_ptr<ob::Filter> &filter) {
-                                   return filter && std::string(filter->type()) ==
-                                                        "UnDistortionFilter";
+                                   return filter &&
+                                          std::string(filter->type()) == "UnDistortionFilter";
                                  }),
                   filters.end());
   };
@@ -2461,8 +2461,7 @@ void OBCameraNode::setupUndistortionFilters() {
     }
     if (stream_index == COLOR && shouldUseHwD2CColorUndistortion()) {
       remove_undistortion_filter(filters);
-      hw_d2c_color_undistortion_filter_ =
-          std::make_shared<ob::UnDistortionFilter>(OB_STREAM_COLOR);
+      hw_d2c_color_undistortion_filter_ = std::make_shared<ob::UnDistortionFilter>(OB_STREAM_COLOR);
       hw_d2c_color_undistortion_filter_->enable(true);
       RCLCPP_INFO_STREAM(logger_,
                          "Enable color undistortion with HW D2C depth intrinsic projection");
@@ -2513,8 +2512,7 @@ void OBCameraNode::configureHwD2CColorUndistortion(const std::shared_ptr<ob::Fra
   }
   hw_d2c_color_undistortion_filter_->setNewCameraMatrix(video_profile->getIntrinsic());
   hw_d2c_color_undistortion_configured_ = true;
-  RCLCPP_INFO_STREAM(logger_,
-                     "Configured HW D2C color undistortion with depth camera intrinsic");
+  RCLCPP_INFO_STREAM(logger_, "Configured HW D2C color undistortion with depth camera intrinsic");
 }
 
 void OBCameraNode::applyHwD2CColorUndistortion(std::shared_ptr<ob::FrameSet> &frame_set,
@@ -2920,9 +2918,9 @@ void OBCameraNode::setupProfiles() {
         }
 
       } catch (const ob::Error &ex) {
-        RCLCPP_ERROR_STREAM(
-            logger_, "Failed to get " << stream_name_[elem]
-                                      << "  profile: " << orbbec_camera::formatObErrorWithStatus(ex));
+        RCLCPP_ERROR_STREAM(logger_, "Failed to get "
+                                         << stream_name_[elem] << "  profile: "
+                                         << orbbec_camera::formatObErrorWithStatus(ex));
         RCLCPP_ERROR_STREAM(
             logger_, "Stream: " << magic_enum::enum_name(elem.first)
                                 << ", Stream Index: " << elem.second << ", Width: " << width_[elem]
@@ -4073,8 +4071,7 @@ void OBCameraNode::setupPublishers() {
       image_publishers_[stream_index] =
           std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
     }
-    if ((is_mjpg_color_stream) &&
-        format_[stream_index] == OB_FORMAT_MJPG) {
+    if ((is_mjpg_color_stream) && format_[stream_index] == OB_FORMAT_MJPG) {
       compressed_image_publishers_[stream_index] =
           node_->create_publisher<sensor_msgs::msg::CompressedImage>(
               topic + "/compressed",
@@ -5196,8 +5193,8 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   const bool has_raw_image_subscriber =
       image_publishers_[stream_index]->get_subscription_count() > 0;
   const bool has_compressed_image_subscriber = hasCompressedImageSubscriber(stream_index);
-  bool has_subscriber = has_raw_image_subscriber || has_compressed_image_subscriber ||
-                        save_images_[stream_index];
+  bool has_subscriber =
+      has_raw_image_subscriber || has_compressed_image_subscriber || save_images_[stream_index];
   has_subscriber =
       has_subscriber || camera_info_publishers_[stream_index]->get_subscription_count() > 0;
   has_subscriber =
@@ -5324,7 +5321,8 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (image.empty() || image.cols != width || image.rows != height) {
     image.create(height, width, image_format_[stream_index]);
   }
-  if (isColorFrameDecodeRequired(frame) && (has_raw_image_subscriber || save_images_[stream_index])) {
+  if (isColorFrameDecodeRequired(frame) &&
+      (has_raw_image_subscriber || save_images_[stream_index])) {
     if (frame->getType() == OB_FRAME_COLOR && !is_color_frame_decoded_) {
       RCLCPP_ERROR(logger_, "color frame is not decoded");
       return;
@@ -6274,8 +6272,8 @@ bool OBCameraNode::applyNamedDepthFilterConfig(
   existing_filter->enable(enabled);
   for (const auto &parsed_param : parsed_params) {
     existing_filter->setConfigValue(parsed_param.first, parsed_param.second);
-    RCLCPP_INFO_STREAM(logger_, "Set " << normalized_filter_name << " config "
-                                       << parsed_param.first << " to " << parsed_param.second);
+    RCLCPP_INFO_STREAM(logger_, "Set " << normalized_filter_name << " config " << parsed_param.first
+                                       << " to " << parsed_param.second);
   }
   updateDepthFilterEnabledCache(normalized_filter_name, enabled);
   return true;
