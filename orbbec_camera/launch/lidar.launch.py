@@ -168,7 +168,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'log_level',
-            default_value='none',
+            default_value='info',
             description='Shared SDK and ROS log level: none, debug, info, warn, error, fatal.'
         ),
         DeclareLaunchArgument(

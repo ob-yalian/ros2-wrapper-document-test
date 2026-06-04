@@ -44,6 +44,16 @@ std::string getLogDirectoryForCamera(const std::string &camera_name) {
   std::string home_dir = std::getenv("HOME") ? std::getenv("HOME") : "";
   return (std::filesystem::path(home_dir) / ".ros" / "Log" / camera_name).string();
 }
+
+std::string makeDefaultSdkLogFileName() {
+  const std::time_t now_time = std::time(nullptr);
+  std::tm tm{};
+  localtime_r(&now_time, &tm);
+
+  std::ostringstream file_name;
+  file_name << std::put_time(&tm, "%Y%m%d_%H%M%S") << ".log";
+  return file_name.str();
+}
 }  // namespace
 
 void signalHandler(int sig) {
@@ -232,7 +242,7 @@ void OBCameraNodeDriver::init() {
   signal(SIGTERM, signalHandler);
   ob::Context::setExtensionsDirectory(extension_path_.c_str());
   g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name);
-  auto log_level_str = declare_parameter<std::string>("log_level", "none");
+  auto log_level_str = declare_parameter<std::string>("log_level", "info");
   auto log_level = obLogSeverityFromString(log_level_str);
   auto ros_log_level = rosLogSeverityFromString(log_level_str);
   auto log_file_name = declare_parameter<std::string>("log_file_name", "");
@@ -246,15 +256,16 @@ void OBCameraNodeDriver::init() {
       RCLCPP_WARN_STREAM(logger_, "Failed to set ROS log level to " << log_level_str);
     }
   }
-  // Set custom log file name if specified
-  if (!log_file_name.empty()) {
-    try {
-      ob::Context::setLoggerFileName(log_file_name);
-      RCLCPP_INFO_STREAM(logger_, "SDK log file name set to: " << log_file_name);
-    } catch (const ob::Error &e) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to set SDK log file name: "
-                                      << orbbec_camera::formatObErrorWithStatus(e));
-    }
+  if (log_file_name.empty()) {
+    log_file_name = makeDefaultSdkLogFileName();
+  }
+  try {
+    ob::Context::setLoggerFileName(log_file_name);
+    RCLCPP_INFO_STREAM(logger_, "SDK log file path set to: "
+                                    << (std::filesystem::path(log_path) / log_file_name).string());
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(
+        logger_, "Failed to set SDK log file name: " << orbbec_camera::formatObErrorWithStatus(e));
   }
   // Force IP
   force_ip_enable_ = declare_parameter<bool>("force_ip_enable", false);

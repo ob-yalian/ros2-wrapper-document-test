@@ -154,7 +154,7 @@ def generate_launch_description():
         DeclareLaunchArgument('net_device_ip', default_value=''),
         DeclareLaunchArgument('net_device_port', default_value='0'),
         DeclareLaunchArgument('device_access_mode', default_value='Default'),
-        DeclareLaunchArgument('log_level', default_value='none'),
+        DeclareLaunchArgument('log_level', default_value='info'),
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('config_file_path', default_value=''),
 

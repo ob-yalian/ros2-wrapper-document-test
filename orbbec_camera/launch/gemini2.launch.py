@@ -44,7 +44,7 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_color_auto_white_balance", default_value="true"),
         DeclareLaunchArgument("color_white_balance", default_value="-1"),
         DeclareLaunchArgument("color_brightness", default_value="-1"),
-        DeclareLaunchArgument('color_denoising_level', default_value='-1')
+        DeclareLaunchArgument('color_denoising_level', default_value='-1'),
         DeclareLaunchArgument('enable_color_decimation_filter', default_value='false'),
         DeclareLaunchArgument('color_decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument("depth_width", default_value="0"),
@@ -85,7 +85,7 @@ def generate_launch_description():
         DeclareLaunchArgument("tf_publish_rate", default_value="0.0"),
         DeclareLaunchArgument("ir_info_url", default_value=""),
         DeclareLaunchArgument("color_info_url", default_value=""),
-        DeclareLaunchArgument("log_level", default_value="none"),
+        DeclareLaunchArgument("log_level", default_value="info"),
         DeclareLaunchArgument("log_file_name", default_value=""),
         DeclareLaunchArgument("enable_publish_extrinsic", default_value="false"),
         DeclareLaunchArgument("enable_d2c_viewer", default_value="false"),
