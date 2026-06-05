@@ -181,36 +181,6 @@
       xyz="0 0 0" />
   </joint>
   <link
-    name="USB">
-    <inertial>
-      <origin
-        xyz="-6.85782796221099E-05 -0.000107475646444261 -9.37341657112484E-06"
-        rpy="0 0 0" />
-      <mass
-        value="0.000124823132660932" />
-      <inertia
-        ixx="9.1168959979051E-10"
-        ixy="-1.5447084285369E-12"
-        ixz="-1.47259149967294E-12"
-        iyy="1.405009962927E-09"
-        iyz="-2.08275831584529E-14"
-        izz="6.96711715818641E-10" />
-    </inertial>
-  </link>
-  <joint
-    name="USB"
-    type="fixed">
-    <origin
-      xyz="-0.00269500000000168 -0.014696049020854 0.0209939609854729"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="USB" />
-    <axis
-      xyz="0 0 0" />
-  </joint>
-  <link
     name="camera_rear_screw_R">
     <inertial>
       <origin

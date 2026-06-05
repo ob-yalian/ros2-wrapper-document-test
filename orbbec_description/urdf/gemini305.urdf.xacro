@@ -128,59 +128,6 @@
       xyz="0 0 0" />
   </joint>
   <link
-    name="USB">
-    <inertial>
-      <origin
-        xyz="-0.0145044504711869 0.00256487494148787 0.000610136627693075"
-        rpy="0 0 0" />
-      <mass
-        value="0.0195706749601595" />
-      <inertia
-        ixx="3.90938897723015E-06"
-        ixy="-1.54949883302208E-09"
-        ixz="2.45880849146858E-08"
-        iyy="6.7877667129966E-06"
-        iyz="-9.63634999610214E-09"
-        izz="3.76189543642479E-06" />
-    </inertial>
-    <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
-      <geometry>
-        <mesh
-          filename="${mesh_path}USB.STL" />
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
-      </material>
-    </visual>
-    <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
-      <geometry>
-        <mesh
-          filename="${mesh_path}USB.STL" />
-      </geometry>
-    </collision>
-  </link>
-  <joint
-    name="USB"
-    type="fixed">
-    <origin
-      xyz="-0.00261829661165068 -0.014700000000115 0.0209999999999719"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="USB" />
-    <axis
-      xyz="0 0 0" />
-  </joint>
-  <link
     name="camera_rear_screw_R">
     <inertial>
       <origin
