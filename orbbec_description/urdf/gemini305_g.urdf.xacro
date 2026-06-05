@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="gemini305_g">
+  <xacro:property name="mesh_path" value="package://orbbec_description/meshes/gemini305_g/" />
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="0.000149164489798296 -0.00906695064573543 -0.0207909592259398"
+        rpy="0 0 0" />
+      <mass
+        value="0.033546716795485" />
+      <inertia
+        ixx="6.61619826485559E-06"
+        ixy="-3.93814864956883E-09"
+        ixz="3.50980830227358E-08"
+        iyy="1.15876789717806E-05"
+        iyz="1.05717082804933E-08"
+        izz="6.08547247005231E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.631372549019608 0.686274509803922 0.749019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="camera_bottom_screw">
+    <inertial>
+      <origin
+        xyz="9.11600953309166E-05 -0.00320635295652284 -0.020524426961246"
+        rpy="0 0 0" />
+      <mass
+        value="0.0214423582709099" />
+      <inertia
+        ixx="4.83339010606525E-06"
+        ixy="-3.72329051071151E-09"
+        ixz="2.51447927275988E-08"
+        iyy="8.20575253145867E-06"
+        iyz="1.19581716252661E-08"
+        izz="4.32451827833792E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}camera_bottom_screw.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.631372549019608 0.686274509803922 0.749019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}camera_bottom_screw.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="camera_bottom_screw"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="camera_bottom_screw" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="RGB_R">
+    <inertial>
+      <origin
+        xyz="-1.1760228169691E-06 -0.0034693462830589 0.000376234001467315"
+        rpy="0 0 0" />
+      <mass
+        value="0.000735468334566907" />
+      <inertia
+        ixx="7.92202560415907E-09"
+        ixy="-1.95146774675994E-12"
+        ixz="-9.3353249049419E-12"
+        iyy="9.93176003014812E-09"
+        iyz="-6.12381828511411E-12"
+        izz="8.02751620920214E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}RGB_R.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.956862745098039 0.0470588235294118 0.874509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}RGB_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RGB_R"
+    type="fixed">
+    <origin
+      xyz="-0.00900395097915 0.008050000000001 -0.0209939609855011"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="RGB_R" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="RGB_L">
+    <inertial>
+      <origin
+        xyz="-1.17602281778789E-06 -0.00346934628305837 0.000376234001468578"
+        rpy="0 0 0" />
+      <mass
+        value="0.000735468334566977" />
+      <inertia
+        ixx="7.92202562203234E-09"
+        ixy="-1.95146773316258E-12"
+        ixz="-9.33532489896877E-12"
+        iyy="9.9317599983348E-09"
+        iyz="-6.12381825718017E-12"
+        izz="8.0275161952487E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}RGB_L.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.956862745098039 0.0470588235294118 0.874509803921569 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}RGB_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="RGB_L"
+    type="fixed">
+    <origin
+      xyz="0.00899604902085 0.008050000000001 -0.0209939609855011"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="RGB_L" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="USB">
+    <inertial>
+      <origin
+        xyz="-6.85782796221099E-05 -0.000107475646444261 -9.37341657112484E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.000124823132660932" />
+      <inertia
+        ixx="9.1168959979051E-10"
+        ixy="-1.5447084285369E-12"
+        ixz="-1.47259149967294E-12"
+        iyy="1.405009962927E-09"
+        iyz="-2.08275831584529E-14"
+        izz="6.96711715818641E-10" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}USB.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}USB.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="USB"
+    type="fixed">
+    <origin
+      xyz="0.014696049020854 -0.00269500000000168 -0.0209939609854729"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="USB" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="camera_rear_screw_R">
+    <inertial>
+      <origin
+        xyz="0.00694483634502586 -0.000403960805324607 -0.00046775323322587"
+        rpy="0 0 0" />
+      <mass
+        value="0.00885761204737663" />
+      <inertia
+        ixx="1.66869077460572E-06"
+        ixy="-2.55469491377221E-10"
+        ixz="7.6968875169436E-09"
+        iyy="3.1776766369675E-06"
+        iyz="-1.12550987680074E-09"
+        izz="1.63868643158484E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}camera_rear_screw_R.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.874509803921569 0.945098039215686 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}camera_rear_screw_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="camera_rear_screw_R"
+    type="fixed">
+    <origin
+      xyz="-0.00679999999999827 -0.02379999999999 -0.0209900000000301"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="camera_rear_screw_R" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="camera_rear_screw_L">
+    <inertial>
+      <origin
+        xyz="-0.00665516365497414 -0.000403960805324607 -0.00046775323322587"
+        rpy="0 0 0" />
+      <mass
+        value="0.00885761204737663" />
+      <inertia
+        ixx="1.66869077460572E-06"
+        ixy="-2.55469491377209E-10"
+        ixz="7.69688751694358E-09"
+        iyy="3.1776766369675E-06"
+        iyz="-1.12550987680075E-09"
+        izz="1.63868643158484E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}camera_rear_screw_L.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.874509803921569 0.945098039215686 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}camera_rear_screw_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="camera_rear_screw_L"
+    type="fixed">
+    <origin
+      xyz="0.00680000000000172 -0.02379999999999 -0.0209900000000301"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="camera_rear_screw_L" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="FAKRA">
+    <inertial>
+      <origin
+        xyz="-2.19014445062421E-07 0.0027197100224461 -0.00011127645937509"
+        rpy="0 0 0" />
+      <mass
+        value="0.000751156783355389" />
+      <inertia
+        ixx="1.51891738860674E-08"
+        ixy="4.67248857458133E-13"
+        ixz="-3.5218905561991E-13"
+        iyy="1.40267326812145E-08"
+        iyz="-2.75286777175686E-10"
+        izz="1.86427254797844E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}FAKRA.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}FAKRA.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="FAKRA"
+    type="fixed">
+    <origin
+      xyz="0 -0.033409999999996 -0.020993960985498"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="FAKRA" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>
