@@ -40,12 +40,14 @@ class Parameters {
   template <class T>
   void setParamValue(T& param, const T& value);  // function updates the parameter value both
                                                  // locally and in the parameters server
+  void syncParameterValue(const std::string& param_name, const std::string& value);
   void removeParam(const std::string& param_name);
 
  private:
  private:
   rclcpp::Node* node_;
   rclcpp::Logger logger_;
+  bool suppress_runtime_change_warning_ = false;
   std::map<std::string, std::vector<std::function<void(const rclcpp::Parameter&)> > >
       param_functions_;
   std::map<void*, std::string> param_names_;

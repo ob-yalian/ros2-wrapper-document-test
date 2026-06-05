@@ -23,6 +23,9 @@ Parameters::Parameters(rclcpp::Node *node)
       [this](const std::vector<rclcpp::Parameter> &parameters) {
         for (const auto &parameter : parameters) {
           if (param_functions_.find(parameter.get_name()) != param_functions_.end()) {
+            if (suppress_runtime_change_warning_) {
+              continue;
+            }
             auto functions = param_functions_[parameter.get_name()];
             if (functions.empty()) {
               RCLCPP_WARN_STREAM(logger_, "Parameter " << parameter.get_name()
@@ -127,6 +130,23 @@ void Parameters::setParamValue(T &param, const T &value) {
     RCLCPP_WARN_STREAM(logger_, "Parameter: " << param_name << " was not declared:" << e.what());
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, e.what());
+  }
+}
+
+void Parameters::syncParameterValue(const std::string &param_name, const std::string &value) {
+  const bool previous_suppression = suppress_runtime_change_warning_;
+  suppress_runtime_change_warning_ = true;
+  try {
+    rcl_interfaces::msg::SetParametersResult result =
+        node_->set_parameter(rclcpp::Parameter(param_name, value));
+    suppress_runtime_change_warning_ = previous_suppression;
+    if (!result.successful) {
+      RCLCPP_WARN_STREAM(logger_, "Parameter: " << param_name << " was not set: "
+                                                << result.reason);
+    }
+  } catch (const std::exception &e) {
+    suppress_runtime_change_warning_ = previous_suppression;
+    RCLCPP_WARN_STREAM(logger_, "Parameter: " << param_name << " was not set: " << e.what());
   }
 }
 

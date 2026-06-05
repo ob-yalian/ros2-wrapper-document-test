@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "orbbec_camera/utils.h"
 #include <filesystem>
@@ -155,6 +156,53 @@ std::string lowerFilterConfigValue(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return value;
+}
+
+std::string lowerParameterValue(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
+}
+
+std::string formatParameterValue(const std::string &value) {
+  return value.empty() ? std::string("\"\"") : "'" + value + "'";
+}
+
+std::string formatValidParameterValues(const std::vector<std::string> &valid_values) {
+  std::stringstream ss;
+  for (size_t i = 0; i < valid_values.size(); ++i) {
+    if (i != 0) {
+      ss << ", ";
+    }
+    ss << formatParameterValue(valid_values[i]);
+  }
+  return ss.str();
+}
+
+std::string normalizeClosedSetParameterValue(
+    const rclcpp::Logger &logger, const std::shared_ptr<Parameters> &parameters,
+    const std::string &param_name, const std::string &value,
+    const std::vector<std::string> &valid_values, const std::string &default_value) {
+  const auto lower_value = lowerParameterValue(value);
+  for (const auto &valid_value : valid_values) {
+    if (lower_value == lowerParameterValue(valid_value)) {
+      if (value != valid_value) {
+        parameters->syncParameterValue(param_name, valid_value);
+      }
+      return valid_value;
+    }
+  }
+
+  RCLCPP_WARN_STREAM(logger, "Invalid parameter " << param_name << " "
+                                                  << formatParameterValue(value)
+                                                  << ". Valid values: "
+                                                  << formatValidParameterValues(valid_values)
+                                                  << ". Falling back to "
+                                                  << formatParameterValue(default_value) << ".");
+  if (value != default_value) {
+    parameters->syncParameterValue(param_name, default_value);
+  }
+  return default_value;
 }
 
 bool parseFilterConfigDouble(const std::string &raw_value, double &parsed_value,
@@ -888,7 +936,7 @@ void OBCameraNode::setupDevices() {
     RCLCPP_DEBUG_STREAM(logger_, "Create align filter");
     align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
   }
-  if (should_apply_launch_config("disparity_to_depth_mode") &&
+  if (should_apply_launch_config("disparity_to_depth_mode") && !disparity_to_depth_mode_.empty() &&
       sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE) &&
       device_->isPropertySupported(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE)) {
@@ -2424,6 +2472,9 @@ void OBCameraNode::setupIrPostProcessFilter() {
 }
 
 void OBCameraNode::setupUndistortionFilters() {
+  hw_d2c_color_undistortion_filter_.reset();
+  hw_d2c_color_undistortion_configured_ = false;
+
   auto remove_undistortion_filter = [](std::vector<std::shared_ptr<ob::Filter>> &filters) {
     filters.erase(std::remove_if(filters.begin(), filters.end(),
                                  [](const std::shared_ptr<ob::Filter> &filter) {
@@ -2487,6 +2538,67 @@ bool OBCameraNode::shouldUseHwD2CColorUndistortion() const {
          isDabaiASeriesForHwD2C(pid_) && depth_registration_ && align_mode_ == "HW" &&
          align_target_stream_ == OB_STREAM_COLOR && enable_stream_.at(COLOR) &&
          enable_stream_.at(DEPTH);
+}
+
+bool OBCameraNode::isHwD2CProfileSupported() const {
+  if (!pipeline_) {
+    return false;
+  }
+  auto color_profile_iter = stream_profile_.find(COLOR);
+  auto depth_profile_iter = stream_profile_.find(DEPTH);
+  if (color_profile_iter == stream_profile_.end() || depth_profile_iter == stream_profile_.end() ||
+      !color_profile_iter->second || !depth_profile_iter->second) {
+    return false;
+  }
+
+  auto supported_profiles =
+      pipeline_->getD2CDepthProfileList(color_profile_iter->second, ALIGN_D2C_HW_MODE);
+  if (!supported_profiles || supported_profiles->count() == 0) {
+    return false;
+  }
+
+  auto selected_depth = depth_profile_iter->second->as<ob::VideoStreamProfile>();
+  if (!selected_depth) {
+    return false;
+  }
+  for (uint32_t i = 0; i < supported_profiles->getCount(); ++i) {
+    auto supported = supported_profiles->getProfile(i)->as<ob::VideoStreamProfile>();
+    if (!supported) {
+      continue;
+    }
+    if (supported->getWidth() == selected_depth->getWidth() &&
+        supported->getHeight() == selected_depth->getHeight() &&
+        supported->getFormat() == selected_depth->getFormat() &&
+        supported->getFps() == selected_depth->getFps()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool OBCameraNode::shouldUseGeneratedCameraInfo(const stream_index_pair &stream_index) const {
+  auto undistortion_iter = enable_undistortion_.find(stream_index);
+  if (undistortion_iter != enable_undistortion_.end() && undistortion_iter->second) {
+    return true;
+  }
+  if (stream_index == COLOR && hw_d2c_color_undistortion_configured_) {
+    return true;
+  }
+  if (!depth_registration_) {
+    return false;
+  }
+  return (stream_index == DEPTH && align_target_stream_ == OB_STREAM_COLOR) ||
+         (stream_index == COLOR && align_target_stream_ == OB_STREAM_DEPTH);
+}
+
+std::string OBCameraNode::getEffectiveOpticalFrameId(const stream_index_pair &stream_index) const {
+  if (depth_registration_ && stream_index == DEPTH && align_target_stream_ == OB_STREAM_COLOR) {
+    return optical_frame_id_.at(COLOR);
+  }
+  if (depth_registration_ && stream_index == COLOR && align_target_stream_ == OB_STREAM_DEPTH) {
+    return optical_frame_id_.at(DEPTH);
+  }
+  return optical_frame_id_.at(stream_index);
 }
 
 void OBCameraNode::configureHwD2CColorUndistortion(const std::shared_ptr<ob::Frame> &depth_frame) {
@@ -3516,6 +3628,9 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(point_cloud_qos_, "point_cloud_qos", "default");
   setAndGetNodeParameter<bool>(enable_d2c_viewer_, "enable_d2c_viewer", false);
   setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
+  disparity_to_depth_mode_ = normalizeClosedSetParameterValue(
+      logger_, parameters_, "disparity_to_depth_mode", disparity_to_depth_mode_,
+      {"", "HW", "SW", "disable"}, "");
   setAndGetNodeParameter<std::string>(depth_filter_config_, "depth_filter_config", "");
   if (!depth_filter_config_.empty()) {
     enable_depth_filter_ = true;
@@ -3657,11 +3772,23 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1);
   setAndGetNodeParameter<int>(hdr_merge_gain_2_, "hdr_merge_gain_2", -1);
   setAndGetNodeParameter<std::string>(align_mode_, "align_mode", "HW");
+  align_mode_ = normalizeClosedSetParameterValue(logger_, parameters_, "align_mode", align_mode_,
+                                                 {"HW", "SW"}, "HW");
   setAndGetNodeParameter<double>(diagnostic_period_, "diagnostic_period", 1.0);
   setAndGetNodeParameter<bool>(enable_laser_, "enable_laser", true);
   std::string align_target_stream_str_;
   setAndGetNodeParameter<std::string>(align_target_stream_str_, "align_target_stream", "COLOR");
+  align_target_stream_str_ =
+      normalizeClosedSetParameterValue(logger_, parameters_, "align_target_stream",
+                                       align_target_stream_str_, {"COLOR", "DEPTH"}, "COLOR");
   align_target_stream_ = obStreamTypeFromString(align_target_stream_str_);
+  if (depth_registration_ && align_mode_ == "HW" && align_target_stream_ != OB_STREAM_COLOR) {
+    RCLCPP_WARN_STREAM(logger_,
+                       "HW D2C only supports COLOR as align_target_stream; falling back to SW "
+                       "alignment for target "
+                           << align_target_stream_str_);
+    align_mode_ = "SW";
+  }
   setAndGetNodeParameter<bool>(retry_on_usb3_detection_failure_, "retry_on_usb3_detection_failure",
                                false);
   setAndGetNodeParameter<int>(laser_energy_level_, "laser_energy_level", -1);
@@ -3670,6 +3797,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
+  time_domain_ = normalizeClosedSetParameterValue(
+      logger_, parameters_, "time_domain", time_domain_, {"global", "device", "system"}, "global");
   setAndGetNodeParameter<bool>(enable_frame_timestamp_csv_, "enable_frame_timestamp_csv", false);
   setAndGetNodeParameter<std::string>(frame_timestamp_csv_file_, "frame_timestamp_csv_file", "");
   setAndGetNodeParameter<std::string>(exposure_range_mode_, "exposure_range_mode", "");
@@ -3750,6 +3879,9 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(offset_index1_, "offset_index1", -1);
 
   setAndGetNodeParameter<std::string>(frame_aggregate_mode_, "frame_aggregate_mode", "ANY");
+  frame_aggregate_mode_ = normalizeClosedSetParameterValue(
+      logger_, parameters_, "frame_aggregate_mode", frame_aggregate_mode_,
+      {"full_frame", "color_frame", "ANY", "disable"}, "ANY");
 
   setAndGetNodeParameter<bool>(show_fps_enable_, "show_fps_enable", false);
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
@@ -3983,6 +4115,15 @@ void OBCameraNode::setupPipelineConfig() {
   CHECK_NOTNULL(device_info.get());
   if (depth_registration_ && enable_stream_[COLOR] && enable_stream_[DEPTH] &&
       align_mode_ == "HW") {
+    if (!isHwD2CProfileSupported()) {
+      std::stringstream ss;
+      ss << "Selected profiles do not support HW D2C. color=" << width_[COLOR] << "x"
+         << height_[COLOR] << "@" << fps_[COLOR] << " " << magic_enum::enum_name(format_[COLOR])
+         << ", depth=" << width_[DEPTH] << "x" << height_[DEPTH] << "@" << fps_[DEPTH] << " "
+         << magic_enum::enum_name(format_[DEPTH])
+         << ". Select a supported profile or use align_mode:=SW.";
+      throw std::runtime_error(ss.str());
+    }
     OBAlignMode align_mode = ALIGN_D2C_HW_MODE;
     RCLCPP_INFO_STREAM(logger_, "set align mode to " << magic_enum::enum_name(align_mode));
     pipeline_config_->setAlignMode(align_mode);
@@ -4272,8 +4413,10 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     RCLCPP_ERROR_STREAM(logger_, "device_info is null in publishDepthPointCloud");
     return;
   }
-  if (depth_registration_ || pid_ == DABAI_MAX_PID) {
-    camera_params.depthIntrinsic = camera_params.rgbIntrinsic;
+  auto depth_profile = depth_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+  if (depth_profile) {
+    camera_params.depthIntrinsic = depth_profile->getIntrinsic();
+    camera_params.depthDistortion = depth_profile->getDistortion();
   }
   depth_point_cloud_filter_.setCameraParam(camera_params);
   float depth_scale = depth_frame->getValueScale();
@@ -4328,7 +4471,7 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
   }
   auto frame_timestamp = getFrameTimestampUs(depth_frame);
   auto timestamp = fromUsToROSTime(frame_timestamp);
-  std::string frame_id = depth_registration_ ? optical_frame_id_[COLOR] : optical_frame_id_[DEPTH];
+  std::string frame_id = getEffectiveOpticalFrameId(DEPTH);
   if (!cloud_frame_id_.empty()) {
     frame_id = cloud_frame_id_;
   }
@@ -4393,8 +4536,10 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     RCLCPP_ERROR_STREAM(logger_, "device_info is null in publishColoredPointCloud");
     return;
   }
-  if (depth_registration_ || pid_ == DABAI_MAX_PID) {
-    camera_params.depthIntrinsic = camera_params.rgbIntrinsic;
+  auto depth_profile = depth_frame->getStreamProfile()->as<ob::VideoStreamProfile>();
+  if (depth_profile) {
+    camera_params.depthIntrinsic = depth_profile->getIntrinsic();
+    camera_params.depthDistortion = depth_profile->getDistortion();
   }
 
   color_point_cloud_filter_.setCameraParam(camera_params);
@@ -4460,7 +4605,7 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     point_cloud_msg->row_step = point_cloud_msg->width * point_cloud_msg->point_step;
   }
   auto frame_timestamp = getFrameTimestampUs(depth_frame);
-  std::string frame_id = optical_frame_id_[COLOR];
+  std::string frame_id = getEffectiveOpticalFrameId(DEPTH);
   if (!cloud_frame_id_.empty()) {
     frame_id = cloud_frame_id_;
   }
@@ -5252,24 +5397,17 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   CHECK_NOTNULL(video_stream_profile);
   intrinsic = video_stream_profile->getIntrinsic();
   distortion = video_stream_profile->getDistortion();
-  if (pid_ == DABAI_MAX_PID) {
-    auto camera_params = pipeline_->getCameraParam();
-    // use color param
-    intrinsic = camera_params.rgbIntrinsic;
-    distortion = camera_params.rgbDistortion;
-  }
-  std::string frame_id = optical_frame_id_[stream_index];
-  if (depth_registration_ && stream_index == DEPTH) {
-    frame_id = depth_aligned_frame_id_[stream_index];
-  }
+  std::string frame_id = getEffectiveOpticalFrameId(stream_index);
   sensor_msgs::msg::CameraInfo camera_info{};
-  if (color_info_manager_ && color_info_manager_->isCalibrated() && stream_index == COLOR) {
+  const bool use_generated_camera_info = shouldUseGeneratedCameraInfo(stream_index);
+  if (!use_generated_camera_info && color_info_manager_ && color_info_manager_->isCalibrated() &&
+      stream_index == COLOR) {
     camera_info = color_info_manager_->getCameraInfo();
     camera_info.header.stamp = timestamp;
     camera_info.header.frame_id = frame_id;
     camera_info.width = width;
     camera_info.height = height;
-  } else if (ir_info_manager_ && ir_info_manager_->isCalibrated() &&
+  } else if (!use_generated_camera_info && ir_info_manager_ && ir_info_manager_->isCalibrated() &&
              (stream_index == INFRA1 || stream_index == INFRA2 || stream_index == DEPTH)) {
     camera_info = ir_info_manager_->getCameraInfo();
     camera_info.header.stamp = timestamp;
