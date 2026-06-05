@@ -20,29 +20,6 @@
         iyz="-9.63634999610215E-09"
         izz="3.76189543642479E-06" />
     </inertial>
-    <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
-      <geometry>
-        <mesh
-          filename="${mesh_path}base_link.STL" />
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 0.945098039215686 1" />
-      </material>
-    </visual>
-    <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
-      <geometry>
-        <mesh
-          filename="${mesh_path}base_link.STL" />
-      </geometry>
-    </collision>
   </link>
   <link
     name="RGB_R">
@@ -88,7 +65,7 @@
     name="RGB_R"
     type="fixed">
     <origin
-      xyz="-0.008999999999889 0.008126703388352 -0.0210000000000001"
+      xyz="0.008126703388352 0.008999999999889 0.0210000000000001"
       rpy="0 0 0" />
     <parent
       link="base_link" />
@@ -141,7 +118,7 @@
     name="RGB_L"
     type="fixed">
     <origin
-      xyz="0.009000000000111 0.008126703388352 -0.0210000000000001"
+      xyz="0.008126703388352 -0.009000000000111 0.0210000000000001"
       rpy="0 0 0" />
     <parent
       link="base_link" />
@@ -194,7 +171,7 @@
     name="USB"
     type="fixed">
     <origin
-      xyz="0.014700000000115 -0.00261829661165068 -0.0209999999999719"
+      xyz="-0.00261829661165068 -0.014700000000115 0.0209999999999719"
       rpy="0 0 0" />
     <parent
       link="base_link" />
@@ -222,7 +199,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_R.STL" />
@@ -247,7 +224,7 @@
     name="camera_rear_screw_R"
     type="fixed">
     <origin
-      xyz="-0.00999680631556896 -0.01091969797964 -0.0209990315919259"
+      xyz="-0.01091969797964 0.00999680631556896 0.0209990315919259"
       rpy="0 0 0" />
     <parent
       link="base_link" />
@@ -275,7 +252,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_L.STL" />
@@ -289,7 +266,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_L.STL" />
@@ -300,7 +277,7 @@
     name="camera_rear_screw_L"
     type="fixed">
     <origin
-      xyz="0.0100031936844311 -0.01091969797964 -0.0209990315919259"
+      xyz="-0.01091969797964 -0.0100031936844311 0.0209990315919259"
       rpy="0 0 0" />
     <parent
       link="base_link" />
@@ -328,7 +305,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_bottom_screw.STL" />
@@ -342,7 +319,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_bottom_screw.STL" />
