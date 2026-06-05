@@ -25,6 +25,7 @@
 #include <cstdlib>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 #include "orbbec_camera/utils.h"
 #include <filesystem>
@@ -155,6 +156,48 @@ std::string lowerFilterConfigValue(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return value;
+}
+
+std::string lowerParameterValue(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
+}
+
+std::string formatParameterValue(const std::string &value) {
+  return value.empty() ? std::string("\"\"") : "'" + value + "'";
+}
+
+std::string formatValidParameterValues(const std::vector<std::string> &valid_values) {
+  std::stringstream ss;
+  for (size_t i = 0; i < valid_values.size(); ++i) {
+    if (i != 0) {
+      ss << ", ";
+    }
+    ss << formatParameterValue(valid_values[i]);
+  }
+  return ss.str();
+}
+
+std::string normalizeClosedSetParameterValue(const rclcpp::Logger &logger,
+                                             const std::string &param_name,
+                                             const std::string &value,
+                                             const std::vector<std::string> &valid_values,
+                                             const std::string &default_value) {
+  const auto lower_value = lowerParameterValue(value);
+  for (const auto &valid_value : valid_values) {
+    if (lower_value == lowerParameterValue(valid_value)) {
+      return valid_value;
+    }
+  }
+
+  RCLCPP_ERROR_STREAM(logger, "Invalid parameter "
+                                   << param_name << " " << formatParameterValue(value)
+                                   << ". Valid values: "
+                                   << formatValidParameterValues(valid_values)
+                                   << ". Skip setting and use "
+                                   << formatParameterValue(default_value) << ".");
+  return default_value;
 }
 
 bool parseFilterConfigDouble(const std::string &raw_value, double &parsed_value,
@@ -888,7 +931,7 @@ void OBCameraNode::setupDevices() {
     RCLCPP_DEBUG_STREAM(logger_, "Create align filter");
     align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
   }
-  if (should_apply_launch_config("disparity_to_depth_mode") &&
+  if (should_apply_launch_config("disparity_to_depth_mode") && !disparity_to_depth_mode_.empty() &&
       sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE) &&
       device_->isPropertySupported(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE)) {
@@ -3516,6 +3559,9 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(point_cloud_qos_, "point_cloud_qos", "default");
   setAndGetNodeParameter<bool>(enable_d2c_viewer_, "enable_d2c_viewer", false);
   setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
+  disparity_to_depth_mode_ = normalizeClosedSetParameterValue(
+      logger_, "disparity_to_depth_mode", disparity_to_depth_mode_, {"", "HW", "SW", "disable"},
+      "");
   setAndGetNodeParameter<std::string>(depth_filter_config_, "depth_filter_config", "");
   if (!depth_filter_config_.empty()) {
     enable_depth_filter_ = true;
@@ -3657,10 +3703,22 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1);
   setAndGetNodeParameter<int>(hdr_merge_gain_2_, "hdr_merge_gain_2", -1);
   setAndGetNodeParameter<std::string>(align_mode_, "align_mode", "HW");
+  align_mode_ =
+      normalizeClosedSetParameterValue(logger_, "align_mode", align_mode_, {"HW", "SW"}, "HW");
   setAndGetNodeParameter<double>(diagnostic_period_, "diagnostic_period", 1.0);
   setAndGetNodeParameter<bool>(enable_laser_, "enable_laser", true);
   std::string align_target_stream_str_;
   setAndGetNodeParameter<std::string>(align_target_stream_str_, "align_target_stream", "COLOR");
+  align_target_stream_str_ = normalizeClosedSetParameterValue(
+      logger_, "align_target_stream", align_target_stream_str_, {"COLOR", "DEPTH"}, "COLOR");
+  if (depth_registration_ && align_mode_ == "HW" && align_target_stream_str_ != "COLOR") {
+    RCLCPP_ERROR_STREAM(logger_,
+                        "HW D2C only supports COLOR as align_target_stream; got "
+                            << align_target_stream_str_
+                            << ". Skip setting and use 'COLOR'. Use align_mode:=SW to align to "
+                               "DEPTH.");
+    align_target_stream_str_ = "COLOR";
+  }
   align_target_stream_ = obStreamTypeFromString(align_target_stream_str_);
   setAndGetNodeParameter<bool>(retry_on_usb3_detection_failure_, "retry_on_usb3_detection_failure",
                                false);
@@ -3670,6 +3728,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
+  time_domain_ = normalizeClosedSetParameterValue(
+      logger_, "time_domain", time_domain_, {"global", "device", "system"}, "global");
   setAndGetNodeParameter<bool>(enable_frame_timestamp_csv_, "enable_frame_timestamp_csv", false);
   setAndGetNodeParameter<std::string>(frame_timestamp_csv_file_, "frame_timestamp_csv_file", "");
   setAndGetNodeParameter<std::string>(exposure_range_mode_, "exposure_range_mode", "");
@@ -3750,6 +3810,9 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(offset_index1_, "offset_index1", -1);
 
   setAndGetNodeParameter<std::string>(frame_aggregate_mode_, "frame_aggregate_mode", "ANY");
+  frame_aggregate_mode_ = normalizeClosedSetParameterValue(
+      logger_, "frame_aggregate_mode", frame_aggregate_mode_,
+      {"full_frame", "color_frame", "ANY", "disable"}, "ANY");
 
   setAndGetNodeParameter<bool>(show_fps_enable_, "show_fps_enable", false);
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
