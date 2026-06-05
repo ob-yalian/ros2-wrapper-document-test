@@ -327,10 +327,11 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
           std::max<int64_t>(1, device_ts_delta_us / state.expected_interval_us - 1);
       if (drop_log_enabled_) {
         previous.dropped_frames += lost_frames;
-        RCLCPP_WARN_STREAM(
-            logger_, "Frame drop detected: stage=SDK_RECEIVE"
-                         << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
-                         << " frame_index=" << state.frame_index << " dropped=" << lost_frames);
+        RCLCPP_WARN_STREAM(logger_,
+                           "Frame drop detected: stage=SDK_RECEIVE"
+                               << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
+                               << " frame_index=" << state.frame_index
+                               << " dropped=" << previous.dropped_frames);
       }
     }
   }
@@ -377,10 +378,11 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
           std::max<int64_t>(1, device_ts_delta_us / state.expected_interval_us - 1);
       if (drop_log_enabled_) {
         previous.publish_dropped_frames += lost_frames;
-        RCLCPP_WARN_STREAM(
-            logger_, "Frame drop detected: stage=ROS_PUBLISH"
-                         << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
-                         << " frame_index=" << state.frame_index << " dropped=" << lost_frames);
+        RCLCPP_WARN_STREAM(logger_,
+                           "Frame drop detected: stage=ROS_PUBLISH"
+                               << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
+                               << " frame_index=" << state.frame_index
+                               << " dropped=" << previous.publish_dropped_frames);
       }
     }
   }
