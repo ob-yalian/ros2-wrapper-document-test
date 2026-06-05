@@ -23,7 +23,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}base_link.STL" />
@@ -37,7 +37,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}base_link.STL" />
@@ -63,7 +63,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_bottom_screw.STL" />
@@ -77,7 +77,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_bottom_screw.STL" />
@@ -116,7 +116,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_R.STL" />
@@ -130,7 +130,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_R.STL" />
@@ -169,7 +169,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_L.STL" />
@@ -183,7 +183,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_L.STL" />
@@ -222,7 +222,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}USB.STL" />
@@ -236,7 +236,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}USB.STL" />
@@ -275,7 +275,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_R.STL" />
@@ -289,7 +289,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_R.STL" />
@@ -328,7 +328,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_L.STL" />
@@ -342,7 +342,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}camera_rear_screw_L.STL" />
@@ -381,7 +381,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}FAKRA.STL" />
@@ -395,7 +395,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 0" />
+        rpy="0 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}FAKRA.STL" />
