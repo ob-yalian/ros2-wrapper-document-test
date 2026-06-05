@@ -141,7 +141,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_frame_sync', default_value='true'),
         DeclareLaunchArgument('frame_aggregate_mode', default_value='ANY'),
         DeclareLaunchArgument('time_domain', default_value='global'),
-        DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
+        DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('enable_depth_undistortion', default_value='false'),

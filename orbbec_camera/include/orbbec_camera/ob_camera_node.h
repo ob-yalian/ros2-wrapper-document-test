@@ -913,7 +913,7 @@ class OBCameraNode {
   int min_depth_limit_ = 0;
   int max_depth_limit_ = 0;
   std::string time_domain_ = "global";  // device, system, global
-  bool enable_frame_timestamp_csv_ = false;
+  bool enable_frame_drop_log_ = false;
   std::string frame_timestamp_csv_file_;
   std::unique_ptr<FrameTimestampCsvLogger> frame_timestamp_csv_logger_;
   std::string exposure_range_mode_;

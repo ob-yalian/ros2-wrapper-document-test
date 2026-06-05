@@ -83,7 +83,7 @@ def generate_launch_description():
         DeclareLaunchArgument('ordered_pc', default_value='false'),
         DeclareLaunchArgument('use_hardware_time', default_value='false'),
         DeclareLaunchArgument('timestamp_clock_type', default_value=''),  # realtime or monotonic, default is realtime.
-        DeclareLaunchArgument('enable_frame_timestamp_csv', default_value='false'),
+        DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('enable_depth_undistortion', default_value='false'),

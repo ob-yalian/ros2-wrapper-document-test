@@ -31,38 +31,47 @@ int64_t getExpectedIntervalUs(const std::shared_ptr<ob::Frame> &frame) {
 
 }  // namespace
 
-FrameTimestampCsvLogger::FrameTimestampCsvLogger(bool enabled, const std::string &csv_file_path,
+FrameTimestampCsvLogger::FrameTimestampCsvLogger(bool drop_log_enabled,
+                                                 const std::string &csv_file_path,
                                                  rclcpp::Logger logger)
-    : logger_(std::move(logger)), enabled_(enabled), csv_file_path_(csv_file_path) {
+    : logger_(std::move(logger)),
+      enabled_(drop_log_enabled || !csv_file_path.empty()),
+      csv_enabled_(!csv_file_path.empty()),
+      drop_log_enabled_(drop_log_enabled),
+      csv_file_path_(csv_file_path) {
   if (!enabled_) {
     return;
   }
 
-  if (csv_file_path_.empty()) {
-    RCLCPP_INFO_STREAM(logger_,
-                       "Frame timestamp CSV file is empty; only frame lost logs are enabled.");
-    return;
-  }
-
-  try {
-    auto path = std::filesystem::path(csv_file_path_);
-    if (path.has_parent_path() && !std::filesystem::exists(path.parent_path())) {
-      std::filesystem::create_directories(path.parent_path());
+  if (csv_enabled_) {
+    try {
+      auto path = std::filesystem::path(csv_file_path_);
+      if (path.has_parent_path() && !std::filesystem::exists(path.parent_path())) {
+        std::filesystem::create_directories(path.parent_path());
+      }
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to prepare frame timestamp CSV path "
+                                       << csv_file_path_ << ": " << e.what());
+      csv_enabled_ = false;
+      csv_writer_failed_ = true;
     }
-  } catch (const std::exception &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to prepare frame timestamp CSV path " << csv_file_path_
-                                                                               << ": " << e.what());
-    enabled_ = false;
-    writer_failed_ = true;
-    return;
   }
 
-  openCsvIfNeeded();
-  if (!enabled_) {
-    return;
+  if (csv_enabled_) {
+    openCsvIfNeeded();
   }
 
-  writer_thread_ = std::thread([this]() { writerThreadMain(); });
+  enabled_ = csv_enabled_ || drop_log_enabled_;
+  if (csv_enabled_) {
+    writer_thread_ = std::thread([this]() { writerThreadMain(); });
+  }
+
+  if (enabled_) {
+    RCLCPP_INFO_STREAM(logger_,
+                       "Frame timestamp logger enabled: csv_file="
+                           << (csv_enabled_ ? csv_file_path_ : "disabled")
+                           << " frame_drop_log=" << (drop_log_enabled_ ? "enabled" : "disabled"));
+  }
 }
 
 FrameTimestampCsvLogger::~FrameTimestampCsvLogger() noexcept { shutdown(); }
@@ -73,7 +82,7 @@ void FrameTimestampCsvLogger::recordFrameSet(const std::shared_ptr<ob::Frame> &c
                                              bool track_color, bool track_depth,
                                              bool color_image_publish_expected,
                                              bool depth_image_publish_expected) {
-  if (!enabled_ || writer_failed_) {
+  if (!enabled_) {
     return;
   }
   recordFrameSetInternal(color_frame, depth_frame, arrival_system_us, arrival_steady_us,
@@ -86,7 +95,7 @@ void FrameTimestampCsvLogger::recordStandaloneFrameArrival(OBStreamType stream_t
                                                            int64_t arrival_system_us,
                                                            int64_t arrival_steady_us,
                                                            bool image_publish_expected) {
-  if (!enabled_ || writer_failed_ || !frame || !isTrackedStream(stream_type)) {
+  if (!enabled_ || !frame || !isTrackedStream(stream_type)) {
     return;
   }
   recordStandaloneFrameArrivalInternal(stream_type, frame, arrival_system_us, arrival_steady_us,
@@ -97,7 +106,7 @@ void FrameTimestampCsvLogger::recordPreImagePublish(OBStreamType stream_type,
                                                     const std::shared_ptr<ob::Frame> &frame,
                                                     int64_t publish_system_us,
                                                     int64_t publish_steady_us) {
-  if (!enabled_ || writer_failed_ || !frame || !isTrackedStream(stream_type)) {
+  if (!enabled_ || !frame || !isTrackedStream(stream_type)) {
     return;
   }
   recordPreImagePublishInternal(stream_type, frame, publish_system_us, publish_steady_us);
@@ -316,16 +325,13 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
     if (device_ts_delta_us > state.expected_interval_us * 3 / 2) {
       const auto lost_frames =
           std::max<int64_t>(1, device_ts_delta_us / state.expected_interval_us - 1);
-      previous.dropped_frames += lost_frames;
-      reportDropLogFormatOnce();
-      RCLCPP_WARN_STREAM(
-          logger_, "SDK drop " << (stream == TrackedStream::COLOR ? "color" : "depth") << ": idx="
-                               << state.frame_index << " ts=" << state.device_ts_us << "us"
-                               << " gap=" << std::fixed << std::setprecision(1)
-                               << (static_cast<double>(device_ts_delta_us) / 1000.0) << "ms"
-                               << " ideal="
-                               << (static_cast<double>(state.expected_interval_us) / 1000.0) << "ms"
-                               << " total=" << previous.dropped_frames);
+      if (drop_log_enabled_) {
+        previous.dropped_frames += lost_frames;
+        RCLCPP_WARN_STREAM(
+            logger_, "Frame drop detected: stage=SDK_RECEIVE"
+                         << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
+                         << " frame_index=" << state.frame_index << " dropped=" << lost_frames);
+      }
     }
   }
   if (frame->hasMetadata(OB_FRAME_METADATA_TYPE_FRAME_NUMBER)) {
@@ -369,16 +375,13 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
     if (state.expected_interval_us > 0 && device_ts_delta_us > state.expected_interval_us * 3 / 2) {
       const auto lost_frames =
           std::max<int64_t>(1, device_ts_delta_us / state.expected_interval_us - 1);
-      previous.publish_dropped_frames += lost_frames;
-      reportDropLogFormatOnce();
-      RCLCPP_WARN_STREAM(
-          logger_, "PUB drop " << (stream == TrackedStream::COLOR ? "color" : "depth") << ": idx="
-                               << state.frame_index << " ts=" << state.device_ts_us << "us"
-                               << " gap=" << std::fixed << std::setprecision(1)
-                               << (static_cast<double>(device_ts_delta_us) / 1000.0) << "ms"
-                               << " ideal="
-                               << (static_cast<double>(state.expected_interval_us) / 1000.0) << "ms"
-                               << " total=" << previous.publish_dropped_frames);
+      if (drop_log_enabled_) {
+        previous.publish_dropped_frames += lost_frames;
+        RCLCPP_WARN_STREAM(
+            logger_, "Frame drop detected: stage=ROS_PUBLISH"
+                         << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
+                         << " frame_index=" << state.frame_index << " dropped=" << lost_frames);
+      }
     }
   }
   previous.publish_device_ts_us = state.device_ts_us;
@@ -389,19 +392,6 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
   state.publish_steady_delta_us =
       updateDelta(previous.publish_steady_us, state.publish_steady_us.value());
   state.arrival_to_publish_steady_us = state.publish_steady_us.value() - state.arrival_steady_us;
-}
-
-void FrameTimestampCsvLogger::reportDropLogFormatOnce() {
-  if (drop_log_format_reported_) {
-    return;
-  }
-  drop_log_format_reported_ = true;
-  RCLCPP_INFO_STREAM(
-      logger_,
-      "Frame drop log enabled. Format: <SDK|PUB> drop <color|depth>: idx=<frame_index> "
-      "ts=<device_timestamp_us> gap=<actual_interval_ms> ideal=<expected_interval_ms> "
-      "total=<total_dropped_frames>. SDK means frame arrival from SDK; PUB means before ROS "
-      "image publish.");
 }
 
 std::optional<int64_t> FrameTimestampCsvLogger::updateDelta(std::optional<int64_t> &previous,
@@ -423,7 +413,7 @@ bool FrameTimestampCsvLogger::isRowReady(const PendingRow &row) const {
 }
 
 void FrameTimestampCsvLogger::enqueueCompletedRow(const PendingRow &row) {
-  if (csv_file_path_.empty()) {
+  if (!csv_enabled_ || csv_writer_failed_) {
     return;
   }
   std::lock_guard<std::mutex> queue_lock(completed_rows_mutex_);
@@ -539,7 +529,7 @@ std::string FrameTimestampCsvLogger::csvHeader() {
 }
 
 void FrameTimestampCsvLogger::writerThreadMain() {
-  if (!enabled_ || writer_failed_) {
+  if (!csv_enabled_ || csv_writer_failed_) {
     return;
   }
 
@@ -582,13 +572,12 @@ void FrameTimestampCsvLogger::openCsvIfNeeded() {
   csv_stream_.open(csv_file_path_, std::ios::out | std::ios::trunc);
   if (!csv_stream_.is_open()) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to open frame timestamp CSV file: " << csv_file_path_);
-    enabled_ = false;
-    writer_failed_ = true;
+    csv_enabled_ = false;
+    csv_writer_failed_ = true;
     return;
   }
   csv_stream_ << csvHeader() << "\n";
   csv_stream_.flush();
-  RCLCPP_INFO_STREAM(logger_, "Frame timestamp CSV logger enabled: " << csv_file_path_);
 }
 
 }  // namespace orbbec_camera
