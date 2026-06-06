@@ -32,3 +32,12 @@ ros2 run orbbec_camera firmware_update_tool -- \
 --firmware_path /path/to/firmware.bin \
 --continue_on_error
 ```
+
+如需开启 SDK 文件日志并同时尝试开启固件日志，可增加 `--sdk_log_level`。可选值为 `debug`、`info`、`warn`、`error`、`fatal`、`off`，默认 `off`。
+
+```bash
+ros2 run orbbec_camera firmware_update_tool -- \
+--serial_number <SN> \
+--preset_path /path/to/preset.bin \
+--sdk_log_level debug
+```
