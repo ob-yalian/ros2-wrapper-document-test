@@ -131,7 +131,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_R.STL" />
@@ -145,7 +145,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_R.STL" />
@@ -184,7 +184,7 @@
     <visual>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_L.STL" />
@@ -198,7 +198,7 @@
     <collision>
       <origin
         xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
+        rpy="3.141592653589793 0 1.570796326794897" />
       <geometry>
         <mesh
           filename="${mesh_path}RGB_L.STL" />
