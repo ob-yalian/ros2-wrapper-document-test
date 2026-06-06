@@ -161,6 +161,10 @@
     ```bash
     ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString
     ```
+*   `/camera/export_config_json`
+    ```bash
+    ros2 service call /camera/export_config_json orbbec_camera_msgs/srv/SetString "{data: '/tmp/orbbec_camera_config.json'}"
+    ```
 *   `/camera/reboot_device`
     ```bash
     ros2 service call /camera/reboot_device std_srvs/srv/Empty '{}'
@@ -191,7 +195,9 @@
 
 *   `/camera/set_filter`
     ```bash
-    # filter_name is the filter name, filter_enable indicates whether the filter is enabled or disabled, and filter_param represents the filter parameters.
+    # filter_name is the filter name, and filter_enable indicates whether the filter is enabled.
+    # filter_param is the legacy positional parameter form; filter_config is the new named parameter form.
+    # filter_param and filter_config cannot be used at the same time.
 
     # Set DecimationFilter: [scale]
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: DecimationFilter, filter_enable: false, filter_param: [5]}'
@@ -222,6 +228,11 @@
     # Set MgcNoiseRemovalFilter / LutNoiseRemovalFilter: []
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+
+    # Tune filters with named parameters
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: NoiseRemovalFilter, filter_enable: true, filter_config: [{name: min_diff, value: '256'}, {name: max_size, value: '80'}]}"
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: HardwareNoiseRemovalFilter, filter_enable: true, filter_config: [{name: threshold, value: '0.2'}]}"
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: SpatialAdvancedFilter, filter_enable: true, filter_config: [{name: alpha, value: '0.5'}, {name: disp_diff, value: '160'}, {name: magnitude, value: '1'}, {name: radius, value: '8'}]}"
     ```
 
     Filter status is updated after service calls on `/camera/depth_filter_status` and `/camera/depth_filters/status`. `/camera/depth_filters/status` uses the structured `orbbec_camera_msgs/msg/DepthFiltersStatus` message and includes each filter's enabled state and parameters.

@@ -161,6 +161,10 @@
     ```bash
     ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString
     ```
+*   `/camera/export_config_json`
+    ```bash
+    ros2 service call /camera/export_config_json orbbec_camera_msgs/srv/SetString "{data: '/tmp/orbbec_camera_config.json'}"
+    ```
 *   `/camera/reboot_device`
     ```bash
     ros2 service call /camera/reboot_device std_srvs/srv/Empty '{}'
@@ -191,7 +195,9 @@
 
 *   `/camera/set_filter`
     ```bash
-    # filter_name 为滤波器名称，filter_enable 表示是否开启滤波器开关，filter_param 表示滤波参数
+    # filter_name 为滤波器名称，filter_enable 表示是否开启滤波器开关。
+    # filter_param 为旧的按位置传参方式；filter_config 为新的命名参数方式。
+    # filter_param 和 filter_config 不能同时使用。
 
     # 设置 DecimationFilter: [scale]
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: DecimationFilter, filter_enable: false, filter_param: [5]}'
@@ -223,6 +229,11 @@
     # 设置 MgcNoiseRemovalFilter / LutNoiseRemovalFilter: []
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+
+    # 使用 filter_config 按参数名调参
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: NoiseRemovalFilter, filter_enable: true, filter_config: [{name: min_diff, value: '256'}, {name: max_size, value: '80'}]}"
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: HardwareNoiseRemovalFilter, filter_enable: true, filter_config: [{name: threshold, value: '0.2'}]}"
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: SpatialAdvancedFilter, filter_enable: true, filter_config: [{name: alpha, value: '0.5'}, {name: disp_diff, value: '160'}, {name: magnitude, value: '1'}, {name: radius, value: '8'}]}"
     ```
 
     滤波状态会在服务调用后同步更新到 `/camera/depth_filter_status` 和 `/camera/depth_filters/status`。其中 `/camera/depth_filters/status` 使用结构化消息 `orbbec_camera_msgs/msg/DepthFiltersStatus`，包含每个滤波器的使能状态和参数。
