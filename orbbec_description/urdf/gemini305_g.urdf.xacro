@@ -5,22 +5,50 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="gemini305_g">
   <xacro:property name="mesh_path" value="package://orbbec_description/meshes/gemini305_g/" />
   <link
-    name="base_link">
-    <inertial>
-      <origin
-        xyz="0.000149164489798296 -0.00906695064573543 -0.0207909592259398"
-        rpy="0 0 0" />
-      <mass
-        value="0.033546716795485" />
-      <inertia
-        ixx="6.61619826485559E-06"
-        ixy="-3.93814864956883E-09"
-        ixz="3.50980830227358E-08"
-        iyy="1.15876789717806E-05"
-        iyz="1.05717082804933E-08"
-        izz="6.08547247005231E-06" />
-    </inertial>
-  </link>
+    name="camera_link" />
+  <joint
+    name="camera_link"
+    type="fixed">
+    <origin
+      xyz="0.008050000000001 0.00900395097915 0.0209939609855011"
+      rpy="0 0 0" />
+    <parent
+      link="camera_bottom_screw" />
+    <child
+      link="camera_link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="camera_left_color_optical_frame" />
+  <joint
+    name="camera_left_color_optical_frame"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="-1.5707963267949 0 -1.5707963267949" />
+    <parent
+      link="camera_left_color_frame" />
+    <child
+      link="camera_left_color_optical_frame" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="camera_right_color_optical_frame" />
+  <joint
+    name="camera_right_color_optical_frame"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="-1.5707963267949 0 -1.5707963267949" />
+    <parent
+      link="camera_right_color_frame" />
+    <child
+      link="camera_right_color_optical_frame" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
   <link
     name="camera_bottom_screw">
     <inertial>
@@ -60,22 +88,32 @@
           filename="${mesh_path}base_link.STL" />
       </geometry>
     </collision>
+    <visual>
+      <origin
+        xyz="-0.033409999999996 0 0.020993960985498"
+        rpy="0 0 1.570796326794897" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}FAKRA.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="-0.033409999999996 0 0.020993960985498"
+        rpy="0 0 1.570796326794897" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}FAKRA.STL" />
+      </geometry>
+    </collision>
   </link>
-  <joint
-    name="camera_bottom_screw"
-    type="fixed">
-    <origin
-      xyz="0 0 0"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="camera_bottom_screw" />
-    <axis
-      xyz="0 0 0" />
-  </joint>
   <link
-    name="RGB_R">
+    name="camera_right_color_frame">
     <inertial>
       <origin
         xyz="-1.1760228169691E-06 -0.0034693462830589 0.000376234001467315"
@@ -115,20 +153,20 @@
     </collision>
   </link>
   <joint
-    name="RGB_R"
+    name="camera_right_color_frame"
     type="fixed">
     <origin
-      xyz="0.008050000000001 -0.00899604902085 0.0209939609855011"
+      xyz="0 -0.018 0"
       rpy="0 0 0" />
     <parent
-      link="base_link" />
+      link="camera_left_color_frame" />
     <child
-      link="RGB_R" />
+      link="camera_right_color_frame" />
     <axis
       xyz="0 0 0" />
   </joint>
   <link
-    name="RGB_L">
+    name="camera_left_color_frame">
     <inertial>
       <origin
         xyz="-1.17602281778789E-06 -0.00346934628305837 0.000376234001468578"
@@ -168,68 +206,15 @@
     </collision>
   </link>
   <joint
-    name="RGB_L"
+    name="camera_left_color_frame"
     type="fixed">
     <origin
-      xyz="0.008050000000001 0.00900395097915 0.0209939609855011"
+      xyz="0 0 0"
       rpy="0 0 0" />
     <parent
-      link="base_link" />
+      link="camera_link" />
     <child
-      link="RGB_L" />
-    <axis
-      xyz="0 0 0" />
-  </joint>
-  <link
-    name="FAKRA">
-    <inertial>
-      <origin
-        xyz="-2.19014445062421E-07 0.0027197100224461 -0.00011127645937509"
-        rpy="0 0 0" />
-      <mass
-        value="0.000751156783355389" />
-      <inertia
-        ixx="1.51891738860674E-08"
-        ixy="4.67248857458133E-13"
-        ixz="-3.5218905561991E-13"
-        iyy="1.40267326812145E-08"
-        iyz="-2.75286777175686E-10"
-        izz="1.86427254797844E-08" />
-    </inertial>
-    <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
-      <geometry>
-        <mesh
-          filename="${mesh_path}FAKRA.STL" />
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="1 1 1 1" />
-      </material>
-    </visual>
-    <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 1.570796326794897" />
-      <geometry>
-        <mesh
-          filename="${mesh_path}FAKRA.STL" />
-      </geometry>
-    </collision>
-  </link>
-  <joint
-    name="FAKRA"
-    type="fixed">
-    <origin
-      xyz="-0.033409999999996 0 0.020993960985498"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="FAKRA" />
+      link="camera_left_color_frame" />
     <axis
       xyz="0 0 0" />
   </joint>

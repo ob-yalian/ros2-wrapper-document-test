@@ -5,24 +5,52 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="gemini305">
   <xacro:property name="mesh_path" value="package://orbbec_description/meshes/gemini305/" />
   <link
-    name="base_link">
-    <inertial>
-      <origin
-        xyz="0.000195549528928161 -5.34216701628021E-05 -0.0203898633722788"
-        rpy="0 0 0" />
-      <mass
-        value="0.0195706749601595" />
-      <inertia
-        ixx="3.90938897723015E-06"
-        ixy="-1.54949883302207E-09"
-        ixz="2.45880849146858E-08"
-        iyy="6.7877667129966E-06"
-        iyz="-9.63634999610215E-09"
-        izz="3.76189543642479E-06" />
-    </inertial>
-  </link>
+    name="camera_link" />
+  <joint
+    name="camera_link"
+    type="fixed">
+    <origin
+      xyz="0.008126703388352 0.008999999999889 0.0210000000000001"
+      rpy="0 0 0" />
+    <parent
+      link="camera_bottom_screw" />
+    <child
+      link="camera_link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
   <link
-    name="RGB_R">
+    name="camera_left_color_optical_frame" />
+  <joint
+    name="camera_left_color_optical_frame"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="-1.5707963267949 0 -1.5707963267949" />
+    <parent
+      link="camera_left_color_frame" />
+    <child
+      link="camera_left_color_optical_frame" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="camera_right_color_optical_frame" />
+  <joint
+    name="camera_right_color_optical_frame"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="-1.5707963267949 0 -1.5707963267949" />
+    <parent
+      link="camera_right_color_frame" />
+    <child
+      link="camera_right_color_optical_frame" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="camera_right_color_frame">
     <inertial>
       <origin
         xyz="0.00919554952881716 -0.00818012505851481 0.000610136627721268"
@@ -62,20 +90,20 @@
     </collision>
   </link>
   <joint
-    name="RGB_R"
+    name="camera_right_color_frame"
     type="fixed">
     <origin
-      xyz="0.008126703388352 -0.009000000000111 0.0210000000000001"
+      xyz="0 -0.018 0"
       rpy="0 0 0" />
     <parent
-      link="base_link" />
+      link="camera_left_color_frame" />
     <child
-      link="RGB_R" />
+      link="camera_right_color_frame" />
     <axis
       xyz="0 0 0" />
   </joint>
   <link
-    name="RGB_L">
+    name="camera_left_color_frame">
     <inertial>
       <origin
         xyz="-0.00880445047118283 -0.00818012505851481 0.000610136627721265"
@@ -115,15 +143,15 @@
     </collision>
   </link>
   <joint
-    name="RGB_L"
+    name="camera_left_color_frame"
     type="fixed">
     <origin
-      xyz="0.008126703388352 0.008999999999889 0.0210000000000001"
+      xyz="0 0 0"
       rpy="0 0 0" />
     <parent
-      link="base_link" />
+      link="camera_link" />
     <child
-      link="RGB_L" />
+      link="camera_left_color_frame" />
     <axis
       xyz="0 0 0" />
   </joint>
@@ -174,7 +202,7 @@
       xyz="-0.01091969797964 -0.0100031936844311 0.0209990315919259"
       rpy="0 0 0" />
     <parent
-      link="base_link" />
+      link="camera_bottom_screw" />
     <child
       link="camera_rear_screw_R" />
     <axis
@@ -227,7 +255,7 @@
       xyz="-0.01091969797964 0.00999680631556896 0.0209990315919259"
       rpy="0 0 0" />
     <parent
-      link="base_link" />
+      link="camera_bottom_screw" />
     <child
       link="camera_rear_screw_L" />
     <axis
@@ -273,17 +301,4 @@
       </geometry>
     </collision>
   </link>
-  <joint
-    name="camera_bottom_screw"
-    type="fixed">
-    <origin
-      xyz="0 0 0"
-      rpy="0 0 0" />
-    <parent
-      link="base_link" />
-    <child
-      link="camera_bottom_screw" />
-    <axis
-      xyz="0 0 0" />
-  </joint>
 </robot>
