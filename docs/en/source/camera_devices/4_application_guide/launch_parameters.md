@@ -53,7 +53,7 @@ The following are the launch parameters available:
 *   **`device_num`**
     *   The number of devices. This must be filled in if multiple cameras are required. See [multi camera](../5_advanced_guide/multi_camera/multi_camera.md) for multi-camera startup.
 * **`device_preset`**
-    * The default value is determined by the launch file. See [predefined presets](../5_advanced_guide/configuration/predefined_presets.md) for available presets and recommended scenarios. You can use the following command to view the configurable modes; the tool also prints the preset list and preset version information.
+    * Depth preset. See [predefined presets](../5_advanced_guide/configuration/predefined_presets.md) for available presets and recommended scenarios. You can use the following command to view the configurable modes; the tool also prints the preset list and preset version information.
     ```bash
     ros2 run orbbec_camera list_devices_node
     ```

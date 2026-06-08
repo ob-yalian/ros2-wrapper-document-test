@@ -53,7 +53,7 @@
 *   **`device_num`**
     *   设备数量。如果需要多个相机，必须填写此参数。多相机启动方式参考 [多相机](../5_advanced_guide/multi_camera/multi_camera.md)。
 *   **`device_preset`**
-    *   默认值由启动文件决定。可选 preset 和推荐场景请参考 [设备预设](../5_advanced_guide/configuration/predefined_presets.md)。可以使用下面命令查看可设置模式；该工具会同时打印 preset 列表和 preset 版本信息。
+    *   深度预设。可选预设和推荐场景请参考 [设备预设](../5_advanced_guide/configuration/predefined_presets.md)。可以使用下面命令查看可设置模式；该工具会同时打印 preset 列表和 preset 版本信息。
     ```bash
     ros2 run orbbec_camera list_devices_node
     ```
