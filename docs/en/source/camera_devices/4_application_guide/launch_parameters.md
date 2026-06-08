@@ -24,6 +24,12 @@ Launch parameters can be modified in two ways:
 
    This is useful when you want a setting to become a long-term default, such as a fixed resolution, frame rate, camera name, or synchronization mode. Device launch files are located in [orbbec_camera/launch](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch). Choose the `*.launch.py` file that matches your camera model.
 
+   For example, modify the default camera name to `camera_02`:
+
+   ```python
+   DeclareLaunchArgument('camera_name', default_value='camera_02')
+   ```
+
    If you build from source and do not use `--symlink-install`, you usually need to rebuild the workspace and source it again after modifying a launch file:
 
    ```bash
@@ -49,7 +55,7 @@ The following are the launch parameters available:
 * **`device_preset`**
     * The default value is determined by the launch file. See [predefined presets](../5_advanced_guide/configuration/predefined_presets.md) for available presets and recommended scenarios. You can use the following command to view the configurable modes; the tool also prints the preset list and preset version information.
     ```bash
-    ros2 run orbbec_camera list_camera_profile_mode_node
+    ros2 run orbbec_camera list_devices_node
     ```
 *   **`[color|depth|left_ir|right_ir|ir]_[width|height|fps|format]`**
     *   The resolution and frame rate of the sensor stream.

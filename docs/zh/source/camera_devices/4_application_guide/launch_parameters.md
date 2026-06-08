@@ -24,6 +24,12 @@
 
    适合将参数作为长期默认配置使用，例如团队固定使用某个分辨率、帧率、相机名称或同步模式。各设备的 launch 文件位于 [orbbec_camera/launch](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch)，请选择与设备型号对应的 `*.launch.py` 文件。
 
+   例如，将相机名称的默认值修改为 `camera_02`：
+
+   ```python
+   DeclareLaunchArgument('camera_name', default_value='camera_02')
+   ```
+
    如果您是从源码构建并且没有使用 `--symlink-install`，修改 launch 文件后通常需要回到工作空间重新编译并重新 source：
 
    ```bash
@@ -49,7 +55,7 @@
 *   **`device_preset`**
     *   默认值由启动文件决定。可选 preset 和推荐场景请参考 [设备预设](../5_advanced_guide/configuration/predefined_presets.md)。可以使用下面命令查看可设置模式；该工具会同时打印 preset 列表和 preset 版本信息。
     ```bash
-    ros2 run orbbec_camera list_camera_profile_mode_node
+    ros2 run orbbec_camera list_devices_node
     ```
 *   **`[color|depth|left_ir|right_ir|ir]_[width|height|fps|format]`**
     *   传感器流的分辨率和帧率。
