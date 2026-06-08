@@ -93,6 +93,43 @@ std::string ipSourceTypeToString(int ip_source_type) {
   }
 }
 
+std::string boolToString(bool value) { return value ? "true" : "false"; }
+
+bool isPropertyReadable(const std::shared_ptr<ob::Device> &device, OBPropertyID property_id) {
+  return device->isPropertySupported(property_id, OB_PERMISSION_READ) ||
+         device->isPropertySupported(property_id, OB_PERMISSION_READ_WRITE);
+}
+
+void printIpConfigStatus(const std::shared_ptr<ob::Device> &device) {
+  auto logger = rclcpp::get_logger("list_device_node");
+
+  RCLCPP_INFO_STREAM(logger, "IP config status:");
+
+  const bool v2_read_supported = isPropertyReadable(device, OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2);
+  const bool legacy_read_supported = isPropertyReadable(device, OB_STRUCT_DEVICE_IP_ADDR_CONFIG);
+
+  if (v2_read_supported) {
+    OBNetIpConfigV2 ip_config_v2{};
+    uint32_t data_size = sizeof(ip_config_v2);
+    device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2,
+                              reinterpret_cast<uint8_t *>(&ip_config_v2), &data_size);
+    RCLCPP_INFO_STREAM(logger,
+                       "  DHCP: " << boolToString(ip_config_v2.flags & OB_NET_IP_FLAG_DHCP));
+    RCLCPP_INFO_STREAM(logger, "  persistent IP: "
+                                   << boolToString(ip_config_v2.flags & OB_NET_IP_FLAG_PERSISTENT));
+  } else if (legacy_read_supported) {
+    OBNetIpConfig ip_config{};
+    uint32_t data_size = sizeof(ip_config);
+    device->getStructuredData(OB_STRUCT_DEVICE_IP_ADDR_CONFIG,
+                              reinterpret_cast<uint8_t *>(&ip_config), &data_size);
+    RCLCPP_INFO_STREAM(logger, "  DHCP: " << boolToString(ip_config.dhcp != 0));
+    RCLCPP_INFO_STREAM(logger, "  persistent IP: " << boolToString(ip_config.dhcp == 0));
+  } else {
+    RCLCPP_INFO_STREAM(logger, "  DHCP: not supported");
+    RCLCPP_INFO_STREAM(logger, "  persistent IP: not supported");
+  }
+}
+
 void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
   auto logger = rclcpp::get_logger("list_device_node");
   try {
@@ -192,6 +229,10 @@ int main(int argc, char **argv) {
           RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                              "firmware version: " << firmware_version);
           RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "usb port: " << usb_port);
+          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
+                             "ip source type: " << ipSourceTypeToString(static_cast<int>(
+                                 list->getIpSourceType(static_cast<uint32_t>(i)))));
+          printIpConfigStatus(device_);
           printPresetInfo(device_);
           std::cout << std::endl;
         } else {
@@ -221,6 +262,7 @@ int main(int argc, char **argv) {
           RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                              "ip source type: " << ipSourceTypeToString(static_cast<int>(
                                  list->getIpSourceType(static_cast<uint32_t>(i)))));
+          printIpConfigStatus(device_);
           printPresetInfo(device_);
           std::cout << std::endl;
         }
