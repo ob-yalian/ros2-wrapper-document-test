@@ -78,4 +78,4 @@ ros2 launch orbbec_camera gemini_330_series.launch.py
 
 ## Multi_camera_synced + Interleave_ae
 
-请参考 [multi_camera_synced](./multi_camera_synced.md) 和 [参数介绍](#参数介绍)
+请参考 [multi_camera_synced](../multi_camera/multi_camera_synced.md) 和 [参数介绍](#参数介绍)

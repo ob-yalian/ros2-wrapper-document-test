@@ -78,4 +78,4 @@ ros2 launch orbbec_camera gemini_330_series.launch.py
 
 ## Multi_camera_synced + Interleave_ae
 
-Please refer to [multi_camera_synced](./multi_camera_synced.md) and [Parameter Introduction](#parameter-introduction)
+Please refer to [multi_camera_synced](../multi_camera/multi_camera_synced.md) and [Parameter Introduction](#parameter-introduction)

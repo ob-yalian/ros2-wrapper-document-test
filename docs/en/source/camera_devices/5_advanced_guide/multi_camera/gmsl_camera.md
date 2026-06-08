@@ -53,8 +53,6 @@ ros2 launch orbbec_camera multi_gmsl_camera_synced.launch.py
 
 ## Usage Limitations of GMSL Cameras
 
-[](https://github.com/orbbec/MIPI_Camera_Platform_Driver/tree/main?tab=readme-ov-file#usage-limitations-of-gmsl-cameras)
-
 GMSL cameras interface with various deserializer chips such as MAX9296 and MAX92716. Orbbec GMSL cameras support multiple streams including depth, color, IR, and IMU data, but certain usage limitations apply:
 
 - GMSL only supports V4L2 and YUYV format; MJPG format is not supported. RGB output is derived from YUYV format conversion.
