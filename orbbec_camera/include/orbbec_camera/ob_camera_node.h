@@ -73,7 +73,7 @@
 #include "orbbec_camera/fps_delay_status.hpp"
 #include "orbbec_camera/frame_timestamp_csv_logger.h"
 #include "jpeg_decoder.h"
-#include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/header.hpp>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -883,7 +883,6 @@ class OBCameraNode {
   int spatial_moderate_filter_radius_ = -1;
   int spatial_moderate_filter_diff_threshold_ = -1;
   int spatial_moderate_filter_magnitude_ = -1;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr filter_status_pub_;
   rclcpp::Publisher<DepthFiltersStatus>::SharedPtr depth_filters_status_pub_;
   nlohmann::json filter_status_;
   std::string align_mode_ = "HW";

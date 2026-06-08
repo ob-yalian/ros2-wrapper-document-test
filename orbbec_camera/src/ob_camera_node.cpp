@@ -4244,11 +4244,6 @@ void OBCameraNode::setupPublishers() {
         node_->create_publisher<orbbec_camera_msgs::msg::Extrinsics>("left_color_to_right_color",
                                                                      extrinsics_qos);
   }
-  filter_status_pub_ =
-      node_->create_publisher<std_msgs::msg::String>("depth_filter_status", extrinsics_qos);
-  std_msgs::msg::String msg;
-  msg.data = filter_status_.dump(2);
-  filter_status_pub_->publish(msg);
   depth_filters_status_pub_ =
       node_->create_publisher<DepthFiltersStatus>("depth_filters/status", extrinsics_qos);
   publishDepthFiltersStatus();
@@ -6386,11 +6381,6 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
 
       filter_status_[normalized_request_filter_name] = static_cast<bool>(request->filter_enable);
-      if (filter_status_pub_) {
-        std_msgs::msg::String msg;
-        msg.data = filter_status_.dump(2);
-        filter_status_pub_->publish(msg);
-      }
       publishDepthFiltersStatus();
 
       response->success = true;
@@ -6651,11 +6641,6 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       }
     }
     filter_status_[normalized_request_filter_name] = static_cast<bool>(request->filter_enable);
-    if (filter_status_pub_) {
-      std_msgs::msg::String msg;
-      msg.data = filter_status_.dump(2);
-      filter_status_pub_->publish(msg);
-    }
     publishDepthFiltersStatus();
     response->success = true;
   } catch (const ob::Error &e) {
