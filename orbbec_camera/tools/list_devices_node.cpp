@@ -229,10 +229,6 @@ int main(int argc, char **argv) {
           RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                              "firmware version: " << firmware_version);
           RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"), "usb port: " << usb_port);
-          RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
-                             "ip source type: " << ipSourceTypeToString(static_cast<int>(
-                                 list->getIpSourceType(static_cast<uint32_t>(i)))));
-          printIpConfigStatus(device_);
           printPresetInfo(device_);
           std::cout << std::endl;
         } else {
