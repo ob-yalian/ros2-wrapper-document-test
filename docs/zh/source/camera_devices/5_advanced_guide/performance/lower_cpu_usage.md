@@ -1,6 +1,6 @@
 ## 使用Orbbec ROS包降低CPU使用率
 
-您可以在 [示例](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples) 中找到使用示例代码。
+您可以参考 [gemini_330_series_low_cpu.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/launch/gemini_330_series_low_cpu.launch.py) 中的低 CPU 启动配置。
 
 本文档概述了在使用 **Gemini 330系列相机** 的 **OrbbecSDK_ROS2 v2** 环境中最小化CPU使用率的策略。固件版本必须 **不低于1.4.10**，且 `device` 应设置为 **Default**。
 
@@ -13,19 +13,17 @@
 | `uvc_backend` |                `v4l2`                |     与 `libuvc` 相比CPU使用率更低     |
 | `color_format` |                `RGB`                |         CPU使用率低于 `MJPG`         |
 |    `filter`    | 仅使用 `hardware_noise_removal_filter` | 其他滤波器会显著增加CPU使用率 |
+|     `depth_registration`     | `false` 或 `true` 配合 `align_mode=HW` |      软件对齐消耗更多CPU      |
+|     `enable_point_cloud`     |                    `false`                    |     禁用点云可降低CPU使用率     |
+| `enable_colored_point_cloud` |                    `false`                    | 禁用彩色点云可降低CPU使用率 |
 
 ### 彩色流格式与订阅方式
 
 v2.8.8 优化了彩色流图像发布流程：
 
 - 当 `color_format` 为 RGB/YUYV 等非 MJPG 格式时，订阅 `/camera/color/image_raw`。
-- 当 `color_format:=MJPG` 时，建议订阅 `/camera/color/image_raw/compressed`。ROS wrapper 会直接发布压缩图像，避免额外解码，从而显著降低 MJPG 场景下的 CPU 占用。
+- 当 `color_format:=MJPG` 时，建议订阅 `/camera/color/image_raw/compressed`。ROS wrapper 会直接发布压缩图像，避免额外解码，从而显著降低 MJPG 场景下的 CPU 占用，甚至低于 RGB 格式。
 - 如果订阅 `/camera/color/image_raw`，MJPG 仍需要在主机侧解码，CPU 占用会更高。
-
-### 用于测试的启动文件
-
-* `gemini_330_series_lower_cpu_usage.launch.py`
-* `multi_camera_lower_cpu_usage.launch.py`
 
 ### 测试环境
 
@@ -94,10 +92,3 @@ v2.8.8 优化了彩色流图像发布流程：
 
 根据测试结果，仅使用 `hardware_noise_removal_filter` 相比无滤波器基准，对 `libuvc`（+3.5%）和 `v4l2`（-3.4%）的CPU使用率变化可以忽略不计，因为此滤波器在相机硬件内部运行。相比之下，其他滤波器在主机系统上执行。将 `spatial_filter` 添加到硬件滤波器会导致CPU使用率适度增加，而应用基于软件的 `noise_removal_filter`——无论是单独使用还是与 `spatial_filter` 结合——都会显著增加CPU负载。为保持较低的CPU使用率，建议避免使用基于软件的滤波器，仅依赖 `hardware_noise_removal_filter`。
 
-### 进一步优化
-
-|           参数           |                  推荐值                  |                      说明                      |
-| :----------------------------: | :----------------------------------------------: | :---------------------------------------------: |
-|     `depth_registration`     | `false` 或 `true` 配合 `align_mode=HW` |      软件对齐消耗更多CPU      |
-|     `enable_point_cloud`     |                    `false`                    |     禁用点云可降低CPU使用率     |
-| `enable_colored_point_cloud` |                    `false`                    | 禁用彩色点云可降低CPU使用率 |

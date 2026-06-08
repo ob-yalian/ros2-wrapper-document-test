@@ -1,6 +1,6 @@
 ## Reducing CPU Usage with Orbbec ROS Package
 
-You can find example usage code in the [example](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples).
+You can refer to the low-CPU launch configuration in [gemini_330_series_low_cpu.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/launch/gemini_330_series_low_cpu.launch.py).
 
 This document outlines strategies for minimizing CPU usage in the **OrbbecSDK_ROS2 v2** environment when using **Gemini 330 series cameras**. The firmware version must be **no lower than 1.4.10**, and `device` should be set to **Default**.
 
