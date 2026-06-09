@@ -1,8 +1,8 @@
-### 压缩图像
+## 压缩图像
 
 OrbbecSDK ROS2 支持通过 `image_transport` 发布压缩图像话题。常用场景包括降低网络传输带宽、远程查看图像，以及在 `color_format:=MJPG` 时直接订阅压缩彩色图像以降低主机端解码开销。
 
-## 相关启动参数
+### 相关启动参数
 
 压缩图像由以下 launch 参数控制：
 
@@ -27,7 +27,7 @@ ros2 launch orbbec_camera gemini_330_series.launch.py \
 color.image_raw.enable_pub_plugins:='["image_transport/raw"]'
 ```
 
-## 常用压缩图像话题
+### 常用压缩图像话题
 
 默认相机命名空间为 `/camera`。如果启动时修改了 `camera_name`，请将下面话题中的 `/camera` 替换为实际命名空间。
 
@@ -50,7 +50,7 @@ ros2 topic echo /camera/color/image_raw/compressed --no-arr
 ros2 topic echo /camera/depth/image_raw/compressedDepth --no-arr
 ```
 
-## `color_format:=MJPG` 场景
+### `color_format:=MJPG` 场景
 
 当彩色流使用 `color_format:=MJPG` 时，ROS wrapper 会直接发布 `/camera/color/image_raw/compressed`，订阅该话题可以避免在主机侧额外解码 MJPG 图像，通常能降低 CPU 占用。
 
@@ -66,7 +66,7 @@ ros2 topic echo /camera/color/image_raw/compressed --no-arr
 
 如果订阅 `/camera/color/image_raw`，MJPG 图像仍需要在主机侧解码，CPU 占用会更高。更多低 CPU 配置建议请参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
 
-## 排查方法
+### 排查方法
 
 如果没有看到压缩图像话题，请先检查话题列表：
 

@@ -1,8 +1,8 @@
-### Compressed Image
+## Compressed Image
 
 OrbbecSDK ROS2 supports publishing compressed image topics through `image_transport`. This is useful for reducing network bandwidth, viewing images remotely, and subscribing to the compressed color image directly when `color_format:=MJPG` is used to reduce host-side decoding overhead.
 
-## Related Launch Parameters
+### Related Launch Parameters
 
 Compressed image publishing is controlled by the following launch parameters:
 
@@ -27,7 +27,7 @@ ros2 launch orbbec_camera gemini_330_series.launch.py \
 color.image_raw.enable_pub_plugins:='["image_transport/raw"]'
 ```
 
-## Common Compressed Image Topics
+### Common Compressed Image Topics
 
 The default camera namespace is `/camera`. If you change `camera_name` when launching the camera, replace `/camera` in the following topics with the actual namespace.
 
@@ -50,7 +50,7 @@ View compressed depth image messages:
 ros2 topic echo /camera/depth/image_raw/compressedDepth --no-arr
 ```
 
-## `color_format:=MJPG` Scenario
+### `color_format:=MJPG` Scenario
 
 When the color stream uses `color_format:=MJPG`, the ROS wrapper directly publishes `/camera/color/image_raw/compressed`. Subscribing to this topic avoids extra host-side MJPG decoding and usually reduces CPU usage.
 
@@ -66,7 +66,7 @@ ros2 topic echo /camera/color/image_raw/compressed --no-arr
 
 If you subscribe to `/camera/color/image_raw`, the MJPG image still needs to be decoded on the host, which increases CPU usage. For more low-CPU configuration suggestions, see [Reducing CPU Usage](../5_advanced_guide/performance/lower_cpu_usage.md).
 
-## Troubleshooting
+### Troubleshooting
 
 If you do not see compressed image topics, check the topic list first:
 
