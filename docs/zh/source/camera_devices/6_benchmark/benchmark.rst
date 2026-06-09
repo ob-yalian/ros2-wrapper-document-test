@@ -1,11 +1,15 @@
-性能基准测试
+工具
 ======================================================
 
-本章介绍如何使用性能基准测试工具来测试不同相机的性能。
+本章汇总 OrbbecSDK_ROS2 提供的设备查询、维护、网络配置、性能诊断、多相机和调试辅助工具。
 
 .. toctree::
     :maxdepth: 2
 
-    introduction.md
-    benchmark_usage.md
-    othertools.md
+    tools.md
+    device_query_tools.md
+    network_config_tools.md
+    firmware_update_tool.md
+    benchmark_tools.md
+    diagnostic_tools.md
+    multi_camera_tools.md
