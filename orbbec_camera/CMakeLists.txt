@@ -14,6 +14,7 @@ option(INSTALL_UDEV_RULES "Install udev rule for Orbbec cameras" ON)
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wall -Wextra -Werror -Wno-pedantic -Wno-array-bounds)
     add_compile_options(-Wno-error=deprecated-declarations)
+    add_link_options("-Wl,-z,relro,-z,now,-z,defs")
 endif()
 
 # find dependencies
