@@ -239,9 +239,9 @@ class OBCameraNode {
 
   void captureInitialRosParameters();
 
-  bool isLaunchParamProvided(const std::string &param_name) const;
+  bool isLaunchParamProvided(const std::string& param_name) const;
 
-  bool exportConfigJsonToFile(const std::string &file_path, std::string &message);
+  bool exportConfigJsonToFile(const std::string& file_path, std::string& message);
 
   void exportConfigJsonIfRequested();
 
@@ -249,8 +249,8 @@ class OBCameraNode {
 
   void syncConfigJsonDeviceSettings();
 
-  void syncConfigJsonFilterSettings(const std::vector<std::shared_ptr<ob::Filter>> &filters,
-                                    const std::string &sensor_name);
+  void syncConfigJsonFilterSettings(const std::vector<std::shared_ptr<ob::Filter>>& filters,
+                                    const std::string& sensor_name);
 
   void setupProfiles();
 
@@ -282,19 +282,19 @@ class OBCameraNode {
 
   void publishDepthFiltersStatus();
 
-  DepthFilterState buildDepthFilterState(const std::string &filter_name, bool enabled,
-                                         const std::shared_ptr<ob::Filter> &filter) const;
+  DepthFilterState buildDepthFilterState(const std::string& filter_name, bool enabled,
+                                         const std::shared_ptr<ob::Filter>& filter) const;
 
-  static std::string normalizeDepthFilterName(const std::string &filter_name);
+  static std::string normalizeDepthFilterName(const std::string& filter_name);
 
-  static void appendDepthFilterParam(DepthFilterState &filter_state, const std::string &name,
-                                     const std::string &value);
+  static void appendDepthFilterParam(DepthFilterState& filter_state, const std::string& name,
+                                     const std::string& value);
 
-  void updateDepthFilterEnabledCache(const std::string &filter_name, bool enabled);
+  void updateDepthFilterEnabledCache(const std::string& filter_name, bool enabled);
 
   bool applyNamedDepthFilterConfig(
-      const std::string &filter_name, bool enabled,
-      const std::vector<orbbec_camera_msgs::msg::DepthFilterParam> &params, std::string &message);
+      const std::string& filter_name, bool enabled,
+      const std::vector<orbbec_camera_msgs::msg::DepthFilterParam>& params, std::string& message);
 
   void setupCameraInfo();
 
@@ -435,8 +435,8 @@ class OBCameraNode {
   void switchIRCameraCallback(const std::shared_ptr<SetString::Request>& request,
                               std::shared_ptr<SetString::Response>& response);
 
-  void exportConfigJsonCallback(const std::shared_ptr<SetString::Request> &request,
-                                std::shared_ptr<SetString::Response> &response);
+  void exportConfigJsonCallback(const std::shared_ptr<SetString::Request>& request,
+                                std::shared_ptr<SetString::Response>& response);
 
   bool writeCustomerData(const std::string& data);
 

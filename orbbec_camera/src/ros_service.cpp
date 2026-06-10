@@ -1495,8 +1495,8 @@ void OBCameraNode::switchIRCameraCallback(const std::shared_ptr<SetString::Reque
   }
 }
 
-void OBCameraNode::exportConfigJsonCallback(const std::shared_ptr<SetString::Request> &request,
-                                            std::shared_ptr<SetString::Response> &response) {
+void OBCameraNode::exportConfigJsonCallback(const std::shared_ptr<SetString::Request>& request,
+                                            std::shared_ptr<SetString::Response>& response) {
   response->success = exportConfigJsonToFile(request->data, response->message);
 }
 

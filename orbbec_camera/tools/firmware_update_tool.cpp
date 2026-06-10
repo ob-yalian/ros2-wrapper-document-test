@@ -44,8 +44,7 @@ void waitForFirmwareLogDrain(const rclcpp::Logger &logger) {
 }
 
 bool isSdkLogEnabled(const std::string &log_level) {
-  return orbbec_camera::obLogSeverityFromString(log_level) !=
-         OBLogSeverity::OB_LOG_SEVERITY_OFF;
+  return orbbec_camera::obLogSeverityFromString(log_level) != OBLogSeverity::OB_LOG_SEVERITY_OFF;
 }
 
 struct CliArgs {
@@ -629,8 +628,7 @@ bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob
 
 FirmwareUpdateResult updateFirmware(const rclcpp::Logger &logger,
                                     const std::shared_ptr<ob::Device> &device,
-                                    const std::string &firmware_path,
-                                    bool firmware_log_enabled) {
+                                    const std::string &firmware_path, bool firmware_log_enabled) {
   FirmwareUpdateResult result;
   if (firmware_path.empty()) {
     result.success = true;
