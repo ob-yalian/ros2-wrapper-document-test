@@ -2305,6 +2305,9 @@ void OBCameraNode::syncConfigJsonFilterSettings(
 }
 
 void OBCameraNode::setupColorPostProcessFilter() {
+  if (!enable_stream_[COLOR] && !enable_stream_[COLOR_LEFT] && !enable_stream_[COLOR_RIGHT]) {
+    return;
+  }
   try {
     auto color_sensor = device_->getSensor(OB_SENSOR_COLOR);
     if (color_sensor) {
@@ -2452,6 +2455,9 @@ void OBCameraNode::setupColorPostProcessFilter() {
 }
 
 void OBCameraNode::setupIrPostProcessFilter() {
+  if (!enable_stream_[INFRA0]) {
+    return;
+  }
   try {
     auto ir_sensor = device_->getSensor(OB_SENSOR_IR);
     ir_filter_list_ = ir_sensor->createRecommendedFilters();
@@ -2579,6 +2585,9 @@ void OBCameraNode::applyHwD2CColorUndistortion(std::shared_ptr<ob::FrameSet> &fr
 }
 
 void OBCameraNode::setupLeftIrPostProcessFilter() {
+  if (!enable_stream_[INFRA1]) {
+    return;
+  }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
   if (isGemini335PID(pid_)) {
@@ -2617,6 +2626,9 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
 }
 
 void OBCameraNode::setupRightIrPostProcessFilter() {
+  if (!enable_stream_[INFRA2]) {
+    return;
+  }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
   if (isGemini335PID(pid_)) {
@@ -2654,6 +2666,9 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
   }
 }
 void OBCameraNode::setupDepthPostProcessFilter() {
+  if (!enable_stream_[DEPTH]) {
+    return;
+  }
   auto depth_sensor = device_->getSensor(OB_SENSOR_DEPTH);
   // set depth sensor to filter
   depth_filter_list_ = depth_sensor->createRecommendedFilters();
@@ -3856,21 +3871,11 @@ void OBCameraNode::setupTopics() {
     getParameters();
     loadConfigJson();
     setupDevices();
-    if (enable_stream_[DEPTH]) {
-      setupDepthPostProcessFilter();
-    }
-    if (enable_stream_[COLOR] || enable_stream_[COLOR_LEFT] || enable_stream_[COLOR_RIGHT]) {
-      setupColorPostProcessFilter();
-    }
-    if (enable_stream_[INFRA0]) {
-      setupIrPostProcessFilter();
-    }
-    if (enable_stream_[INFRA2]) {
-      setupRightIrPostProcessFilter();
-    }
-    if (enable_stream_[INFRA1]) {
-      setupLeftIrPostProcessFilter();
-    }
+    setupDepthPostProcessFilter();
+    setupColorPostProcessFilter();
+    setupIrPostProcessFilter();
+    setupRightIrPostProcessFilter();
+    setupLeftIrPostProcessFilter();
     setupUndistortionFilters();
     syncConfigJsonDeviceSettings();
     syncConfigJsonFilterSettings(depth_filter_list_, "depth");
