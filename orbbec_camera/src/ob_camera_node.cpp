@@ -1009,7 +1009,6 @@ void OBCameraNode::setupDevices() {
     sync_config.framesPerTrigger = frames_per_trigger_;
     TRY_EXECUTE_BLOCK(device_->setMultiDeviceSyncConfig(sync_config));
     sync_config = device_->getMultiDeviceSyncConfig();
-    RCLCPP_INFO_STREAM(logger_, "Current device preset: " << device_->getCurrentPresetName());
     RCLCPP_INFO_STREAM(logger_,
                        "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
     if (sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING) {
