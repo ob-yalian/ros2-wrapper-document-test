@@ -699,8 +699,7 @@ void OBCameraNode::clean() noexcept {
       // Wait for any currently executing timer callbacks to complete
       {
         std::unique_lock<std::mutex> lk(diagnostic_mutex_);
-        diagnostic_cv_.wait_for(lk, std::chrono::milliseconds(100),
-                                [this]() { return !diagnostic_running_; });
+        diagnostic_cv_.wait(lk, [this]() { return !diagnostic_running_; });
       }
       diagnostic_timer_.reset();
     }
