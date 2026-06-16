@@ -192,6 +192,8 @@ class OBCameraNode {
 
   void startIMU();
 
+  void restartPlaybackStreams();
+
   int openSocSyncPwmTrigger(uint16_t fps);
   int closeSocSyncPwmTrigger();
   void startGmslTrigger();

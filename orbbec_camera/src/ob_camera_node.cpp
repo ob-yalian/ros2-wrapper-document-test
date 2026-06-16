@@ -3303,6 +3303,26 @@ void OBCameraNode::startIMU() {
   }
 }
 
+void OBCameraNode::restartPlaybackStreams() {
+  if (!is_playback_device_ || !is_running_.load()) {
+    return;
+  }
+
+  try {
+    stopStreams();
+    startStreams();
+    stopIMU();
+    startIMU();
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to restart playback streams: "
+                                    << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to restart playback streams: " << e.what());
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to restart playback streams");
+  }
+}
+
 void OBCameraNode::stopStreams() {
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
 

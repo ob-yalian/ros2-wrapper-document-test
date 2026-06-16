@@ -1023,7 +1023,7 @@ void OBCameraNodeDriver::initializeBagPlayback() {
         try {
           playback_device_->seek(0);
           if (ob_camera_node_) {
-            ob_camera_node_->startStreams();
+            ob_camera_node_->restartPlaybackStreams();
           }
         } catch (const ob::Error &e) {
           RCLCPP_WARN_STREAM(logger_, "Failed to restart bag playback: "
