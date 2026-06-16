@@ -31,6 +31,7 @@
 #include <std_srvs/srv/empty.hpp>
 #include <backward_ros/backward.hpp>
 #include "libobsensor/hpp/Device.hpp"
+#include "libobsensor/hpp/RecordPlayback.hpp"
 
 namespace orbbec_camera {
 
@@ -56,6 +57,8 @@ class OBCameraNodeDriver : public rclcpp::Node {
                                                   const std::string& net_ip);
 
   void initializeDevice(const std::shared_ptr<ob::Device>& device);
+
+  void initializeBagPlayback();
 
   void startDevice(const std::shared_ptr<ob::DeviceList>& list);
 
@@ -155,5 +158,13 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::string force_ip_gateway_;      // e.g. "192.168.1.1"
   std::atomic<bool> force_ip_success_{false};
   std::string device_type_;
+  // bag recording
+  std::string bag_record_filename_;
+  bool bag_record_compression_ = true;
+  std::shared_ptr<ob::RecordDevice> record_device_ = nullptr;
+  // bag playback
+  std::string bag_filename_;
+  bool bag_loop_ = false;
+  std::shared_ptr<ob::PlaybackDevice> playback_device_ = nullptr;
 };
 }  // namespace orbbec_camera

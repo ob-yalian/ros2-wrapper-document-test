@@ -75,6 +75,12 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_number', default_value=''),
         DeclareLaunchArgument('usb_port', default_value=''),
         DeclareLaunchArgument('device_num', default_value='1'),
+        # Bag recording: record the live stream to an Orbbec .bag file
+        DeclareLaunchArgument('bag_record_filename', default_value=''),
+        DeclareLaunchArgument('bag_record_compression', default_value='true'),
+        # Bag playback: load a previously recorded .bag file as a virtual device
+        DeclareLaunchArgument('bag_filename', default_value=''),
+        DeclareLaunchArgument('bag_loop', default_value='false'),
         DeclareLaunchArgument('upgrade_firmware', default_value=''),
         DeclareLaunchArgument('preset_firmware_path', default_value=''),
         DeclareLaunchArgument('load_config_json_file_path', default_value=''),

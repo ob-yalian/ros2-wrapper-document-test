@@ -164,7 +164,8 @@ typedef struct {
 class OBCameraNode {
  public:
   OBCameraNode(rclcpp::Node* node, std::shared_ptr<ob::Device> device,
-               std::shared_ptr<Parameters> parameters, bool use_intra_process = false);
+               std::shared_ptr<Parameters> parameters, bool use_intra_process = false,
+               bool is_playback_device = false);
 
   template <class T>
   void setAndGetNodeParameter(
@@ -932,6 +933,11 @@ class OBCameraNode {
   bool hw_d2c_color_undistortion_configured_ = false;
   bool has_first_color_frame_ = false;
   bool use_intra_process_ = false;
+  // True when device_ is an ob::PlaybackDevice. Real-device-only hardware
+  // tuning (heartbeat, USB3 retry, laser, sync config, etc.) is skipped in
+  // setupDevices() for playback devices since those SDK components aren't
+  // registered for a recorded .bag file.
+  bool is_playback_device_ = false;
   std::string cloud_frame_id_;
   std::mutex depth_filter_mutex_;
   std::vector<std::shared_ptr<ob::Filter>> depth_filter_list_;
