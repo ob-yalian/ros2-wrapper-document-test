@@ -41,7 +41,7 @@ def load_parameters(context, args):
     config_file_path = LaunchConfiguration('config_file_path').perform(context)
     if config_file_path:
         default_params = merge_params(default_params, load_yaml(config_file_path))
-    skip_convert = {'config_file_path', 'usb_port', 'serial_number'}
+    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename'}
 
     result = {}
     for key, value in default_params.items():
@@ -72,6 +72,9 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_number', default_value=''),
         DeclareLaunchArgument('usb_port', default_value=''),
         DeclareLaunchArgument('device_num', default_value='1'),
+        DeclareLaunchArgument('bag_record_filename', default_value=''),
+        DeclareLaunchArgument('bag_filename', default_value=''),
+        DeclareLaunchArgument('bag_loop', default_value='false'),
         DeclareLaunchArgument('connection_delay', default_value='10'),
         DeclareLaunchArgument('upgrade_firmware', default_value=''),
         DeclareLaunchArgument('preset_firmware_path', default_value=''),
