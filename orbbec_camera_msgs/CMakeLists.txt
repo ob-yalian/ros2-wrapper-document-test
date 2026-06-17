@@ -36,6 +36,7 @@ rosidl_generate_interfaces(
     "srv/SetArrays.srv"
     "srv/GetUserCalibParams.srv"
     "srv/SetUserCalibParams.srv"
+    "srv/SetBagRecording.srv"
     DEPENDENCIES
     sensor_msgs
     std_msgs

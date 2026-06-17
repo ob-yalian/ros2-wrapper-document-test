@@ -32,6 +32,7 @@
 #include <fstream>
 #include <iomanip>  // For std::put_time
 #include <malloc.h>
+#include <sstream>
 
 std::string g_camera_name = "orbbec_camera";  // Assuming this is declared elsewhere
 std::string g_time_domain = "global";         // Assuming this is declared elsewhere
@@ -43,6 +44,18 @@ std::string getLogDirectoryForCamera(const std::string &camera_name) {
   }
   std::string home_dir = std::getenv("HOME") ? std::getenv("HOME") : "";
   return (std::filesystem::path(home_dir) / ".ros" / "Log" / camera_name).string();
+}
+
+std::string getDefaultBagRecordFilePath() {
+  const std::time_t now_time = std::time(nullptr);
+  std::tm tm{};
+  localtime_r(&now_time, &tm);
+
+  std::ostringstream time_stream;
+  time_stream << std::put_time(&tm, "%Y_%m_%d_%H_%M_%S");
+
+  return (std::filesystem::current_path() / ("orbbec_record_" + time_stream.str() + ".bag"))
+      .string();
 }
 
 std::string makeDefaultSdkLogFileName() {
@@ -164,7 +177,7 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
   // Finalize bag recording before the pipeline is torn down, otherwise the
   // bag file can end up truncated/corrupted.
   if (record_device_) {
-    RCLCPP_INFO_STREAM(logger_, "Finalizing bag recording...");
+    RCLCPP_INFO_STREAM(logger_, "Stopping bag recording...");
     record_device_.reset();
   }
 
@@ -341,6 +354,9 @@ void OBCameraNodeDriver::init() {
   reboot_device_srv_ = this->create_service<std_srvs::srv::Empty>(
       "reboot_device", std::bind(&OBCameraNodeDriver::rebootDeviceCallback, this,
                                  std::placeholders::_1, std::placeholders::_2));
+  set_bag_recording_srv_ = this->create_service<orbbec_camera_msgs::srv::SetBagRecording>(
+      "set_bag_recording", std::bind(&OBCameraNodeDriver::setBagRecordingCallback, this,
+                                     std::placeholders::_1, std::placeholders::_2));
   pthread_mutexattr_init(&orb_device_lock_attr_);
   pthread_mutexattr_setpshared(&orb_device_lock_attr_, PTHREAD_PROCESS_SHARED);
   orb_device_lock_ = (pthread_mutex_t *)orb_device_lock_shm_addr_;
@@ -805,6 +821,54 @@ void OBCameraNodeDriver::deviceStatusTimer() {
   }
   // RCLCPP_INFO_STREAM(logger_, "deviceStatusTimer() ");
 }
+
+void OBCameraNodeDriver::setBagRecordingCallback(
+    const std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Request> request,
+    std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Response> response) {
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+
+  if (!device_) {
+    response->success = false;
+    response->message = "No device connected";
+    return;
+  }
+
+  if (!request->enable) {
+    if (!record_device_) {
+      response->success = true;
+      response->message = "Bag recording is not running";
+      return;
+    }
+    RCLCPP_INFO_STREAM(logger_, "Stopping bag recording");
+    record_device_.reset();
+    response->success = true;
+    response->message = "Bag recording stopped";
+    return;
+  }
+
+  std::string file_path =
+      request->file_path.empty() ? getDefaultBagRecordFilePath() : request->file_path;
+
+  if (record_device_) {
+    record_device_.reset();
+  }
+
+  try {
+    record_device_ =
+        std::make_shared<ob::RecordDevice>(device_, file_path, bag_record_compression_);
+  } catch (const ob::Error &e) {
+    response->success = false;
+    response->message = "Failed to start recording: " + orbbec_camera::formatObErrorWithStatus(e);
+    RCLCPP_ERROR_STREAM(logger_, response->message);
+    return;
+  }
+
+  RCLCPP_INFO_STREAM(logger_, "Recording to " << file_path);
+
+  response->success = true;
+  response->message = "Recording started: " + file_path;
+}
+
 void OBCameraNodeDriver::rebootDeviceCallback(
     const std::shared_ptr<std_srvs::srv::Empty::Request> request,
     std::shared_ptr<std_srvs::srv::Empty::Response> response) {
