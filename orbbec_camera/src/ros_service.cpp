@@ -1299,7 +1299,14 @@ void OBCameraNode::getLdpStatusCallback(const std::shared_ptr<GetBool::Request>&
                                         std::shared_ptr<GetBool::Response>& response) {
   (void)request;
   try {
-    response->data = device_->getBoolProperty(OB_PROP_LDP_STATUS_BOOL);
+    if (!device_->isPropertySupported(OB_PROP_LDP_BOOL, OB_PERMISSION_READ) ||
+        !device_->isPropertySupported(OB_PROP_LDP_STATUS_BOOL, OB_PERMISSION_READ)) {
+      response->message = "LDP property is not supported";
+      response->success = false;
+      return;
+    }
+    response->data = device_->getBoolProperty(OB_PROP_LDP_BOOL) &&
+                     device_->getBoolProperty(OB_PROP_LDP_STATUS_BOOL);
     response->success = true;
   } catch (const ob::Error& e) {
     response->message = orbbec_camera::formatObErrorWithStatus(e);
