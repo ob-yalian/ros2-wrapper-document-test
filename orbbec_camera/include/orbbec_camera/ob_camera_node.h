@@ -51,6 +51,7 @@
 #include "orbbec_camera_msgs/msg/depth_filter_param.hpp"
 #include "orbbec_camera_msgs/msg/depth_filter_state.hpp"
 #include "orbbec_camera_msgs/msg/depth_filters_status.hpp"
+#include "orbbec_camera_msgs/srv/get_device_config.hpp"
 #include "orbbec_camera_msgs/srv/get_device_info.hpp"
 #include "orbbec_camera_msgs/msg/extrinsics.hpp"
 #include "orbbec_camera_msgs/msg/metadata.hpp"
@@ -110,6 +111,7 @@
 #define DEVICE_PATH "/dev/camsync"
 
 namespace orbbec_camera {
+using GetDeviceConfig = orbbec_camera_msgs::srv::GetDeviceConfig;
 using GetDeviceInfo = orbbec_camera_msgs::srv::GetDeviceInfo;
 using Extrinsics = orbbec_camera_msgs::msg::Extrinsics;
 using SetInt32 = orbbec_camera_msgs::srv::SetInt32;
@@ -377,6 +379,9 @@ class OBCameraNode {
 
   void getDeviceInfoCallback(const std::shared_ptr<GetDeviceInfo::Request>& request,
                              std::shared_ptr<GetDeviceInfo::Response>& response);
+
+  void getDeviceConfigCallback(const std::shared_ptr<GetDeviceConfig::Request>& request,
+                               std::shared_ptr<GetDeviceConfig::Response>& response);
 
   void getSDKVersion(const std::shared_ptr<GetString::Request>& request,
                      std::shared_ptr<GetString::Response>& response);
@@ -658,6 +663,7 @@ class OBCameraNode {
       set_auto_exposure_srv_;
   std::map<stream_index_pair, rclcpp::Service<SetArrays>::SharedPtr> set_ae_roi_srv_;
   rclcpp::Service<GetDeviceInfo>::SharedPtr get_device_srv_;
+  rclcpp::Service<GetDeviceConfig>::SharedPtr get_device_config_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_laser_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ldp_enable_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ldp_status_srv_;
