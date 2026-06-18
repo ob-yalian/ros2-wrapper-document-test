@@ -3809,7 +3809,7 @@ void OBCameraNode::getParameters() {
   if (isOpenNIDevice(pid_)) {
     time_domain_ = "system";
   }
-  if (time_domain_ == "global") {
+  if (time_domain_ == "global" && !is_playback_device_) {
     device_->enableGlobalTimestamp(true);
   }
   setAndGetNodeParameter<int>(frames_per_trigger_, "frames_per_trigger", 2);
