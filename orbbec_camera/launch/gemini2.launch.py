@@ -17,6 +17,9 @@ def generate_launch_description():
         DeclareLaunchArgument("serial_number", default_value=""),
         DeclareLaunchArgument("usb_port", default_value=""),
         DeclareLaunchArgument("device_num", default_value="1"),
+        DeclareLaunchArgument("bag_record_filename", default_value=""),
+        DeclareLaunchArgument("bag_filename", default_value=""),
+        DeclareLaunchArgument("bag_loop", default_value="false"),
         DeclareLaunchArgument("uvc_backend", default_value="libuvc"),  # libuvc or v4l2
         DeclareLaunchArgument("product_id", default_value=""),
         DeclareLaunchArgument("enable_point_cloud", default_value="true"),

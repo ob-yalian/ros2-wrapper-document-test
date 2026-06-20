@@ -572,12 +572,14 @@ void OBCameraNode::publishDepthFiltersStatus() {
 }
 
 OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> device,
-                           std::shared_ptr<Parameters> parameters, bool use_intra_process)
+                           std::shared_ptr<Parameters> parameters, bool use_intra_process,
+                           bool is_playback_device)
     : node_(node),
       device_(std::move(device)),
       parameters_(std::move(parameters)),
       logger_(node->get_logger()),
-      use_intra_process_(use_intra_process) {
+      use_intra_process_(use_intra_process),
+      is_playback_device_(is_playback_device) {
   pid_ = device_->getDeviceInfo()->getPid();
   RCLCPP_INFO_STREAM(logger_,
                      "OBCameraNode: use_intra_process: " << (use_intra_process ? "ON" : "OFF"));
@@ -903,6 +905,16 @@ void OBCameraNode::setupDevices() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
+
+  if (is_playback_device_) {
+    // Everything below this point only tunes real-hardware-only behavior
+    // (heartbeat, USB3 retry, laser, depth limits, multi-device sync, PTP,
+    // etc.). Those SDK device components aren't registered on a playback
+    // device, so querying them throws instead of returning "not supported".
+    // None of it is needed to correctly publish a recorded .bag file.
+    return;
+  }
+
   auto should_apply_launch_config = [this](const std::string &param_name) {
     return isLaunchParamProvided(param_name);
   };
@@ -3613,6 +3625,26 @@ void OBCameraNode::startIMU() {
   }
 }
 
+void OBCameraNode::restartPlaybackStreams() {
+  if (!is_playback_device_ || !is_running_.load()) {
+    return;
+  }
+
+  try {
+    stopStreams();
+    startStreams();
+    stopIMU();
+    startIMU();
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to restart playback streams: "
+                                    << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to restart playback streams: " << e.what());
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to restart playback streams");
+  }
+}
+
 void OBCameraNode::stopStreams() {
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
 
@@ -4099,7 +4131,7 @@ void OBCameraNode::getParameters() {
   if (isOpenNIDevice(pid_)) {
     time_domain_ = "system";
   }
-  if (time_domain_ == "global") {
+  if (time_domain_ == "global" && !is_playback_device_) {
     device_->enableGlobalTimestamp(true);
   }
   setAndGetNodeParameter<int>(frames_per_trigger_, "frames_per_trigger", 2);
@@ -4291,7 +4323,9 @@ void OBCameraNode::onTemperatureUpdate(diagnostic_updater::DiagnosticStatusWrapp
 }
 
 void OBCameraNode::setupDiagnosticUpdater() {
-  if (diagnostic_period_ <= 0.0) {
+  if (diagnostic_period_ <= 0.0 || is_playback_device_) {
+    // Temperature reporting requires live hardware monitoring that doesn't
+    // exist for a recorded .bag file; skip to avoid repeated SDK errors.
     return;
   }
   try {

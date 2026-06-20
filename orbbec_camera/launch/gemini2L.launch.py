@@ -64,7 +64,7 @@ def load_parameters(context, args):
     if config_file_path:
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
-    skip_convert = {"config_file_path", "usb_port", "serial_number"}
+    skip_convert = {"config_file_path", "usb_port", "serial_number", 'bag_record_filename', 'bag_filename'}
 
     return {
         key: (value if key in skip_convert else convert_value(value))
@@ -79,6 +79,9 @@ def generate_launch_description():
         DeclareLaunchArgument("serial_number", default_value=""),
         DeclareLaunchArgument("usb_port", default_value=""),
         DeclareLaunchArgument("device_num", default_value="1"),
+        DeclareLaunchArgument("bag_record_filename", default_value=""),
+        DeclareLaunchArgument("bag_filename", default_value=""),
+        DeclareLaunchArgument("bag_loop", default_value="false"),
         DeclareLaunchArgument("uvc_backend", default_value="libuvc"),  # libuvc or v4l2
         DeclareLaunchArgument("product_id", default_value=""),
         DeclareLaunchArgument("enable_point_cloud", default_value="true"),
