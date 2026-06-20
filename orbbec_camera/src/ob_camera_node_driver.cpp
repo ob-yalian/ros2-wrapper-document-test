@@ -854,6 +854,7 @@ void OBCameraNodeDriver::setBagRecordingCallback(
   }
 
   try {
+    exportBagPresetJson(file_path);
     record_device_ =
         std::make_shared<ob::RecordDevice>(device_, file_path, bag_record_compression_);
   } catch (const ob::Error &e) {
@@ -1068,6 +1069,36 @@ std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDeviceByNetIP(
   }
 
   return nullptr;
+}
+
+void OBCameraNodeDriver::exportBagPresetJson(const std::string &bag_path) {
+  if (!device_ || bag_path.empty() || playback_device_) {
+    return;
+  }
+
+  auto json_path = std::filesystem::path(bag_path);
+  if (json_path.extension() == ".bag") {
+    json_path.replace_extension(".json");
+  } else {
+    json_path += ".json";
+  }
+
+  const auto json_path_str = json_path.string();
+  try {
+    const auto parent_path = json_path.parent_path();
+    if (!parent_path.empty()) {
+      std::filesystem::create_directories(parent_path);
+    }
+    device_->exportSettingsAsPresetJsonFile(json_path_str.c_str());
+    RCLCPP_INFO_STREAM(logger_, "Exported bag preset JSON: " << json_path_str);
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Failed to export bag preset JSON "
+                                    << json_path_str << ": "
+                                    << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_,
+                       "Failed to export bag preset JSON " << json_path_str << ": " << e.what());
+  }
 }
 
 void OBCameraNodeDriver::initializeBagPlayback() {
@@ -1309,6 +1340,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
 
   if (!bag_record_filename_.empty() && !record_device_) {
     try {
+      exportBagPresetJson(bag_record_filename_);
       record_device_ = std::make_shared<ob::RecordDevice>(device_, bag_record_filename_,
                                                           bag_record_compression_);
       RCLCPP_INFO_STREAM(logger_, "Recording to bag file: " << bag_record_filename_);

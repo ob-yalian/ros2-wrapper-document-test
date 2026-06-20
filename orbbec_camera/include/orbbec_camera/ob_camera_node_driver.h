@@ -61,6 +61,8 @@ class OBCameraNodeDriver : public rclcpp::Node {
 
   void initializeBagPlayback();
 
+  void exportBagPresetJson(const std::string& bag_path);
+
   void startDevice(const std::shared_ptr<ob::DeviceList>& list);
 
   void connectNetDevice(const std::string& net_device_ip, int net_device_port);
