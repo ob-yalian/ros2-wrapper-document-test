@@ -177,8 +177,8 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
   // Finalize bag recording before the pipeline is torn down, otherwise the
   // bag file can end up truncated/corrupted.
   if (record_device_) {
-    RCLCPP_INFO_STREAM(logger_, "Stopping bag recording...");
     record_device_.reset();
+    RCLCPP_INFO_STREAM(logger_, "Bag recording stopped");
   }
 
   // First stop the camera node cleanly before stopping threads
@@ -601,8 +601,8 @@ void OBCameraNodeDriver::resetDevice() {
 
         // Stop recording before tearing down the pipeline so the bag file is finalized
         if (record_device_) {
-          RCLCPP_WARN_STREAM(logger_, "Device disconnected, stopping bag recording");
           record_device_.reset();
+          RCLCPP_WARN_STREAM(logger_, "Device disconnected, bag recording stopped");
         }
 
         // Reset objects in order, with additional safety checks
@@ -839,8 +839,8 @@ void OBCameraNodeDriver::setBagRecordingCallback(
       response->message = "Bag recording is not running";
       return;
     }
-    RCLCPP_INFO_STREAM(logger_, "Stopping bag recording");
     record_device_.reset();
+    RCLCPP_INFO_STREAM(logger_, "Bag recording stopped");
     response->success = true;
     response->message = "Bag recording stopped";
     return;
@@ -851,6 +851,7 @@ void OBCameraNodeDriver::setBagRecordingCallback(
 
   if (record_device_) {
     record_device_.reset();
+    RCLCPP_INFO_STREAM(logger_, "Bag recording stopped before starting a new recording");
   }
 
   try {
