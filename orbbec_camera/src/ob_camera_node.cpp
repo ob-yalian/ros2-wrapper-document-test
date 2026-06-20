@@ -1695,6 +1695,7 @@ bool OBCameraNode::exportConfigJsonToFile(const std::string &file_path, std::str
     }
 
     const auto resolved_file_path_str = resolved_file_path.string();
+    syncApplicationSensorConfigForExport();
     syncApplicationPointCloudConfigForExport();
     syncApplicationHdrMergeConfigForExport();
     device_->exportSettingsAsPresetJsonFile(resolved_file_path_str.c_str());
@@ -1730,6 +1731,66 @@ void OBCameraNode::exportConfigJsonIfRequested() {
 }
 
 bool OBCameraNode::isConfigJsonLoaded() const { return config_json_loaded_; }
+
+void OBCameraNode::syncApplicationSensorConfigForExport() {
+  if (!device_) {
+    return;
+  }
+
+  try {
+    if (!ob::ApplicationConfig::isSupported(device_)) {
+      RCLCPP_DEBUG_STREAM(logger_, "Skip exporting application_config sensors: unsupported device");
+      return;
+    }
+
+    auto application_config = ob::ApplicationConfig::get(device_);
+    CHECK_NOTNULL(application_config.get());
+
+    for (const auto &sensor_config : application_config->sensors()) {
+      if (!sensor_config || !sensor_config->streamProfile()) {
+        continue;
+      }
+
+      const auto current_profile = sensor_config->streamProfile();
+      const stream_index_pair stream_index{current_profile->getType(), 0};
+      const auto stream_name_it = stream_name_.find(stream_index);
+      if (stream_name_it == stream_name_.end()) {
+        RCLCPP_DEBUG_STREAM(logger_,
+                            "Skip exporting application_config sensor: unsupported stream type="
+                                << magic_enum::enum_name(current_profile->getType()));
+        continue;
+      }
+
+      auto export_sensor_config =
+          std::make_shared<ob::ApplicationSensorConfig>(sensor_config->sensorType());
+      const auto enable_stream_it = enable_stream_.find(stream_index);
+      export_sensor_config->enableStream(enable_stream_it != enable_stream_.end()
+                                             ? enable_stream_it->second
+                                             : sensor_config->isStreamEnabled());
+
+      const auto stream_profile_it = stream_profile_.find(stream_index);
+      export_sensor_config->setStreamProfile(stream_profile_it != stream_profile_.end() &&
+                                                     stream_profile_it->second
+                                                 ? stream_profile_it->second
+                                                 : current_profile);
+
+      const auto enable_undistortion_it = enable_undistortion_.find(stream_index);
+      export_sensor_config->enableUndistortion(enable_undistortion_it != enable_undistortion_.end()
+                                                   ? enable_undistortion_it->second
+                                                   : sensor_config->isUndistortionEnabled());
+
+      application_config->setSensor(export_sensor_config);
+    }
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config sensors sync failed error=\""
+                                    << orbbec_camera::formatObErrorWithStatus(e) << "\"");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(
+        logger_, "Export application_config sensors sync failed error=\"" << e.what() << "\"");
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config sensors sync failed");
+  }
+}
 
 void OBCameraNode::syncApplicationPointCloudConfigForExport() {
   if (!device_) {
