@@ -80,6 +80,30 @@ std::filesystem::path resolveConfigJsonFilePath(const std::string &file_path) {
   return path.lexically_normal();
 }
 
+bool configJsonContainsApplicationConfig(const std::string &file_path,
+                                         const rclcpp::Logger &logger) {
+  if (file_path.empty()) {
+    return false;
+  }
+
+  const auto resolved_file_path = resolveConfigJsonFilePath(file_path);
+  std::ifstream config_file(resolved_file_path);
+  if (!config_file.good()) {
+    return false;
+  }
+
+  try {
+    nlohmann::json config_json;
+    config_file >> config_json;
+    return config_json.contains("application_config");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger, "Config JSON application_config check failed file="
+                                   << resolved_file_path.string() << " error=\"" << e.what()
+                                   << "\"");
+  }
+  return false;
+}
+
 std::string getDepthFilterStatusParamName(const std::string &filter_name,
                                           const std::string &param_name) {
   if (filter_name == "SpatialAdvancedFilter" && param_name == "disp_diff") {
@@ -1671,6 +1695,8 @@ bool OBCameraNode::exportConfigJsonToFile(const std::string &file_path, std::str
     }
 
     const auto resolved_file_path_str = resolved_file_path.string();
+    syncApplicationPointCloudConfigForExport();
+    syncApplicationHdrMergeConfigForExport();
     device_->exportSettingsAsPresetJsonFile(resolved_file_path_str.c_str());
     if (!std::filesystem::exists(resolved_file_path)) {
       message = "Failed to export config json file: file not found after export path=" +
@@ -1704,6 +1730,86 @@ void OBCameraNode::exportConfigJsonIfRequested() {
 }
 
 bool OBCameraNode::isConfigJsonLoaded() const { return config_json_loaded_; }
+
+void OBCameraNode::syncApplicationPointCloudConfigForExport() {
+  if (!device_) {
+    return;
+  }
+
+  try {
+    if (!ob::ApplicationConfig::isSupported(device_)) {
+      RCLCPP_DEBUG_STREAM(logger_,
+                          "Skip exporting application_config point_cloud: unsupported device");
+      return;
+    }
+
+    auto application_config = ob::ApplicationConfig::get(device_);
+    CHECK_NOTNULL(application_config.get());
+
+    auto point_cloud_config = std::make_shared<ob::ApplicationPointCloudConfig>();
+    point_cloud_config->enable(enable_point_cloud_ || enable_colored_point_cloud_);
+    point_cloud_config->setFormat(enable_colored_point_cloud_ ? OB_FORMAT_RGB_POINT
+                                                              : OB_FORMAT_POINT);
+    point_cloud_config->setDecimationFactor(std::max(1, point_cloud_decimation_filter_factor_));
+
+    auto align_mode = ALIGN_DISABLE;
+    if (depth_registration_) {
+      if (align_mode_ == "HW") {
+        align_mode = ALIGN_D2C_HW_MODE;
+      } else if (align_target_stream_ == OB_STREAM_DEPTH) {
+        align_mode = ALIGN_C2D_SW_MODE;
+      } else {
+        align_mode = ALIGN_D2C_SW_MODE;
+      }
+    }
+    point_cloud_config->setAlignMode(align_mode);
+    point_cloud_config->enableFrameSync(enable_frame_sync_);
+    point_cloud_config->setAllFrameTypeRequired(frame_aggregate_mode_ == "full_frame");
+    point_cloud_config->enableMatchTargetResolution(
+        align_mode == ALIGN_D2C_HW_MODE ? enable_depth_scale_ : true);
+
+    application_config->setPointCloud(point_cloud_config);
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config point_cloud sync failed error=\""
+                                    << orbbec_camera::formatObErrorWithStatus(e) << "\"");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(
+        logger_, "Export application_config point_cloud sync failed error=\"" << e.what() << "\"");
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config point_cloud sync failed");
+  }
+}
+
+void OBCameraNode::syncApplicationHdrMergeConfigForExport() {
+  if (!device_) {
+    return;
+  }
+
+  try {
+    if (!ob::ApplicationConfig::isSupported(device_)) {
+      RCLCPP_DEBUG_STREAM(logger_,
+                          "Skip exporting application_config hdr_merge: unsupported device");
+      return;
+    }
+
+    auto application_config = ob::ApplicationConfig::get(device_);
+    CHECK_NOTNULL(application_config.get());
+
+    auto hdr_merge_config = std::make_shared<ob::ApplicationHDRMergeConfig>();
+    hdr_merge_config->enable(enable_hdr_merge_);
+    hdr_merge_config->enableIR(true);
+
+    application_config->setHDRMerge(hdr_merge_config);
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config hdr_merge sync failed error=\""
+                                    << orbbec_camera::formatObErrorWithStatus(e) << "\"");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(
+        logger_, "Export application_config hdr_merge sync failed error=\"" << e.what() << "\"");
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config hdr_merge sync failed");
+  }
+}
 
 void OBCameraNode::loadConfigJson() {
   if (load_config_json_file_path_.empty()) {
@@ -1751,6 +1857,148 @@ bool OBCameraNode::isLaunchParamProvided(const std::string &param_name) const {
     return false;
   }
   return initial_ros_params_.find(param_name) != initial_ros_params_.end();
+}
+
+void OBCameraNode::syncConfigJsonApplicationConfig() {
+  if (!config_json_loaded_ ||
+      !configJsonContainsApplicationConfig(load_config_json_file_path_, logger_)) {
+    return;
+  }
+
+  try {
+    if (!ob::ApplicationConfig::isSupported(device_)) {
+      RCLCPP_WARN_STREAM(logger_,
+                         "Config JSON application_config is ignored because this device does not "
+                         "support SDK application config");
+      return;
+    }
+
+    auto application_config = ob::ApplicationConfig::get(device_);
+    CHECK_NOTNULL(application_config.get());
+
+    for (const auto &sensor_config : application_config->sensors()) {
+      if (!sensor_config || !sensor_config->streamProfile()) {
+        continue;
+      }
+
+      auto profile = sensor_config->streamProfile();
+      const stream_index_pair stream_index{profile->getType(), 0};
+      auto stream_name_it = stream_name_.find(stream_index);
+      if (stream_name_it == stream_name_.end()) {
+        RCLCPP_DEBUG_STREAM(logger_, "Config JSON application_config skips unsupported stream type="
+                                         << profile->getType());
+        continue;
+      }
+
+      const auto &stream_name = stream_name_it->second;
+      if (!isLaunchParamProvided("enable_" + stream_name)) {
+        enable_stream_[stream_index] = sensor_config->isStreamEnabled();
+      }
+
+      if (std::find(IMAGE_STREAMS.begin(), IMAGE_STREAMS.end(), stream_index) !=
+          IMAGE_STREAMS.end()) {
+        auto video_profile = profile->as<ob::VideoStreamProfile>();
+        if (!isLaunchParamProvided(stream_name + "_width")) {
+          width_[stream_index] = static_cast<int>(video_profile->width());
+        }
+        if (!isLaunchParamProvided(stream_name + "_height")) {
+          height_[stream_index] = static_cast<int>(video_profile->height());
+        }
+        if (!isLaunchParamProvided(stream_name + "_fps")) {
+          fps_[stream_index] = static_cast<int>(video_profile->fps());
+        }
+        if (!isLaunchParamProvided(stream_name + "_format")) {
+          format_[stream_index] = video_profile->format();
+          format_str_[stream_index] = OBFormatToString(format_[stream_index]);
+        }
+        if (!isLaunchParamProvided("enable_" + stream_name + "_undistortion")) {
+          enable_undistortion_[stream_index] = sensor_config->isUndistortionEnabled();
+        }
+      } else if (stream_index == ACCEL) {
+        auto accel_profile = profile->as<ob::AccelStreamProfile>();
+        if (!isLaunchParamProvided("accel_rate")) {
+          imu_rate_[ACCEL] = sampleRateToString(accel_profile->sampleRate());
+        }
+        if (!isLaunchParamProvided("accel_range")) {
+          imu_range_[ACCEL] = fullAccelScaleRangeToString(accel_profile->fullScaleRange());
+        }
+      } else if (stream_index == GYRO) {
+        auto gyro_profile = profile->as<ob::GyroStreamProfile>();
+        if (!isLaunchParamProvided("gyro_rate")) {
+          imu_rate_[GYRO] = sampleRateToString(gyro_profile->sampleRate());
+        }
+        if (!isLaunchParamProvided("gyro_range")) {
+          imu_range_[GYRO] = fullGyroScaleRangeToString(gyro_profile->fullScaleRange());
+        }
+      }
+    }
+
+    auto point_cloud_config = application_config->pointCloud();
+    if (point_cloud_config) {
+      const auto point_cloud_enabled = point_cloud_config->isEnabled();
+      const auto point_cloud_format = point_cloud_config->format();
+      if (!isLaunchParamProvided("enable_point_cloud")) {
+        enable_point_cloud_ = point_cloud_enabled && point_cloud_format == OB_FORMAT_POINT;
+      }
+      if (!isLaunchParamProvided("enable_colored_point_cloud")) {
+        enable_colored_point_cloud_ =
+            point_cloud_enabled && point_cloud_format == OB_FORMAT_RGB_POINT;
+      }
+      if (!isLaunchParamProvided("point_cloud_decimation_filter_factor")) {
+        point_cloud_decimation_filter_factor_ = point_cloud_config->decimationFactor();
+      }
+      if (!isLaunchParamProvided("enable_frame_sync")) {
+        enable_frame_sync_ = point_cloud_config->isFrameSyncEnabled();
+      }
+      if (!isLaunchParamProvided("frame_aggregate_mode")) {
+        frame_aggregate_mode_ = point_cloud_config->isAllFrameTypeRequired() ? "full_frame" : "ANY";
+      }
+
+      const auto align_mode = point_cloud_config->alignMode();
+      if (!isLaunchParamProvided("depth_registration")) {
+        depth_registration_ = align_mode != ALIGN_DISABLE;
+      }
+      if (!isLaunchParamProvided("align_mode")) {
+        if (align_mode == ALIGN_D2C_HW_MODE) {
+          align_mode_ = "HW";
+        } else if (align_mode == ALIGN_D2C_SW_MODE || align_mode == ALIGN_C2D_SW_MODE) {
+          align_mode_ = "SW";
+        }
+      }
+      if (!isLaunchParamProvided("align_target_stream")) {
+        if (align_mode == ALIGN_D2C_HW_MODE || align_mode == ALIGN_D2C_SW_MODE) {
+          align_target_stream_ = OB_STREAM_COLOR;
+        } else if (align_mode == ALIGN_C2D_SW_MODE) {
+          align_target_stream_ = OB_STREAM_DEPTH;
+        }
+      }
+    }
+
+    auto hdr_merge_config = application_config->hdrMerge();
+    if (hdr_merge_config && !isLaunchParamProvided("enable_hdr_merge")) {
+      enable_hdr_merge_ = hdr_merge_config->isEnabled();
+    }
+
+    auto device_decimation_config = application_config->deviceDecimation();
+    if (device_decimation_config && device_decimation_config->isEnabled() &&
+        !isLaunchParamProvided("preset_resolution_config")) {
+      const auto &config = device_decimation_config->presetResolutionConfig();
+      std::ostringstream ss;
+      ss << config.width << "," << config.height << "," << config.irDecimationFactor << ","
+         << config.depthDecimationFactor;
+      preset_resolution_config_ = ss.str();
+    }
+
+    RCLCPP_INFO_STREAM(logger_, "Config JSON application_config synced");
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Config JSON application_config sync failed error=\""
+                                    << orbbec_camera::formatObErrorWithStatus(e) << "\"");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_,
+                       "Config JSON application_config sync failed error=\"" << e.what() << "\"");
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Config JSON application_config sync failed");
+  }
 }
 
 void OBCameraNode::syncConfigJsonDeviceSettings() {
@@ -3883,6 +4131,7 @@ void OBCameraNode::setupTopics() {
     captureInitialRosParameters();
     getParameters();
     loadConfigJson();
+    syncConfigJsonApplicationConfig();
     setupDevices();
     setupDepthPostProcessFilter();
     setupColorPostProcessFilter();
