@@ -1695,6 +1695,8 @@ bool OBCameraNode::exportConfigJsonToFile(const std::string &file_path, std::str
     }
 
     const auto resolved_file_path_str = resolved_file_path.string();
+    syncApplicationPointCloudConfigForExport();
+    syncApplicationHdrMergeConfigForExport();
     device_->exportSettingsAsPresetJsonFile(resolved_file_path_str.c_str());
     if (!std::filesystem::exists(resolved_file_path)) {
       message = "Failed to export config json file: file not found after export path=" +
@@ -1728,6 +1730,86 @@ void OBCameraNode::exportConfigJsonIfRequested() {
 }
 
 bool OBCameraNode::isConfigJsonLoaded() const { return config_json_loaded_; }
+
+void OBCameraNode::syncApplicationPointCloudConfigForExport() {
+  if (!device_) {
+    return;
+  }
+
+  try {
+    if (!ob::ApplicationConfig::isSupported(device_)) {
+      RCLCPP_DEBUG_STREAM(logger_,
+                          "Skip exporting application_config point_cloud: unsupported device");
+      return;
+    }
+
+    auto application_config = ob::ApplicationConfig::get(device_);
+    CHECK_NOTNULL(application_config.get());
+
+    auto point_cloud_config = std::make_shared<ob::ApplicationPointCloudConfig>();
+    point_cloud_config->enable(enable_point_cloud_ || enable_colored_point_cloud_);
+    point_cloud_config->setFormat(enable_colored_point_cloud_ ? OB_FORMAT_RGB_POINT
+                                                              : OB_FORMAT_POINT);
+    point_cloud_config->setDecimationFactor(std::max(1, point_cloud_decimation_filter_factor_));
+
+    auto align_mode = ALIGN_DISABLE;
+    if (depth_registration_) {
+      if (align_mode_ == "HW") {
+        align_mode = ALIGN_D2C_HW_MODE;
+      } else if (align_target_stream_ == OB_STREAM_DEPTH) {
+        align_mode = ALIGN_C2D_SW_MODE;
+      } else {
+        align_mode = ALIGN_D2C_SW_MODE;
+      }
+    }
+    point_cloud_config->setAlignMode(align_mode);
+    point_cloud_config->enableFrameSync(enable_frame_sync_);
+    point_cloud_config->setAllFrameTypeRequired(frame_aggregate_mode_ == "full_frame");
+    point_cloud_config->enableMatchTargetResolution(
+        align_mode == ALIGN_D2C_HW_MODE ? enable_depth_scale_ : true);
+
+    application_config->setPointCloud(point_cloud_config);
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config point_cloud sync failed error=\""
+                                    << orbbec_camera::formatObErrorWithStatus(e) << "\"");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(
+        logger_, "Export application_config point_cloud sync failed error=\"" << e.what() << "\"");
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config point_cloud sync failed");
+  }
+}
+
+void OBCameraNode::syncApplicationHdrMergeConfigForExport() {
+  if (!device_) {
+    return;
+  }
+
+  try {
+    if (!ob::ApplicationConfig::isSupported(device_)) {
+      RCLCPP_DEBUG_STREAM(logger_,
+                          "Skip exporting application_config hdr_merge: unsupported device");
+      return;
+    }
+
+    auto application_config = ob::ApplicationConfig::get(device_);
+    CHECK_NOTNULL(application_config.get());
+
+    auto hdr_merge_config = std::make_shared<ob::ApplicationHDRMergeConfig>();
+    hdr_merge_config->enable(enable_hdr_merge_);
+    hdr_merge_config->enableIR(true);
+
+    application_config->setHDRMerge(hdr_merge_config);
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config hdr_merge sync failed error=\""
+                                    << orbbec_camera::formatObErrorWithStatus(e) << "\"");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(
+        logger_, "Export application_config hdr_merge sync failed error=\"" << e.what() << "\"");
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Export application_config hdr_merge sync failed");
+  }
+}
 
 void OBCameraNode::loadConfigJson() {
   if (load_config_json_file_path_.empty()) {

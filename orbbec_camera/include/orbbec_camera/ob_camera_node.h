@@ -251,6 +251,10 @@ class OBCameraNode {
 
   void syncConfigJsonApplicationConfig();
 
+  void syncApplicationPointCloudConfigForExport();
+
+  void syncApplicationHdrMergeConfigForExport();
+
   void syncConfigJsonDeviceSettings();
 
   void syncConfigJsonFilterSettings(const std::vector<std::shared_ptr<ob::Filter>>& filters,
