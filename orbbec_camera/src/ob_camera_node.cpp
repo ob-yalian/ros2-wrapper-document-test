@@ -890,6 +890,19 @@ void OBCameraNode::setupDevices() {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DEVICE_USB3_REPEAT_IDENTIFY_BOOL,
                         retry_on_usb3_detection_failure_);
   }
+  if (sync_io_voltage_level_ != -1 &&
+      device_->isPropertySupported(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT, OB_PERMISSION_READ_WRITE)) {
+    auto range = device_->getIntPropertyRange(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
+    if (sync_io_voltage_level_ < range.min || sync_io_voltage_level_ > range.max) {
+      RCLCPP_ERROR_STREAM(
+          logger_, "sync IO voltage level is out of range " << range.min << " - " << range.max);
+    } else {
+      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT,
+                          sync_io_voltage_level_);
+      RCLCPP_INFO_STREAM(logger_, "Current sync IO voltage level: " << device_->getIntProperty(
+                                      OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT));
+    }
+  }
   if (should_apply_launch_config("enable_heartbeat") &&
       device_->isPropertySupported(OB_PROP_HEARTBEAT_BOOL, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
@@ -3820,6 +3833,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(disparity_offset_config_, "disparity_offset_config", false);
   setAndGetNodeParameter<int>(offset_index0_, "offset_index0", -1);
   setAndGetNodeParameter<int>(offset_index1_, "offset_index1", -1);
+  setAndGetNodeParameter<int>(sync_io_voltage_level_, "sync_io_voltage_level", -1);
 
   setAndGetNodeParameter<std::string>(frame_aggregate_mode_, "frame_aggregate_mode", "ANY");
   frame_aggregate_mode_ =

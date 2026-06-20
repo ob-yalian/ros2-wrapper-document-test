@@ -270,6 +270,7 @@ def generate_launch_description():
         DeclareLaunchArgument('device_preset', default_value='Default'), # Default, High Accuracy, Close Range High Accuracy, Factory Calib, Dual Color Streams, Custom
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('enable_sync_host_time', default_value='false'),
+        DeclareLaunchArgument('sync_io_voltage_level', default_value='-1'),
         DeclareLaunchArgument('time_sync_period', default_value='6.0'), # seconds
         DeclareLaunchArgument('time_domain', default_value='global'),# global, device, system
         DeclareLaunchArgument('timestamp_clock_type', default_value=''),# realtime or monotonic, default is realtime.

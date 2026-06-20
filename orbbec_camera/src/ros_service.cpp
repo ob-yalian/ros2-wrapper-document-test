@@ -387,6 +387,11 @@ void OBCameraNode::setupCameraCtrlServices() {
                                             std::shared_ptr<SetInt32::Response> response) {
         setDisparitySearchOffsetCallback(request, response);
       });
+  set_sync_io_voltage_level_srv_ = node_->create_service<SetInt32>(
+      "set_sync_io_voltage_level", [this](const std::shared_ptr<SetInt32::Request> request,
+                                          std::shared_ptr<SetInt32::Response> response) {
+        setSyncIoVoltageLevelCallback(request, response);
+      });
 }
 
 void OBCameraNode::getPointCloudDecimationCallback(
@@ -557,6 +562,50 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
     RCLCPP_INFO_STREAM(logger_, "Set disparity_search_offset to " << current_offset);
     response->success = true;
     response->message = "disparity_search_offset updated to " + std::to_string(current_offset);
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
+}
+
+void OBCameraNode::setSyncIoVoltageLevelCallback(const std::shared_ptr<SetInt32::Request>& request,
+                                                 std::shared_ptr<SetInt32::Response>& response) {
+  if (!request) {
+    response->success = false;
+    response->message = "Invalid request";
+    return;
+  }
+
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  try {
+    if (!device_->isPropertySupported(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT,
+                                      OB_PERMISSION_READ_WRITE)) {
+      response->success = false;
+      response->message = "Current device does not support sync IO voltage level";
+      return;
+    }
+
+    auto range = device_->getIntPropertyRange(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
+    if (request->data < range.min || request->data > range.max) {
+      response->success = false;
+      response->message =
+          "Invalid sync IO voltage level. Allowed values:" + std::to_string(range.min) + " to " +
+          std::to_string(range.max);
+      return;
+    }
+
+    device_->setIntProperty(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT, request->data);
+    sync_io_voltage_level_ = device_->getIntProperty(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
+    response->success = true;
+    response->message =
+        "sync_io_voltage_level updated to " + std::to_string(sync_io_voltage_level_);
+    RCLCPP_INFO_STREAM(logger_, response->message);
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = orbbec_camera::formatObErrorWithStatus(e);
