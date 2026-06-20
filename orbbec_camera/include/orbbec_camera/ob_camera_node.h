@@ -251,6 +251,8 @@ class OBCameraNode {
 
   void syncConfigJsonApplicationConfig();
 
+  void syncApplicationSensorConfigForExport();
+
   void syncApplicationPointCloudConfigForExport();
 
   void syncApplicationHdrMergeConfigForExport();
