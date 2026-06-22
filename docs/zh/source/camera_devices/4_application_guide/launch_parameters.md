@@ -42,7 +42,7 @@
 
 以下是可用的启动参数：
 
-### 核心与数据流配置
+## 核心与数据流配置
 
 *   **`camera_name`**
     *   启动节点的命名空间。
@@ -89,9 +89,9 @@
 * **`point_cloud_decimation_filter_factor`**
   * 点云下采样因子。范围：`1–8`，`1`表示不下采样，数值越大下采样倍数越大。
 
-### 传感器控制
+## 传感器控制
 
-#### 彩色流
+### 彩色流
 *   **`enable_color_auto_exposure`**
     *   启用彩色自动曝光。
 *   **`enable_color_auto_exposure_priority`**
@@ -126,7 +126,7 @@
     *   启用ISP彩色降噪功能。**范围：** `0–8`，`0`表示自动。支持 Gemini 330 系列、Gemini 2 固件 `1.5.04` 及以上、Gemini 2L 固件 `1.5.09` 及以上；该功能需要开启彩色自动曝光并依赖新固件支持。
 
 
-#### 深度流
+### 深度流
 *   **`enable_depth_auto_exposure_priority`**
     *   启用深度自动曝光优先级。
 * **`mean_intensity_set_point`**
@@ -141,7 +141,7 @@
 *   **`depth_ae_roi_[left|right|top|bottom]`**
     *   设置深度自动曝光ROI。
 
-#### 红外流
+### 红外流
 *   **`enable_ir_auto_exposure`**
     *   启用红外自动曝光。
 *   **`ir_exposure`** / **`ir_gain`**
@@ -151,7 +151,7 @@
 *   **`ir_brightness`**
     *   设置开启自动曝光时ir图像的目标平均强度。
 
-#### 激光 / LDP
+### 激光 / LDP
 *   **`enable_laser`**
     *   启用激光。默认值为 `true`。
 *   **`laser_energy_level`**
@@ -159,9 +159,9 @@
 *   **`enable_ldp`** / **`ldp_power_level`**
     *   启用LDP并设置其功率级别。
 
-### 设备、同步与高级功能
+## 设备、同步与高级功能
 
-#### 多相机同步
+### 多相机同步
 *   **`sync_mode`**
     *   设置同步模式。默认值为 `standalone`。多相机连接、同步模式和触发配置参考 [多相机同步](../5_advanced_guide/multi_camera/multi_camera_synced.md)。
 *   **`depth_delay_us`** / **`color_delay_us`**
@@ -177,7 +177,7 @@
 *   **`frames_per_trigger`**
     *   触发模式下每次触发后每个流的帧数。
 
-#### 网络相机
+### 网络相机
 * **`enumerate_net_device`**
   * 启用自动枚举网络设备。网络相机启动、指定 IP 和 Force IP 配置参考 [网络相机](../5_advanced_guide/configuration/net_camera.md)。
 * **`net_device_ip`** / **`net_device_port`**
@@ -193,7 +193,7 @@
 * **`force_ip_gateway`**
   * 静态IP的网关地址。**默认值：** `192.168.1.1`
 
-#### 设备特定
+### 设备特定
 *   **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
     *   启用gmsl触发输出信号 / 设置gmsl触发fps。用于 [gmsl相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
 * **`enable_ptp_config`**
@@ -217,14 +217,14 @@
   * 启用鬼影滤波。可减少重影噪声。
   > **支持模组**：DaBaiA / DaBaiAL / Gemini 330 系列 / Gemini345 / Gemini345Lg。
 
-#### 视差
+### 视差
 *   **`disparity_to_depth_mode`**
     *   `HW`：使用硬件视差到深度转换。`SW`：使用软件视差到深度转换。也可以设置为 `disable` 关闭。
     *   该参数大小写不敏感；非法值会报错并回退默认值。
 *   **`disparity_range_mode`**、**`disparity_search_offset`**、**`disparity_offset_config`**
     *   视差搜索偏移参数。用于 [视差搜索偏移](../5_advanced_guide/configuration/disparity_search_offset.md)。
 
-#### 交错AE模式
+### 交错AE模式
 *   **`interleave_ae_mode`**
     *   设置 `laser` 或 `hdr` 交错。
 *   **`interleave_frame_enable`**、**`interleave_skip_enable`**、**`interleave_skip_index`**
@@ -233,7 +233,7 @@
     *   在交错帧模式下，设置hdr或laser交错帧的第0和第1帧参数。
 *   *所有交错参数用于 [交错ae模式](../5_advanced_guide/configuration/interleave_ae_mode.md)。*
 
-#### 相机内同步
+### 相机内同步
 
 - **`depth_registration`**
   *   启用深度帧与彩色帧的对齐。当 `enable_colored_point_cloud` 设置为 `true` 时需要此字段。启动和查看方法参考 [对齐深度到彩色](../5_advanced_guide/configuration/align_depth_color.md)。
@@ -249,9 +249,9 @@
 - **`intra_camera_sync_reference`**
   - 设置相机内同步的参考点。适用于Gemini 330系列设备，当 `sync_mode` 设置为**软件**或**硬件触发**模式时。**选项：** `Start`、`Middle`、`End`。设置为空时，长基线设备默认End，短基线设备默认Middle。
 
-### 基础与通用参数
+## 基础与通用参数
 
-#### 固件与后端
+### 固件与后端
 *   **`upgrade_firmware`**
     *   输入参数为固件路径。新版本建议使用独立工具 `firmware_update_tool` 进行固件升级，参考 [firmware_update_tool 工具](../6_benchmark/firmware_update_tool.md)。
 *   **`preset_firmware_path`**
@@ -263,7 +263,7 @@
 *   **`retry_on_usb3_detection_failure`**
     *   如果相机连接到USB 2.0端口且未检测到，系统将尝试重置相机最多三次。使用USB 2.0连接时建议将此参数设置为 `false`，以避免不必要的重置。
 
-#### TF、外参与校准
+### TF、外参与校准
 *   **`publish_tf`** / **`tf_publish_rate`**
     *   启用TF发布并设置其发布速率。坐标系、TF 树查看和可视化方法参考 [坐标系和 TF 变换](coordinate_and_tf.md)。
 *   **`enable_publish_extrinsic`**
@@ -273,7 +273,7 @@
 *   **`enable_[color|depth|ir|left_ir|right_ir]_undistortion`**
     *   启用对应图像流的 SDK 去畸变滤波器。双 IR 设备使用 `enable_left_ir_undistortion` / `enable_right_ir_undistortion`，单 IR 设备使用 `enable_ir_undistortion`。
 
-#### 时间同步
+### 时间同步
 *   **`enable_sync_host_time`**
     *   启用主机时间与相机时间的同步。默认值为 `true`。如果使用全局时间，设置为 `false`。
 *   **`time_domain`**
@@ -291,7 +291,7 @@
 *   **`frame_timestamp_csv_file`**
     *   帧时间戳 CSV 输出路径。为空时不写 CSV；如需保存 CSV，请指定文件路径，例如 `/tmp/frame_timestamp.csv`。
 
-#### 日志与诊断
+### 日志与诊断
 *   **`log_level`**
     *   SDK和ROS节点日志级别。默认只输出设备当前状态；需要更多调试信息时可设置为 `debug`。可选值：`none`、`debug`、`info`、`warn`、`error`、`fatal`。
     *   SDK日志和崩溃文件默认保存在 `~/.ros/Log`，ROS日志仍保存在 `~/.ros/log`。
@@ -304,7 +304,7 @@
 *   **`enable_heartbeat`**
     *   启用心跳功能。默认为 `false`。如果为 `true`，相机节点将向固件发送心跳信号。
 
-#### 其他
+### 其他
 *   **`config_file_path`**
     *   YAML配置文件的路径。默认为 `""`。如果未指定，将使用启动文件中的默认参数。部分 preset 或特殊模式会通过 YAML 配置，示例参考 [设备预设](../5_advanced_guide/configuration/predefined_presets.md)。
 *   **`load_config_json_file_path`**
@@ -317,7 +317,7 @@
 *   **`enable_d2c_viewer`**
     *   发布D2C叠加图像（仅用于测试）。使用示例参考 [对齐深度到彩色](../5_advanced_guide/configuration/align_depth_color.md)。
 
-### IMU
+## IMU
 
 *   **`enable_accel`** / **`enable_gyro`**
     *   启用加速度计/陀螺仪并输出其信息话题数据。
@@ -332,7 +332,7 @@
 *   **`linear_accel_cov`** / **`angular_vel_cov`**
     *   线性加速度和角速度的协方差。
 
-### 深度滤波器
+## 深度滤波器
 
 *   **`enable_decimation_filter`**
     *   启用深度抽取滤波器。使用 `decimation_filter_scale` 设置。
