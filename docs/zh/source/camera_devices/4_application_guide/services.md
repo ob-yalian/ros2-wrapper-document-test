@@ -157,6 +157,11 @@
     ```bash
     ros2 service call /camera/get_device_info orbbec_camera_msgs/srv/GetDeviceInfo
     ```
+*   `/camera/get_device_config`
+    获取当前生效的设备配置状态，例如 preset、对齐模式、时间域、同步模式、帧聚合模式等。
+    ```bash
+    ros2 service call /camera/get_device_config orbbec_camera_msgs/srv/GetDeviceConfig '{}'
+    ```
 *   `/camera/get_sdk_version`
     ```bash
     ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString
@@ -164,6 +169,14 @@
 *   `/camera/export_config_json`
     ```bash
     ros2 service call /camera/export_config_json orbbec_camera_msgs/srv/SetString "{data: '/tmp/orbbec_camera_config.json'}"
+    ```
+*   `/camera/set_bag_recording`
+    使用 SDK bag 录制当前设备数据。`enable: true` 开始录制，`enable: false` 停止录制；`file_path` 为空时使用当前工作目录下的默认文件名。
+    ```bash
+    ros2 service call /camera/set_bag_recording orbbec_camera_msgs/srv/SetBagRecording "{enable: true, file_path: '/tmp/orbbec_record.bag'}"
+    ```
+    ```bash
+    ros2 service call /camera/set_bag_recording orbbec_camera_msgs/srv/SetBagRecording "{enable: false, file_path: ''}"
     ```
 *   `/camera/reboot_device`
     ```bash
@@ -189,6 +202,11 @@
     ```bash
     # 仅在interleave_ae_mode为'laser'且interleave_frame_enable为true时可用
     ros2 service call /camera/set_sync_interleaverlaser orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
+    ```
+*   `/camera/set_sync_io_voltage_level`
+    设置同步 IO 电压等级。仅支持具备该属性的设备。
+    ```bash
+    ros2 service call /camera/set_sync_io_voltage_level orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
     ```
 
 ### 深度滤波器配置

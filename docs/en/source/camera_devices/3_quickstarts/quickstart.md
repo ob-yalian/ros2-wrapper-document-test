@@ -94,3 +94,33 @@ ros2 service call /camera/get_device_info orbbec_camera_msgs/srv/GetDeviceInfo '
 ```bash
 ros2 bag record /camera/color/image_raw /camera/depth/image_raw
 ```
+
+#### Record and play back with SDK bag
+
+SDK bag recording uses the Orbbec SDK to record device data. It is useful when you want to restart the wrapper later with the recording as a playback device. Record when launching:
+
+```bash
+ros2 launch orbbec_camera gemini_330_series.launch.py bag_record_filename:=/tmp/orbbec_record.bag
+```
+
+You can also start or stop recording while the node is running:
+
+```bash
+ros2 service call /camera/set_bag_recording orbbec_camera_msgs/srv/SetBagRecording "{enable: true, file_path: '/tmp/orbbec_record.bag'}"
+```
+
+```bash
+ros2 service call /camera/set_bag_recording orbbec_camera_msgs/srv/SetBagRecording "{enable: false, file_path: ''}"
+```
+
+Play back an SDK bag:
+
+```bash
+ros2 launch orbbec_camera gemini_330_series.launch.py bag_filename:=/tmp/orbbec_record.bag
+```
+
+Loop playback:
+
+```bash
+ros2 launch orbbec_camera gemini_330_series.launch.py bag_filename:=/tmp/orbbec_record.bag bag_loop:=true
+```

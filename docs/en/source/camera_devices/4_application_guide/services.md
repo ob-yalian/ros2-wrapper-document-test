@@ -157,6 +157,11 @@
     ```bash
     ros2 service call /camera/get_device_info orbbec_camera_msgs/srv/GetDeviceInfo
     ```
+*   `/camera/get_device_config`
+    Get the currently effective device configuration state, such as preset, alignment mode, time domain, sync mode, and frame aggregate mode.
+    ```bash
+    ros2 service call /camera/get_device_config orbbec_camera_msgs/srv/GetDeviceConfig '{}'
+    ```
 *   `/camera/get_sdk_version`
     ```bash
     ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString
@@ -164,6 +169,14 @@
 *   `/camera/export_config_json`
     ```bash
     ros2 service call /camera/export_config_json orbbec_camera_msgs/srv/SetString "{data: '/tmp/orbbec_camera_config.json'}"
+    ```
+*   `/camera/set_bag_recording`
+    Record current device data with SDK bag recording. `enable: true` starts recording and `enable: false` stops recording. When `file_path` is empty, the default file name is created in the current working directory.
+    ```bash
+    ros2 service call /camera/set_bag_recording orbbec_camera_msgs/srv/SetBagRecording "{enable: true, file_path: '/tmp/orbbec_record.bag'}"
+    ```
+    ```bash
+    ros2 service call /camera/set_bag_recording orbbec_camera_msgs/srv/SetBagRecording "{enable: false, file_path: ''}"
     ```
 *   `/camera/reboot_device`
     ```bash
@@ -189,6 +202,11 @@
     ```bash
     # Only available if interleave_ae_mode is 'laser' and interleave_frame_enable is true
     ros2 service call /camera/set_sync_interleaverlaser orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
+    ```
+*   `/camera/set_sync_io_voltage_level`
+    Set the sync IO voltage level. This is only supported on devices that expose the property.
+    ```bash
+    ros2 service call /camera/set_sync_io_voltage_level orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
     ```
 
 ### Depth Filter Configuration
