@@ -234,7 +234,6 @@ def generate_launch_description():
         DeclareLaunchArgument('hardware_noise_removal_filter_threshold', default_value='-1.0'),
         DeclareLaunchArgument('noise_removal_filter_min_diff', default_value='256'),
         DeclareLaunchArgument('noise_removal_filter_max_size', default_value='80'),
-        DeclareLaunchArgument('disp_outliers_filter_search_mode', default_value='-1'),
         DeclareLaunchArgument('spatial_filter_alpha', default_value='-1.0'),
         DeclareLaunchArgument('spatial_filter_diff_threshold', default_value='-1'),
         DeclareLaunchArgument('spatial_filter_magnitude', default_value='-1'),

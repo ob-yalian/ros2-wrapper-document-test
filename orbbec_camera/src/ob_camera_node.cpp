@@ -193,6 +193,40 @@ bool equalsIgnoreCase(std::string lhs, std::string rhs) {
   return lhs == rhs;
 }
 
+std::string dispOutliersSearchModeToString(int search_mode) {
+  switch (search_mode) {
+    case 0:
+      return "FULL";
+    case 1:
+      return "OFFSET_80";
+    default:
+      return "";
+  }
+}
+
+bool parseDispOutliersSearchMode(const std::string &raw_value, int &search_mode,
+                                 std::string &message, bool allow_sdk_default = false) {
+  const auto value = trimFilterConfigValue(raw_value);
+  const auto lower_value = lowerFilterConfigValue(value);
+  if (allow_sdk_default && lower_value.empty()) {
+    search_mode = -1;
+    return true;
+  }
+  if (lower_value == "full") {
+    search_mode = 0;
+    return true;
+  }
+  if (lower_value == "offset_80") {
+    search_mode = 1;
+    return true;
+  }
+
+  message = allow_sdk_default
+                ? "Filter config 'search_mode' expects one of FULL, OFFSET_80, or empty"
+                : "Filter config 'search_mode' expects one of FULL, OFFSET_80";
+  return false;
+}
+
 std::string lowerParameterValue(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -337,7 +371,7 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
                            to_param_value(hardware_noise_removal_filter_threshold_));
   } else if (normalized_filter_name == "DispOutliersFilter") {
     appendDepthFilterParam(filter_state, "search_mode",
-                           to_param_value(disp_outliers_filter_search_mode_));
+                           dispOutliersSearchModeToString(disp_outliers_filter_search_mode_));
   }
 
   if (filter_state.params.empty() && filter &&
@@ -4136,8 +4170,18 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_lut_noise_removal_filter_, "enable_lut_noise_removal_filter",
                                false);
   setAndGetNodeParameter<bool>(enable_disp_outliers_filter_, "enable_disp_outliers_filter", false);
-  setAndGetNodeParameter<int>(disp_outliers_filter_search_mode_, "disp_outliers_filter_search_mode",
-                              -1);
+  std::string disp_outliers_filter_search_mode;
+  setAndGetNodeParameter<std::string>(disp_outliers_filter_search_mode,
+                                      "disp_outliers_filter_search_mode", "");
+  std::string disp_outliers_filter_search_mode_message;
+  if (!parseDispOutliersSearchMode(disp_outliers_filter_search_mode,
+                                   disp_outliers_filter_search_mode_,
+                                   disp_outliers_filter_search_mode_message, true)) {
+    RCLCPP_WARN_STREAM(logger_, "Invalid disp_outliers_filter_search_mode value "
+                                    << disp_outliers_filter_search_mode << ". "
+                                    << disp_outliers_filter_search_mode_message << "; using empty");
+    disp_outliers_filter_search_mode_ = -1;
+  }
   setAndGetNodeParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1);
   setAndGetNodeParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1);
   setAndGetNodeParameter<int>(threshold_filter_max_, "threshold_filter_max", -1);
@@ -6761,16 +6805,10 @@ bool OBCameraNode::applyNamedDepthFilterConfig(
         return false;
       }
 
-      double parsed_value = 0.0;
-      if (!parseFilterConfigDouble(param.value, parsed_value, message)) {
-        return false;
-      }
-      if (std::floor(parsed_value) != parsed_value) {
-        message = "Filter config 'search_mode' expects an integer value";
+      if (!parseDispOutliersSearchMode(param.value, search_mode, message)) {
         return false;
       }
       has_search_mode = true;
-      search_mode = static_cast<int>(parsed_value);
     }
 
     if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
@@ -6888,6 +6926,10 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       fail("filter_param and filter_config cannot be used at the same time");
       return;
     }
+    if (is_disp_outliers_filter && has_positional_params) {
+      fail("DispOutliersFilter search_mode expects filter_config value FULL or OFFSET_80");
+      return;
+    }
 
     if (has_named_params || !has_positional_params) {
       std::string message;
@@ -6958,26 +7000,6 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           }
         }
         enable_hardware_noise_removal_filter_ = request->filter_enable;
-      } else if (is_disp_outliers_filter) {
-        if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
-                                         OB_PERMISSION_READ_WRITE)) {
-          device_->setBoolProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, request->filter_enable);
-          RCLCPP_INFO_STREAM(logger_, "Set DispOutliersFilter:" << request->filter_enable);
-        }
-        if (!request->filter_param.empty()) {
-          if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
-                                           OB_PERMISSION_READ_WRITE)) {
-            device_->setIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
-                                    request->filter_param[0]);
-            disp_outliers_filter_search_mode_ = request->filter_param[0];
-            RCLCPP_INFO_STREAM(logger_,
-                               "Set DispOutliersFilter search_mode:" << request->filter_param[0]);
-          } else {
-            fail("Filter config 'search_mode' is not supported by this device");
-            return;
-          }
-        }
-        enable_disp_outliers_filter_ = request->filter_enable;
       }
     } else {
       std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);

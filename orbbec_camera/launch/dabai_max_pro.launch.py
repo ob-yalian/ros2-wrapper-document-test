@@ -92,7 +92,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_mgc_noise_removal_filter', default_value='false'),
         DeclareLaunchArgument('enable_lut_noise_removal_filter', default_value='false'),
         DeclareLaunchArgument('enable_disp_outliers_filter', default_value='false'),
-        DeclareLaunchArgument('disp_outliers_filter_search_mode', default_value='-1'),
+        DeclareLaunchArgument('disp_outliers_filter_search_mode', default_value=''),  # FULL or OFFSET_80
         DeclareLaunchArgument('enable_edge_noise_removal_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_fast_filter', default_value='false'),
         DeclareLaunchArgument('spatial_fast_filter_radius', default_value='-1'),
