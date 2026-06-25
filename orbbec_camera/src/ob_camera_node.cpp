@@ -2744,7 +2744,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
   }
   if (color_filter_list_.empty() && left_color_filter_list_.empty() &&
       right_color_filter_list_.empty()) {
-    RCLCPP_WARN_STREAM(logger_, "Failed to get any color sensor filter list");
+    RCLCPP_DEBUG_STREAM(logger_, "Color sensor filter lists are empty");
   }
   for (size_t i = 0; i < color_filter_list_.size(); i++) {
     auto filter = color_filter_list_[i];
@@ -2880,7 +2880,7 @@ void OBCameraNode::setupIrPostProcessFilter() {
     auto ir_sensor = device_->getSensor(OB_SENSOR_IR);
     ir_filter_list_ = ir_sensor->createRecommendedFilters();
     if (ir_filter_list_.empty()) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to get ir sensor filter list");
+      RCLCPP_DEBUG_STREAM(logger_, "IR sensor filter list is empty");
     }
   } catch (const ob::Error &e) {
     RCLCPP_WARN_STREAM(logger_,
@@ -3012,7 +3012,7 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
     auto left_ir_sensor = device_->getSensor(OB_SENSOR_IR_LEFT);
     left_ir_filter_list_ = left_ir_sensor->createRecommendedFilters();
     if (left_ir_filter_list_.empty()) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to get left ir sensor filter list");
+      RCLCPP_DEBUG_STREAM(logger_, "Left IR sensor filter list is empty");
       return;
     }
     for (size_t i = 0; i < left_ir_filter_list_.size(); i++) {
@@ -3053,7 +3053,7 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
     auto right_ir_sensor = device_->getSensor(OB_SENSOR_IR_RIGHT);
     right_ir_filter_list_ = right_ir_sensor->createRecommendedFilters();
     if (right_ir_filter_list_.empty()) {
-      RCLCPP_WARN_STREAM(logger_, "Failed to get right ir sensor filter list");
+      RCLCPP_DEBUG_STREAM(logger_, "Right IR sensor filter list is empty");
       return;
     }
     for (size_t i = 0; i < right_ir_filter_list_.size(); i++) {
@@ -3091,7 +3091,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
   // set depth sensor to filter
   depth_filter_list_ = depth_sensor->createRecommendedFilters();
   if (depth_filter_list_.empty()) {
-    RCLCPP_WARN_STREAM(logger_, "Failed to get depth sensor filter list");
+    RCLCPP_DEBUG_STREAM(logger_, "Depth sensor filter list is empty");
     return;
   }
   std::map<std::string, bool> filter_params = {
