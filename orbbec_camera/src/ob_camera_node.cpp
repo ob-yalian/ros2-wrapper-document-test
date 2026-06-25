@@ -182,6 +182,14 @@ std::string lowerFilterConfigValue(std::string value) {
   return value;
 }
 
+bool equalsIgnoreCase(std::string lhs, std::string rhs) {
+  std::transform(lhs.begin(), lhs.end(), lhs.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  std::transform(rhs.begin(), rhs.end(), rhs.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return lhs == rhs;
+}
+
 std::string lowerParameterValue(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -1192,26 +1200,47 @@ void OBCameraNode::setupDevices() {
         "Current color auto white balance: "
             << (device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL) ? "ON" : "OFF"));
   }
-  if (should_apply_launch_config("color_preset") && !color_preset_.empty() &&
-      device_->isPropertySupported(OB_PROP_COLOR_PRESET_PRIORITY_INT, OB_PERMISSION_WRITE)) {
-    std::string preset_key = color_preset_;
-    std::transform(preset_key.begin(), preset_key.end(), preset_key.begin(), ::tolower);
-    int preset_value = -1;
-    if (preset_key == "default") {
-      preset_value = 0;
-    } else if (preset_key == "warm biased awb") {
-      preset_value = 1;
-    } else {
+  if (should_apply_launch_config("color_preset") && !color_preset_.empty()) {
+    try {
+      if (!device_->isColorPresetSupported()) {
+        RCLCPP_WARN_STREAM(logger_, "Color preset is not supported by this device");
+      } else {
+        auto color_preset_list = device_->getColorPresetList();
+        std::string selected_preset;
+        std::ostringstream supported_presets;
+        bool has_supported_preset = false;
+        const uint32_t preset_count = color_preset_list ? color_preset_list->getCount() : 0;
+        for (uint32_t i = 0; i < preset_count; ++i) {
+          const char *preset_name = color_preset_list->getName(i);
+          if (preset_name == nullptr || preset_name[0] == '\0') {
+            continue;
+          }
+          if (has_supported_preset) {
+            supported_presets << ", ";
+          }
+          supported_presets << preset_name;
+          has_supported_preset = true;
+          if (equalsIgnoreCase(color_preset_, preset_name)) {
+            selected_preset = preset_name;
+          }
+        }
+
+        if (selected_preset.empty()) {
+          RCLCPP_WARN_STREAM(logger_, "Unsupported color_preset: " << color_preset_
+                                                                   << ". Supported values: "
+                                                                   << supported_presets.str());
+        } else {
+          device_->switchColorPreset(selected_preset.c_str());
+          const char *current_preset = device_->getCurrentColorPresetName();
+          color_preset_ = current_preset != nullptr ? current_preset : selected_preset;
+          RCLCPP_INFO_STREAM(logger_, "Current color preset: " << color_preset_);
+        }
+      }
+    } catch (const ob::Error &e) {
       RCLCPP_WARN_STREAM(
-          logger_, "Unsupported color_preset: " << color_preset_
-                                                << ". Supported values: Default, Warm Biased AWB");
-    }
-    if (preset_value >= 0) {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_PRESET_PRIORITY_INT, preset_value);
-      RCLCPP_INFO_STREAM(logger_, "Current color preset: "
-                                      << (device_->getIntProperty(OB_PROP_COLOR_PRESET_PRIORITY_INT)
-                                              ? "Warm Biased AWB"
-                                              : "Default"));
+          logger_, "Failed to set color preset: " << orbbec_camera::formatObErrorWithStatus(e));
+    } catch (const std::exception &e) {
+      RCLCPP_WARN_STREAM(logger_, "Failed to set color preset: " << e.what());
     }
   }
   if (color_exposure_ != -1 &&
@@ -2413,13 +2442,15 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
     }
   }
   sync_bool("color", "color_anti_flicker", color_anti_flicker_, OB_PROP_COLOR_ANTI_FLICKER_BOOL);
-  if (can_read(OB_PROP_COLOR_PRESET_PRIORITY_INT)) {
-    try {
-      const auto color_preset = device_->getIntProperty(OB_PROP_COLOR_PRESET_PRIORITY_INT);
-      color_preset_ = color_preset == 1 ? "Warm Biased AWB" : "Default";
-      log_readback("color", "color_preset", color_preset_);
-    } catch (const std::exception &) {
+  try {
+    if (device_->isColorPresetSupported()) {
+      const char *color_preset = device_->getCurrentColorPresetName();
+      if (color_preset != nullptr) {
+        color_preset_ = color_preset;
+        log_readback("color", "color_preset", color_preset_);
+      }
     }
+  } catch (const std::exception &) {
   }
   if (can_read(OB_STRUCT_COLOR_AE_ROI)) {
     try {
