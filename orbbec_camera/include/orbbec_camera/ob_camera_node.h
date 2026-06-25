@@ -871,6 +871,7 @@ class OBCameraNode {
   bool enable_spatial_filter_ = true;
   bool enable_temporal_filter_ = false;
   bool enable_hole_filling_filter_ = false;
+  bool enable_edge_noise_removal_filter_ = false;
   bool enable_spatial_fast_filter_ = false;
   bool enable_spatial_moderate_filter_ = false;
   bool enable_false_positive_filter_ = false;

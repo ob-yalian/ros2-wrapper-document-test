@@ -420,6 +420,7 @@ void OBCameraNode::publishDepthFiltersStatus() {
   sync_filter_enabled("SpatialAdvancedFilter", enable_spatial_filter_);
   sync_filter_enabled("TemporalFilter", enable_temporal_filter_);
   sync_filter_enabled("HoleFillingFilter", enable_hole_filling_filter_);
+  sync_filter_enabled("EdgeNoiseRemovalFilter", enable_edge_noise_removal_filter_);
   sync_filter_enabled("DisparityTransform", enable_disparity_to_depth_);
   sync_filter_enabled("ThresholdFilter", enable_threshold_filter_);
   sync_filter_enabled("SpatialFastFilter", enable_spatial_fast_filter_);
@@ -2653,6 +2654,8 @@ void OBCameraNode::syncConfigJsonFilterSettings(
       } catch (const std::exception &) {
       }
     }
+    sync_filter_enabled(filters, "EdgeNoiseRemovalFilter", "enable_edge_noise_removal_filter",
+                        enable_edge_noise_removal_filter_);
     if (auto filter =
             sync_filter_enabled(filters, "FalsePositiveFilter", "enable_false_positive_filter",
                                 enable_false_positive_filter_)) {
@@ -3098,6 +3101,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
       {"SpatialAdvancedFilter", enable_spatial_filter_},
       {"TemporalFilter", enable_temporal_filter_},
       {"HoleFillingFilter", enable_hole_filling_filter_},
+      {"EdgeNoiseRemovalFilter", enable_edge_noise_removal_filter_},
       {"DisparityTransform", enable_disparity_to_depth_},
       {"ThresholdFilter", enable_threshold_filter_},
       {"SpatialFastFilter", enable_spatial_fast_filter_},
@@ -3113,6 +3117,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
       {"SpatialAdvancedFilter", "enable_spatial_filter"},
       {"TemporalFilter", "enable_temporal_filter"},
       {"HoleFillingFilter", "enable_hole_filling_filter"},
+      {"EdgeNoiseRemovalFilter", "enable_edge_noise_removal_filter"},
       {"DisparityTransform", "enable_disparity_to_depth"},
       {"ThresholdFilter", "enable_threshold_filter"},
       {"SpatialFastFilter", "enable_spatial_fast_filter"},
@@ -4121,6 +4126,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_spatial_filter_, "enable_spatial_filter", false);
   setAndGetNodeParameter<bool>(enable_temporal_filter_, "enable_temporal_filter", false);
   setAndGetNodeParameter<bool>(enable_hole_filling_filter_, "enable_hole_filling_filter", false);
+  setAndGetNodeParameter<bool>(enable_edge_noise_removal_filter_,
+                               "enable_edge_noise_removal_filter", false);
   setAndGetNodeParameter<bool>(enable_spatial_fast_filter_, "enable_spatial_fast_filter", false);
   setAndGetNodeParameter<bool>(enable_spatial_moderate_filter_, "enable_spatial_moderate_filter",
                                false);
@@ -6576,6 +6583,8 @@ void OBCameraNode::updateDepthFilterEnabledCache(const std::string &filter_name,
     enable_temporal_filter_ = enabled;
   } else if (normalized_filter_name == "HoleFillingFilter") {
     enable_hole_filling_filter_ = enabled;
+  } else if (normalized_filter_name == "EdgeNoiseRemovalFilter") {
+    enable_edge_noise_removal_filter_ = enabled;
   } else if (normalized_filter_name == "SpatialFastFilter") {
     enable_spatial_fast_filter_ = enabled;
   } else if (normalized_filter_name == "SpatialModerateFilter") {
@@ -7163,6 +7172,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         auto lut_filter = existing_filter->as<ob::LutNoiseRemovalFilter>();
         lut_filter->enable(request->filter_enable);
         enable_lut_noise_removal_filter_ = request->filter_enable;
+      } else if (normalized_request_filter_name == "EdgeNoiseRemovalFilter") {
+        existing_filter->enable(request->filter_enable);
+        enable_edge_noise_removal_filter_ = request->filter_enable;
       } else {
         fail(normalized_request_filter_name + " cannot be set");
         return;
