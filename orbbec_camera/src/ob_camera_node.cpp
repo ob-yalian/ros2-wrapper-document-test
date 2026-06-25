@@ -51,6 +51,9 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
   if (filter_name == "SpatialFilter") {
     return "SpatialAdvancedFilter";
   }
+  if (filter_name == "DispOutliers" || filter_name == "DepthOutliersFilter") {
+    return "DispOutliersFilter";
+  }
   return filter_name;
 }
 
@@ -332,6 +335,9 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
   } else if (normalized_filter_name == "HardwareNoiseRemovalFilter") {
     appendDepthFilterParam(filter_state, "threshold",
                            to_param_value(hardware_noise_removal_filter_threshold_));
+  } else if (normalized_filter_name == "DispOutliersFilter") {
+    appendDepthFilterParam(filter_state, "search_mode",
+                           to_param_value(disp_outliers_filter_search_mode_));
   }
 
   if (filter_state.params.empty() && filter &&
@@ -461,6 +467,22 @@ void OBCameraNode::publishDepthFiltersStatus() {
       // Keep the cached value if runtime querying fails.
     }
   }
+  if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
+    try {
+      enable_disp_outliers_filter_ = device_->getBoolProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
+  if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                   OB_PERMISSION_READ_WRITE)) {
+    try {
+      disp_outliers_filter_search_mode_ =
+          device_->getIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT);
+    } catch (const std::exception &) {
+      // Keep the cached value if runtime querying fails.
+    }
+  }
 
   if (auto filter = find_depth_filter("DecimationFilter")) {
     try {
@@ -536,9 +558,13 @@ void OBCameraNode::publishDepthFiltersStatus() {
                                    OB_PERMISSION_READ_WRITE) ||
       device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
                                    OB_PERMISSION_READ_WRITE);
+  const bool disp_outliers_filter_supported =
+      device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, OB_PERMISSION_READ_WRITE) ||
+      device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                   OB_PERMISSION_READ_WRITE);
 
   std::vector<std::string> ordered_filter_names;
-  ordered_filter_names.reserve(depth_filters_snapshot.size() + 2);
+  ordered_filter_names.reserve(depth_filters_snapshot.size() + 3);
   auto append_unique_filter_name = [&ordered_filter_names](const std::string &filter_name) {
     if (std::find(ordered_filter_names.begin(), ordered_filter_names.end(), filter_name) ==
         ordered_filter_names.end()) {
@@ -557,6 +583,9 @@ void OBCameraNode::publishDepthFiltersStatus() {
   if (hardware_noise_removal_filter_supported) {
     append_unique_filter_name("HardwareNoiseRemovalFilter");
   }
+  if (disp_outliers_filter_supported) {
+    append_unique_filter_name("DispOutliersFilter");
+  }
 
   msg.filters.reserve(ordered_filter_names.size());
   for (const auto &filter_name : ordered_filter_names) {
@@ -566,8 +595,10 @@ void OBCameraNode::publishDepthFiltersStatus() {
       enabled = enable_noise_removal_filter_;
     } else if (filter_name == "HardwareNoiseRemovalFilter") {
       enabled = enable_hardware_noise_removal_filter_;
+    } else if (filter_name == "DispOutliersFilter") {
+      enabled = enable_disp_outliers_filter_;
     }
-    if (filter) {
+    if (filter && filter_name != "DispOutliersFilter") {
       try {
         enabled = filter->isEnabled();
       } catch (const std::exception &) {
@@ -1610,6 +1641,22 @@ void OBCameraNode::setupDevices() {
     RCLCPP_INFO_STREAM(logger_, "Set noise removal filter to "
                                     << (enable_noise_removal_filter_ ? "true" : "false"));
   }
+  if (should_apply_launch_config("enable_disp_outliers_filter") &&
+      sensors_.find(DEPTH) != sensors_.end() &&
+      device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
+    device_->setBoolProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, enable_disp_outliers_filter_);
+    RCLCPP_INFO_STREAM(
+        logger_, "Set DispOutliersFilter to " << (enable_disp_outliers_filter_ ? "true" : "false"));
+  }
+  if (disp_outliers_filter_search_mode_ != -1 && sensors_.find(DEPTH) != sensors_.end() &&
+      device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                   OB_PERMISSION_READ_WRITE)) {
+    device_->setIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                            disp_outliers_filter_search_mode_);
+    RCLCPP_INFO_STREAM(
+        logger_, "Current DispOutliersFilter search mode: "
+                     << device_->getIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT));
+  }
   if (disparity_range_mode_ != -1 &&
       device_->isPropertySupported(OB_PROP_DISP_SEARCH_RANGE_MODE_INT, OB_PERMISSION_WRITE)) {
     if (disparity_range_mode_ == 64) {
@@ -2395,6 +2442,10 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
            OB_PROP_DEPTH_MAX_DIFF_INT);
   sync_int("depth", "noise_removal_filter_max_size", noise_removal_filter_max_size_,
            OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+  sync_bool("depth", "enable_disp_outliers_filter", enable_disp_outliers_filter_,
+            OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL);
+  sync_int("depth", "disp_outliers_filter_search_mode", disp_outliers_filter_search_mode_,
+           OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT);
 
   sync_stream_orientation("depth", DEPTH, OB_PROP_DEPTH_FLIP_BOOL, OB_PROP_DEPTH_MIRROR_BOOL,
                           OB_PROP_DEPTH_ROTATE_INT);
@@ -4077,6 +4128,9 @@ void OBCameraNode::getParameters() {
                                false);
   setAndGetNodeParameter<bool>(enable_lut_noise_removal_filter_, "enable_lut_noise_removal_filter",
                                false);
+  setAndGetNodeParameter<bool>(enable_disp_outliers_filter_, "enable_disp_outliers_filter", false);
+  setAndGetNodeParameter<int>(disp_outliers_filter_search_mode_, "disp_outliers_filter_search_mode",
+                              -1);
   setAndGetNodeParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1);
   setAndGetNodeParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1);
   setAndGetNodeParameter<int>(threshold_filter_max_, "threshold_filter_max", -1);
@@ -6536,6 +6590,8 @@ void OBCameraNode::updateDepthFilterEnabledCache(const std::string &filter_name,
     enable_noise_removal_filter_ = enabled;
   } else if (normalized_filter_name == "HardwareNoiseRemovalFilter") {
     enable_hardware_noise_removal_filter_ = enabled;
+  } else if (normalized_filter_name == "DispOutliersFilter") {
+    enable_disp_outliers_filter_ = enabled;
   }
 }
 
@@ -6667,6 +6723,59 @@ bool OBCameraNode::applyNamedDepthFilterConfig(
     return true;
   }
 
+  if (normalized_filter_name == "DispOutliersFilter") {
+    const bool supported =
+        device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
+                                     OB_PERMISSION_READ_WRITE) ||
+        device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                     OB_PERMISSION_READ_WRITE);
+    if (!supported) {
+      message = "Filter '" + normalized_filter_name + "' is not supported by this device";
+      return false;
+    }
+
+    bool has_search_mode = false;
+    int search_mode = 0;
+    for (const auto &param : params) {
+      const auto param_name = getDepthFilterConfigParamName(normalized_filter_name, param.name);
+      if (!check_duplicate_param(param_name)) {
+        return false;
+      }
+
+      if (param_name != "search_mode") {
+        message = "Unknown filter config '" + param.name + "' for " + normalized_filter_name;
+        return false;
+      }
+      if (!device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                        OB_PERMISSION_READ_WRITE)) {
+        message = "Filter config 'search_mode' is not supported by this device";
+        return false;
+      }
+
+      double parsed_value = 0.0;
+      if (!parseFilterConfigDouble(param.value, parsed_value, message)) {
+        return false;
+      }
+      if (std::floor(parsed_value) != parsed_value) {
+        message = "Filter config 'search_mode' expects an integer value";
+        return false;
+      }
+      has_search_mode = true;
+      search_mode = static_cast<int>(parsed_value);
+    }
+
+    if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
+                                     OB_PERMISSION_READ_WRITE)) {
+      device_->setBoolProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, enabled);
+    }
+    if (has_search_mode) {
+      device_->setIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT, search_mode);
+      disp_outliers_filter_search_mode_ = search_mode;
+    }
+    updateDepthFilterEnabledCache(normalized_filter_name, enabled);
+    return true;
+  }
+
   std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
   auto is_same_filter = [&normalized_filter_name](const std::shared_ptr<ob::Filter> &filter) {
     if (!filter) {
@@ -6741,6 +6850,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
     const bool is_noise_removal_filter = normalized_request_filter_name == "NoiseRemovalFilter";
     const bool is_hardware_noise_removal_filter =
         normalized_request_filter_name == "HardwareNoiseRemovalFilter";
+    const bool is_disp_outliers_filter = normalized_request_filter_name == "DispOutliersFilter";
     bool is_supported_by_property = false;
     if (is_noise_removal_filter) {
       is_supported_by_property =
@@ -6752,6 +6862,12 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
                                        OB_PERMISSION_READ_WRITE) ||
           device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                                       OB_PERMISSION_READ_WRITE);
+    } else if (is_disp_outliers_filter) {
+      is_supported_by_property =
+          device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
+                                       OB_PERMISSION_READ_WRITE) ||
+          device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
                                        OB_PERMISSION_READ_WRITE);
     }
 
@@ -6779,7 +6895,7 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       return;
     }
 
-    if (is_noise_removal_filter || is_hardware_noise_removal_filter) {
+    if (is_noise_removal_filter || is_hardware_noise_removal_filter || is_disp_outliers_filter) {
       if (!is_supported_by_property) {
         fail("Filter '" + normalized_request_filter_name + "' is not supported by this device");
         return;
@@ -6833,6 +6949,26 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
           }
         }
         enable_hardware_noise_removal_filter_ = request->filter_enable;
+      } else if (is_disp_outliers_filter) {
+        if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
+                                         OB_PERMISSION_READ_WRITE)) {
+          device_->setBoolProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, request->filter_enable);
+          RCLCPP_INFO_STREAM(logger_, "Set DispOutliersFilter:" << request->filter_enable);
+        }
+        if (!request->filter_param.empty()) {
+          if (device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                           OB_PERMISSION_READ_WRITE)) {
+            device_->setIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                                    request->filter_param[0]);
+            disp_outliers_filter_search_mode_ = request->filter_param[0];
+            RCLCPP_INFO_STREAM(logger_,
+                               "Set DispOutliersFilter search_mode:" << request->filter_param[0]);
+          } else {
+            fail("Filter config 'search_mode' is not supported by this device");
+            return;
+          }
+        }
+        enable_disp_outliers_filter_ = request->filter_enable;
       }
     } else {
       std::unique_lock<std::mutex> depth_filter_lock(depth_filter_mutex_);
