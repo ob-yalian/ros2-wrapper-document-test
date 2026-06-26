@@ -271,6 +271,9 @@ int main(int argc, char **argv) {
           RCLCPP_INFO_STREAM(
               rclcpp::get_logger("list_device_node"),
               "local net interface: " << list->getLocalNetInterfaceName(static_cast<uint32_t>(i)));
+          RCLCPP_INFO_STREAM(
+              rclcpp::get_logger("list_device_node"),
+              "local MAC address: " << list->getLocalMacAddress(static_cast<uint32_t>(i)));
           RCLCPP_INFO_STREAM(rclcpp::get_logger("list_device_node"),
                              "ip source type: " << ipSourceTypeToString(static_cast<int>(
                                  list->getIpSourceType(static_cast<uint32_t>(i)))));
