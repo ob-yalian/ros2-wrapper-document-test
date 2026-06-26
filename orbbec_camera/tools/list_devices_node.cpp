@@ -143,14 +143,6 @@ void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
       }
     }
 
-    std::string key = "PresetVer";
-    if (device->isExtensionInfoExist(key)) {
-      std::string value = device->getExtensionInfo(key);
-      RCLCPP_INFO_STREAM(logger, "device_preset version: " << value);
-    } else {
-      RCLCPP_INFO_STREAM(logger, "device_preset version: not available");
-    }
-
     if (device->isColorPresetSupported()) {
       auto color_preset_list = device->getColorPresetList();
       const uint32_t color_preset_count = color_preset_list ? color_preset_list->getCount() : 0;
@@ -161,6 +153,14 @@ void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
           RCLCPP_INFO_STREAM(logger, "  - " << preset_name);
         }
       }
+    }
+
+    std::string key = "PresetVer";
+    if (device->isExtensionInfoExist(key)) {
+      std::string value = device->getExtensionInfo(key);
+      RCLCPP_INFO_STREAM(logger, "preset version: " << value);
+    } else {
+      RCLCPP_INFO_STREAM(logger, "preset version: not available");
     }
   } catch (ob::Error &e) {
     RCLCPP_WARN_STREAM(logger,
