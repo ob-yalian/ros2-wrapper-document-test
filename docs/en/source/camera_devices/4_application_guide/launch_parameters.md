@@ -201,7 +201,39 @@ The following are the launch parameters available:
 * **`force_ip_gateway`**
   * Gateway address for the static IP. **Default:** `192.168.1.1`
 
-### Device-Specific
+### Disparity
+*   **`disparity_to_depth_mode`**
+    *   `HW`: use hardware disparity to depth conversion. `SW`: use software disparity to depth conversion. Use `disable` to turn it off.
+    *   This parameter is case-insensitive. Invalid values are reported and replaced with the default value.
+*   **`disparity_range_mode`**, **`disparity_search_offset`**, **`disparity_offset_config`**
+    *   Parameters for disparity search offset. Used for [disparity search offset](../5_advanced_guide/configuration/disparity_search_offset.md).
+
+### Interleave AE Mode
+*   **`interleave_ae_mode`**
+    *   Set `laser` or `hdr` interleave.
+*   **`interleave_frame_enable`**, **`interleave_skip_enable`**, **`interleave_skip_index`**
+    *   Parameters to control interleave frame mode.
+*   **`[hdr|laser]_index[0|1]_[...]`**
+    *   In interleave frame mode, set the 0th and 1st frame parameters of hdr or laser interleaving frames.
+*   *All interleave parameters are used for [interleave ae mode](../5_advanced_guide/configuration/interleave_ae_mode.md).*
+
+### Intra-Camera Synchronization
+
+- **`depth_registration`**
+  *   Enable alignment of the depth frame to the color frame. This field is required when the `enable_colored_point_cloud` is set to `true`. See [Aligning Depth to Color](../5_advanced_guide/configuration/align_depth_color.md) for startup and viewing examples.
+- **`align_mode`**
+  *   The alignment mode to be used. Options are `HW` for hardware alignment and `SW` for software alignment.
+  *   This parameter is case-insensitive. Invalid values are reported and replaced with the default value.
+- **`align_target_stream`**
+  *   Set align target stream mode.
+  *   The possible values are `COLOR`, `DEPTH`.
+  *   `COLOR`: Align depth to color.
+  *   `DEPTH`: Align color to depth.
+  *   This parameter is case-insensitive. Hardware D2C only supports `COLOR` as the target stream; use `align_mode:=SW` if you need to align to `DEPTH`. See [Aligning Depth to Color](../5_advanced_guide/configuration/align_depth_color.md) for startup and viewing examples.
+- **`intra_camera_sync_reference`**
+  - Sets the reference point for intra-camera synchronization. Applicable for Gemini 330 series devices when `sync_mode` is set to **software** or **hardware trigger** mode. **Options:** `Start`, `Middle`, `End`. When set to empty, the long baseline device defaults to End, and the short baseline device defaults to Middle.
+
+## Device-Specific Parameters
 * **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
   * Enable the gmsl trigger out signal / set gmsl trigger fps.
   > Only supports [gmsl camera](../5_advanced_guide/multi_camera/gmsl_camera.md).
@@ -235,37 +267,6 @@ The following are the launch parameters available:
 * **`disp_outliers_filter_search_mode`**
   * Set the DispOutliersFilter search mode. Leave it empty to keep the SDK default. Options: `FULL`, `OFFSET_80`. The value is case-insensitive.
   > **Supported Modules**: DaBai Max Pro
-### Disparity
-*   **`disparity_to_depth_mode`**
-    *   `HW`: use hardware disparity to depth conversion. `SW`: use software disparity to depth conversion. Use `disable` to turn it off.
-    *   This parameter is case-insensitive. Invalid values are reported and replaced with the default value.
-*   **`disparity_range_mode`**, **`disparity_search_offset`**, **`disparity_offset_config`**
-    *   Parameters for disparity search offset. Used for [disparity search offset](../5_advanced_guide/configuration/disparity_search_offset.md).
-
-### Interleave AE Mode
-*   **`interleave_ae_mode`**
-    *   Set `laser` or `hdr` interleave.
-*   **`interleave_frame_enable`**, **`interleave_skip_enable`**, **`interleave_skip_index`**
-    *   Parameters to control interleave frame mode.
-*   **`[hdr|laser]_index[0|1]_[...]`**
-    *   In interleave frame mode, set the 0th and 1st frame parameters of hdr or laser interleaving frames.
-*   *All interleave parameters are used for [interleave ae mode](../5_advanced_guide/configuration/interleave_ae_mode.md).*
-
-### Intra-Camera Synchronization
-
-- **`depth_registration`**
-  *   Enable alignment of the depth frame to the color frame. This field is required when the `enable_colored_point_cloud` is set to `true`. See [Aligning Depth to Color](../5_advanced_guide/configuration/align_depth_color.md) for startup and viewing examples.
-- **`align_mode`**
-  *   The alignment mode to be used. Options are `HW` for hardware alignment and `SW` for software alignment.
-  *   This parameter is case-insensitive. Invalid values are reported and replaced with the default value.
-- **`align_target_stream`**
-  *   Set align target stream mode.
-  *   The possible values are `COLOR`, `DEPTH`.
-  *   `COLOR`: Align depth to color.
-  *   `DEPTH`: Align color to depth.
-  *   This parameter is case-insensitive. Hardware D2C only supports `COLOR` as the target stream; use `align_mode:=SW` if you need to align to `DEPTH`. See [Aligning Depth to Color](../5_advanced_guide/configuration/align_depth_color.md) for startup and viewing examples.
-- **`intra_camera_sync_reference`**
-  - Sets the reference point for intra-camera synchronization. Applicable for Gemini 330 series devices when `sync_mode` is set to **software** or **hardware trigger** mode. **Options:** `Start`, `Middle`, `End`. When set to empty, the long baseline device defaults to End, and the short baseline device defaults to Middle.
 
 ## Basic & General Parameters
 
