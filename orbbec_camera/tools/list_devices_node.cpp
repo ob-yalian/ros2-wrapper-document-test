@@ -134,17 +134,33 @@ void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
   auto logger = rclcpp::get_logger("list_device_node");
   try {
     auto preset_list = device->getAvailablePresetList();
-    RCLCPP_INFO_STREAM(logger, "Preset count: " << preset_list->getCount());
-    for (uint32_t i = 0; i < preset_list->getCount(); ++i) {
-      RCLCPP_INFO_STREAM(logger, "  - " << preset_list->getName(i));
+    const uint32_t preset_count = preset_list ? preset_list->getCount() : 0;
+    RCLCPP_INFO_STREAM(logger, "device_preset count: " << preset_count);
+    for (uint32_t i = 0; i < preset_count; ++i) {
+      const char *preset_name = preset_list->getName(i);
+      if (preset_name != nullptr && preset_name[0] != '\0') {
+        RCLCPP_INFO_STREAM(logger, "  - " << preset_name);
+      }
     }
 
     std::string key = "PresetVer";
     if (device->isExtensionInfoExist(key)) {
       std::string value = device->getExtensionInfo(key);
-      RCLCPP_INFO_STREAM(logger, "Preset version: " << value);
+      RCLCPP_INFO_STREAM(logger, "device_preset version: " << value);
     } else {
-      RCLCPP_INFO_STREAM(logger, "Preset version: not available");
+      RCLCPP_INFO_STREAM(logger, "device_preset version: not available");
+    }
+
+    if (device->isColorPresetSupported()) {
+      auto color_preset_list = device->getColorPresetList();
+      const uint32_t color_preset_count = color_preset_list ? color_preset_list->getCount() : 0;
+      RCLCPP_INFO_STREAM(logger, "color_preset count: " << color_preset_count);
+      for (uint32_t i = 0; i < color_preset_count; ++i) {
+        const char *preset_name = color_preset_list->getName(i);
+        if (preset_name != nullptr && preset_name[0] != '\0') {
+          RCLCPP_INFO_STREAM(logger, "  - " << preset_name);
+        }
+      }
     }
   } catch (ob::Error &e) {
     RCLCPP_WARN_STREAM(logger,
