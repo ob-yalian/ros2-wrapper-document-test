@@ -26,6 +26,7 @@ rosidl_generate_interfaces(
     "msg/IMUInfo.msg"
     "msg/RGBD.msg"
     "srv/GetBool.srv"
+    "srv/GetDeviceConfig.srv"
     "srv/GetDeviceInfo.srv"
     "srv/GetCameraInfo.srv"
     "srv/GetInt32.srv"
@@ -36,6 +37,7 @@ rosidl_generate_interfaces(
     "srv/SetArrays.srv"
     "srv/GetUserCalibParams.srv"
     "srv/SetUserCalibParams.srv"
+    "srv/SetBagRecording.srv"
     DEPENDENCIES
     sensor_msgs
     std_msgs

@@ -337,19 +337,19 @@ For optimal performance, we strongly recommend updating to the latest firmware v
     <tr>
       <td style="text-align: center; font-weight: bold;">Gemini 430</td>
       <td>Gemini 435Le</td>
-      <td><a href="https://github.com/orbbec/OrbbecFirmware/releases/tag/Gemin435Le-Firmware">1.3.6</a></td>
+      <td><a href="https://github.com/orbbec/OrbbecFirmware/releases/tag/Gemin435Le-Firmware">1.3.19</a></td>
       <td>gemini435_le.launch.py</td>
     </tr>
     <tr>
-      <td rowspan="2" style="text-align: center; font-weight: bold;">Gemini 301</td>
+      <td rowspan="3" style="text-align: center; font-weight: bold;">Gemini 301</td>
       <td>Gemini 305</td>
       <td><a href="https://doc.orbbec.com/documentation/Gemini%20305%20Documentation/Firmware%20Release%20of%20Gemini%20305">1.0.70</a></td>
-      <td>gemini305.launch.py</td>
+      <td>gemini_301_series.launch.py</td>
     </tr>
     <tr>
       <td>Gemini 305g</td>
       <td><a href="https://doc.orbbec.com/documentation/Gemini%20305%20Documentation/Firmware%20Release%20of%20Gemini%20305">1.0.70</a></td>
-      <td>gemini305_g.launch.py</td>
+      <td>gemini_301_series.launch.py</td>
     </tr>
     <tr>
       <td rowspan="8" style="text-align: center; font-weight: bold;">Gemini 330</td>
