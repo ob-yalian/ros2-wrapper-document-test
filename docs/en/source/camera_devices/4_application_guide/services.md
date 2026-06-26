@@ -247,10 +247,16 @@
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
 
+    # Set EdgeNoiseRemovalFilter: []
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: EdgeNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+
     # Tune filters with named parameters
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: NoiseRemovalFilter, filter_enable: true, filter_config: [{name: min_diff, value: '256'}, {name: max_size, value: '80'}]}"
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: HardwareNoiseRemovalFilter, filter_enable: true, filter_config: [{name: threshold, value: '0.2'}]}"
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: SpatialAdvancedFilter, filter_enable: true, filter_config: [{name: alpha, value: '0.5'}, {name: disp_diff, value: '160'}, {name: magnitude, value: '1'}, {name: radius, value: '8'}]}"
+
+    # Set DispOutliersFilter. search_mode accepts FULL or OFFSET_80, case-insensitive.
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: DispOutliersFilter, filter_enable: true, filter_config: [{name: search_mode, value: 'FULL'}]}"
     ```
 
     Filter status is updated after service calls on `/camera/depth_filter_status` and `/camera/depth_filters/status`. `/camera/depth_filters/status` uses the structured `orbbec_camera_msgs/msg/DepthFiltersStatus` message and includes each filter's enabled state and parameters.

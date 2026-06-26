@@ -67,6 +67,8 @@ ros2 launch orbbec_camera gemini2L.launch.py config_file_path:=gemini2L_dual_ir.
 > 由于 `Dual Color Streams` 模式的参数配置与 `Default` 模式差异较大，我们提供了对应的 YAML 配置文件。
 请将 `config_file_path` 设置为 `gemini305_dual_color`，该配置文件位于 config 目录下。
 
+Gemini 305 也支持通过 `color_preset` 参数选择彩色 preset。请按名称设置，例如 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，可用名称以设备返回为准。
+
 ## 扩展预设
 
 ### G33X Close Range High Accuracy（Gemini 330 / Gemini 335 / Gemini 336）
@@ -80,4 +82,3 @@ ros2 launch orbbec_camera gemini2L.launch.py config_file_path:=gemini2L_dual_ir.
 | 预设 | 特点 | 推荐使用场景 |
 | --- | --- | --- |
 | G336X AMR Default |  优化其在阳光照射和重复纹理的仓库场景中具有可靠的深度性能<br> 推荐深度分辨率：1280x800 / 640x400 / 424x266 |  仓库AMRs |
-

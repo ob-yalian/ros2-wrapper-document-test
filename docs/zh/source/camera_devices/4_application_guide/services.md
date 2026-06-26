@@ -248,10 +248,16 @@
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
 
+    # 设置 EdgeNoiseRemovalFilter: []
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: EdgeNoiseRemovalFilter, filter_enable: true, filter_param: []}'
+
     # 使用 filter_config 按参数名调参
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: NoiseRemovalFilter, filter_enable: true, filter_config: [{name: min_diff, value: '256'}, {name: max_size, value: '80'}]}"
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: HardwareNoiseRemovalFilter, filter_enable: true, filter_config: [{name: threshold, value: '0.2'}]}"
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: SpatialAdvancedFilter, filter_enable: true, filter_config: [{name: alpha, value: '0.5'}, {name: disp_diff, value: '160'}, {name: magnitude, value: '1'}, {name: radius, value: '8'}]}"
+
+    # 设置 DispOutliersFilter。search_mode 支持 FULL 或 OFFSET_80，大小写不敏感。
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: DispOutliersFilter, filter_enable: true, filter_config: [{name: search_mode, value: 'FULL'}]}"
     ```
 
     滤波状态会在服务调用后同步更新到 `/camera/depth_filter_status` 和 `/camera/depth_filters/status`。其中 `/camera/depth_filters/status` 使用结构化消息 `orbbec_camera_msgs/msg/DepthFiltersStatus`，包含每个滤波器的使能状态和参数。
