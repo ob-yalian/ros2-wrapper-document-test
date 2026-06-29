@@ -14,6 +14,7 @@
   <depend>backward_ros</depend>
   <depend>image_transport</depend>
   <depend>image_publisher</depend>
+  <depend>message_filters</depend>
   <depend>rclcpp_components</depend>
   <depend>cv_bridge</depend>
   <depend>camera_info_manager</depend>
