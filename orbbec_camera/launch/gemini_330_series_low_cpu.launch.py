@@ -42,7 +42,8 @@ def load_parameters(context, args):
     if config_file_path:
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
-    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename'}
+    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
+                    'enhanced_depth_model_path'}
 
     result = {}
     for key, value in default_params.items():
@@ -227,6 +228,9 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_spatial_fast_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_moderate_filter', default_value='false'),
         DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
+        DeclareLaunchArgument('enable_enhanced_depth', default_value='false'),
+        DeclareLaunchArgument('enhanced_depth_model_path', default_value=''),
+        DeclareLaunchArgument('enhanced_depth_confidence_threshold', default_value='0.20'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),

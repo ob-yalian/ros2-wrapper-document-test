@@ -54,6 +54,9 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
   if (filter_name == "DispOutliers" || filter_name == "DepthOutliersFilter") {
     return "DispOutliersFilter";
   }
+  if (filter_name == "EnhancedDepth" || filter_name == "EnhancedDepthFilter") {
+    return "EnhancedDepthFilter";
+  }
   return filter_name;
 }
 
@@ -67,6 +70,20 @@ std::string getDepthFilterStatusName(const std::string &filter_name) {
     return "DisparityToDepth";
   }
   return filter_name;
+}
+
+const std::unordered_map<OBFormat, OBConvertFormat> &enhancedDepthColorFormatMap() {
+  static const std::unordered_map<OBFormat, OBConvertFormat> kFormatMap = {
+      {OB_FORMAT_YUYV, FORMAT_YUYV_TO_RGB}, {OB_FORMAT_UYVY, FORMAT_UYVY_TO_RGB},
+      {OB_FORMAT_MJPG, FORMAT_MJPG_TO_RGB}, {OB_FORMAT_BGR, FORMAT_BGR_TO_RGB},
+      {OB_FORMAT_RGBA, FORMAT_RGBA_TO_RGB}, {OB_FORMAT_Y16, FORMAT_Y16_TO_RGB},
+      {OB_FORMAT_Y8, FORMAT_Y8_TO_RGB},
+  };
+  return kFormatMap;
+}
+
+bool isEnhancedDepthColorFormatSupported(OBFormat format) {
+  return format == OB_FORMAT_RGB || enhancedDepthColorFormatMap().count(format) > 0;
 }
 
 std::filesystem::path resolveConfigJsonFilePath(const std::string &file_path) {
@@ -410,6 +427,15 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
   return filter_state;
 }
 
+DepthFilterState OBCameraNode::buildEnhancedDepthFilterState() const {
+  DepthFilterState filter_state;
+  filter_state.filter_name = "EnhancedDepthFilter";
+  filter_state.enabled = enable_enhanced_depth_.load();
+  appendDepthFilterParam(filter_state, "confidence_threshold",
+                         std::to_string(enhanced_depth_confidence_threshold_));
+  return filter_state;
+}
+
 void OBCameraNode::publishDepthFiltersStatus() {
   if (!depth_filters_status_pub_) {
     return;
@@ -621,9 +647,14 @@ void OBCameraNode::publishDepthFiltersStatus() {
   if (disp_outliers_filter_supported) {
     append_unique_filter_name("DispOutliersFilter");
   }
+  append_unique_filter_name("EnhancedDepthFilter");
 
   msg.filters.reserve(ordered_filter_names.size());
   for (const auto &filter_name : ordered_filter_names) {
+    if (filter_name == "EnhancedDepthFilter") {
+      msg.filters.push_back(buildEnhancedDepthFilterState());
+      continue;
+    }
     bool enabled = false;
     auto filter = find_depth_filter(filter_name);
     if (filter_name == "NoiseRemovalFilter") {
@@ -4036,6 +4067,14 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(publish_tf_, "publish_tf", true);
   setAndGetNodeParameter<double>(tf_publish_rate_, "tf_publish_rate", 0.0);
   setAndGetNodeParameter<bool>(depth_registration_, "depth_registration", false);
+  bool enable_enhanced_depth = false;
+  setAndGetNodeParameter<bool>(enable_enhanced_depth, "enable_enhanced_depth", false);
+  enable_enhanced_depth_.store(enable_enhanced_depth);
+  setAndGetNodeParameter<std::string>(enhanced_depth_model_path_, "enhanced_depth_model_path", "");
+  double enhanced_depth_confidence_threshold = 0.20;
+  setAndGetNodeParameter<double>(enhanced_depth_confidence_threshold,
+                                 "enhanced_depth_confidence_threshold", 0.20);
+  enhanced_depth_confidence_threshold_ = static_cast<float>(enhanced_depth_confidence_threshold);
   setAndGetNodeParameter<bool>(enable_point_cloud_, "enable_point_cloud", false);
   setAndGetNodeParameter<std::string>(ir_info_url_, "ir_info_url", "");
   setAndGetNodeParameter<std::string>(color_info_url_, "color_info_url", "");
@@ -4376,6 +4415,12 @@ void OBCameraNode::setupTopics() {
     syncConfigJsonFilterSettings(left_ir_filter_list_, "left_ir");
     syncConfigJsonFilterSettings(right_ir_filter_list_, "right_ir");
     setupProfiles();
+    if (enable_enhanced_depth_.load()) {
+      std::string message;
+      if (!ensureEnhancedDepthFilter(message)) {
+        throw std::runtime_error(message);
+      }
+    }
     setupCameraInfo();
     selectBaseStream();
     setupCameraCtrlServices();
@@ -4576,6 +4621,341 @@ void OBCameraNode::setupPipelineConfig() {
   }
 }
 
+bool OBCameraNode::validateEnhancedDepthFilterConfig(std::string &message) const {
+  if (!enable_stream_.count(COLOR) || !enable_stream_.at(COLOR) || !enable_stream_.count(DEPTH) ||
+      !enable_stream_.at(DEPTH)) {
+    message = "Enhanced depth filter requires color and depth streams";
+    return false;
+  }
+  if (!depth_registration_) {
+    message = "Enhanced depth filter requires D2C/C2D align mode";
+    return false;
+  }
+  if (align_mode_ != "HW" && align_mode_ != "SW") {
+    message = "Enhanced depth filter requires D2C/C2D align mode";
+    return false;
+  }
+  if (align_mode_ == "HW" && align_target_stream_ != OB_STREAM_COLOR) {
+    message = "Enhanced depth filter requires HW D2C align target COLOR";
+    return false;
+  }
+  if (align_mode_ == "SW" && align_target_stream_ != OB_STREAM_COLOR &&
+      align_target_stream_ != OB_STREAM_DEPTH) {
+    message = "Enhanced depth filter requires D2C/C2D align mode";
+    return false;
+  }
+
+  auto color_it = stream_profile_.find(COLOR);
+  auto depth_it = stream_profile_.find(DEPTH);
+  if (color_it == stream_profile_.end() || !color_it->second || depth_it == stream_profile_.end() ||
+      !depth_it->second) {
+    message = "Enhanced depth filter requires color and depth stream profiles";
+    return false;
+  }
+  auto color_profile = color_it->second->as<ob::VideoStreamProfile>();
+  auto depth_profile = depth_it->second->as<ob::VideoStreamProfile>();
+  if (!color_profile || !depth_profile) {
+    message = "Enhanced depth filter requires video stream profiles";
+    return false;
+  }
+
+  const bool d2c = align_mode_ == "HW" || align_target_stream_ == OB_STREAM_COLOR;
+  const OBStreamType align_to_stream = d2c ? OB_STREAM_COLOR : OB_STREAM_DEPTH;
+  if (!ob::EnhancedDepthFilter::isSupportedResolution(color_profile->getType(), align_to_stream,
+                                                      color_profile->getWidth(),
+                                                      color_profile->getHeight())) {
+    message = d2c ? "Enhanced depth filter requires color frame is: 640 * 480 RGB"
+                  : "Enhanced depth filter requires color frame is: RGB";
+    return false;
+  }
+  if (!ob::EnhancedDepthFilter::isSupportedResolution(depth_profile->getType(), align_to_stream,
+                                                      depth_profile->getWidth(),
+                                                      depth_profile->getHeight()) ||
+      !ob::EnhancedDepthFilter::isSupportedFormat(OB_STREAM_DEPTH, depth_profile->getFormat())) {
+    message = d2c ? "Enhanced depth filter requires depth frame is: Y16"
+                  : "Enhanced depth filter requires depth frame is: 640 * 480 Y16";
+    return false;
+  }
+  if (!isEnhancedDepthColorFormatSupported(color_profile->getFormat())) {
+    message =
+        "Unsupported color stream format for enhanced depth filter. Supported formats are: YUYV "
+        "UYVY MJPG BGR RGBA Y16 Y8 RGB";
+    return false;
+  }
+  return true;
+}
+
+void OBCameraNode::applyEnhancedDepthConfidenceThreshold() {
+  if (!enhanced_depth_filter_ || enhanced_depth_confidence_threshold_ < 0.0f) {
+    return;
+  }
+  auto range = enhanced_depth_filter_->getConfidenceThresholdRange();
+  if (enhanced_depth_confidence_threshold_ < range.min ||
+      enhanced_depth_confidence_threshold_ > range.max) {
+    std::ostringstream ss;
+    ss << "Enhanced depth confidence threshold is out of range " << range.min << " - " << range.max;
+    throw std::runtime_error(ss.str());
+  }
+  enhanced_depth_filter_->setConfidenceThreshold(enhanced_depth_confidence_threshold_);
+}
+
+bool OBCameraNode::ensureEnhancedDepthFilter(std::string &message) {
+  if (!validateEnhancedDepthFilterConfig(message)) {
+    return false;
+  }
+
+  std::lock_guard<std::mutex> lock(enhanced_depth_filter_mutex_);
+  try {
+    if (!enhanced_depth_filter_) {
+      if (enhanced_depth_model_path_.empty()) {
+        message = "Enhanced depth filter requires enhanced_depth_model_path";
+        return false;
+      }
+      std::ifstream model_file(enhanced_depth_model_path_);
+      if (!model_file.good()) {
+        message = "Enhanced depth model file not found: " + enhanced_depth_model_path_;
+        return false;
+      }
+      if (!device_->isLicenseAuthorizationSupported()) {
+        message = "Enhanced depth filter requires device license authorization support";
+        return false;
+      }
+      auto license_info = device_->readLicenseInfo();
+      RCLCPP_INFO_STREAM(logger_, "Enhanced depth license info: " << license_info);
+      if (license_info.empty()) {
+        message = "Enhanced depth filter requires device license info";
+        return false;
+      }
+      RCLCPP_INFO_STREAM(logger_, "Creating enhanced depth filter with model path: "
+                                      << enhanced_depth_model_path_);
+      enhanced_depth_filter_ =
+          std::make_shared<ob::EnhancedDepthFilter>(device_, enhanced_depth_model_path_);
+    }
+    const bool d2c = align_mode_ == "HW" || align_target_stream_ == OB_STREAM_COLOR;
+    auto target_profile = d2c ? stream_profile_.at(COLOR)->as<ob::VideoStreamProfile>()
+                              : stream_profile_.at(DEPTH)->as<ob::VideoStreamProfile>();
+    enhanced_depth_filter_->setResolution(target_profile->getWidth(), target_profile->getHeight());
+    applyEnhancedDepthConfidenceThreshold();
+    setupConfidencePublishers();
+  } catch (const ob::Error &e) {
+    message =
+        "Failed to create enhanced depth filter: " + orbbec_camera::formatObErrorWithStatus(e);
+    return false;
+  } catch (const std::exception &e) {
+    message = "Failed to create enhanced depth filter: " + std::string(e.what());
+    return false;
+  }
+  return true;
+}
+
+bool OBCameraNode::convertEnhancedDepthColorFrame(const std::shared_ptr<ob::FrameSet> &frame_set) {
+  auto color_frame = frame_set ? frame_set->getFrame(OB_FRAME_COLOR) : nullptr;
+  if (!color_frame) {
+    return false;
+  }
+  const auto color_format = color_frame->getFormat();
+  if (color_format == OB_FORMAT_RGB) {
+    return true;
+  }
+  const auto &format_map = enhancedDepthColorFormatMap();
+  auto it = format_map.find(color_format);
+  if (it == format_map.end()) {
+    RCLCPP_ERROR_STREAM_THROTTLE(
+        logger_, *node_->get_clock(), 1000,
+        "Unsupported color stream format for enhanced depth filter: " << color_format);
+    return false;
+  }
+
+  try {
+    enhanced_depth_format_convert_filter_.setFormatConvertType(it->second);
+    auto converted = enhanced_depth_format_convert_filter_.process(color_frame);
+    if (!converted) {
+      RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
+                            "Enhanced depth color format conversion failed");
+      return false;
+    }
+    frame_set->pushFrame(converted);
+  } catch (const ob::Error &e) {
+    RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 1000,
+                                 "Enhanced depth color format conversion failed: "
+                                     << orbbec_camera::formatObErrorWithStatus(e));
+    return false;
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 1000,
+                                 "Enhanced depth color format conversion failed: " << e.what());
+    return false;
+  }
+  return true;
+}
+
+std::shared_ptr<ob::FrameSet> OBCameraNode::processEnhancedDepthFilter(
+    const std::shared_ptr<ob::FrameSet> &frame_set) {
+  if (!frame_set) {
+    return frame_set;
+  }
+  {
+    std::lock_guard<std::mutex> lock(enhanced_depth_filter_mutex_);
+    if (!enable_enhanced_depth_.load()) {
+      return frame_set;
+    }
+  }
+
+  std::string message;
+  if (!ensureEnhancedDepthFilter(message)) {
+    RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 1000, message);
+    return frame_set;
+  }
+  if (!frame_set->getFrame(OB_FRAME_COLOR) || !frame_set->getFrame(OB_FRAME_DEPTH)) {
+    RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
+                          "Enhanced depth filter requires color and depth frames");
+    return frame_set;
+  }
+  if (!convertEnhancedDepthColorFrame(frame_set)) {
+    return frame_set;
+  }
+
+  std::shared_ptr<ob::EnhancedDepthFilter> filter;
+  {
+    std::lock_guard<std::mutex> lock(enhanced_depth_filter_mutex_);
+    if (!enable_enhanced_depth_.load()) {
+      return frame_set;
+    }
+    filter = enhanced_depth_filter_;
+  }
+
+  try {
+    auto processed = filter->process(frame_set);
+    if (!processed || !processed->is<ob::FrameSet>()) {
+      RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
+                            "Enhanced depth filter returned invalid frameset");
+      return frame_set;
+    }
+    auto processed_frame_set = processed->as<ob::FrameSet>();
+    publishConfidenceFrame(processed_frame_set->getFrame(OB_FRAME_CONFIDENCE));
+    return processed_frame_set;
+  } catch (const ob::Error &e) {
+    RCLCPP_ERROR_STREAM_THROTTLE(
+        logger_, *node_->get_clock(), 1000,
+        "Enhanced depth filter failed: " << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 1000,
+                                 "Enhanced depth filter failed: " << e.what());
+  }
+  return frame_set;
+}
+
+void OBCameraNode::setupConfidencePublishers() {
+  if (confidence_image_publisher_ && confidence_camera_info_publisher_) {
+    return;
+  }
+  auto image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
+  auto camera_info_qos_profile = getRMWQosProfileFromString(camera_info_qos_[DEPTH]);
+  if (use_intra_process_) {
+    image_qos_profile = rmw_qos_profile_default;
+    camera_info_qos_profile = rmw_qos_profile_default;
+  }
+  if (!confidence_image_publisher_) {
+    confidence_image_publisher_ = node_->create_publisher<sensor_msgs::msg::Image>(
+        "confidence/image_raw",
+        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_qos_profile), image_qos_profile));
+  }
+  if (!confidence_camera_info_publisher_) {
+    confidence_camera_info_publisher_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>(
+        "confidence/camera_info",
+        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
+                    camera_info_qos_profile));
+  }
+}
+
+void OBCameraNode::publishConfidenceFrame(const std::shared_ptr<ob::Frame> &confidence_frame) {
+  if (!confidence_frame || !confidence_frame->is<ob::VideoFrame>()) {
+    return;
+  }
+  setupConfidencePublishers();
+  if ((!confidence_image_publisher_ ||
+       confidence_image_publisher_->get_subscription_count() == 0) &&
+      (!confidence_camera_info_publisher_ ||
+       confidence_camera_info_publisher_->get_subscription_count() == 0)) {
+    return;
+  }
+
+  auto video_frame = confidence_frame->as<ob::VideoFrame>();
+  const int width = static_cast<int>(video_frame->getWidth());
+  const int height = static_cast<int>(video_frame->getHeight());
+  int image_type = CV_8UC1;
+  std::string encoding = sensor_msgs::image_encodings::MONO8;
+  int unit_step_size = sizeof(uint8_t);
+  if (confidence_frame->getFormat() == OB_FORMAT_Y16) {
+    image_type = CV_16UC1;
+    encoding = sensor_msgs::image_encodings::MONO16;
+    unit_step_size = sizeof(uint16_t);
+  } else if (confidence_frame->getFormat() != OB_FORMAT_Y8) {
+    RCLCPP_ERROR_STREAM_THROTTLE(
+        logger_, *node_->get_clock(), 1000,
+        "Unsupported confidence frame format: " << confidence_frame->getFormat());
+    return;
+  }
+
+  if (confidence_image_.empty() || confidence_image_.cols != width ||
+      confidence_image_.rows != height || confidence_image_.type() != image_type) {
+    confidence_image_.create(height, width, image_type);
+  }
+  memcpy(confidence_image_.data, video_frame->getData(), video_frame->getDataSize());
+
+  auto timestamp = fromUsToROSTime(getFrameTimestampUs(confidence_frame));
+  std::string frame_id =
+      depth_registration_ ? depth_aligned_frame_id_[DEPTH] : optical_frame_id_[DEPTH];
+
+  OBCameraIntrinsic intrinsic{};
+  OBCameraDistortion distortion{};
+  bool has_camera_params = false;
+  try {
+    auto stream_profile = confidence_frame->getStreamProfile();
+    if (stream_profile) {
+      auto video_stream_profile = stream_profile->as<ob::VideoStreamProfile>();
+      if (video_stream_profile) {
+        intrinsic = video_stream_profile->getIntrinsic();
+        distortion = video_stream_profile->getDistortion();
+        has_camera_params = true;
+      }
+    }
+  } catch (const std::exception &) {
+    has_camera_params = false;
+  }
+  if (!has_camera_params && stream_profile_.count(DEPTH) && stream_profile_[DEPTH]) {
+    auto depth_profile = stream_profile_[DEPTH]->as<ob::VideoStreamProfile>();
+    if (depth_profile) {
+      intrinsic = depth_profile->getIntrinsic();
+      distortion = depth_profile->getDistortion();
+      has_camera_params = true;
+    }
+  }
+  if (!has_camera_params) {
+    RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
+                          "Failed to get confidence camera info");
+    return;
+  }
+  auto camera_info = convertToCameraInfo(intrinsic, distortion, width);
+  camera_info.header.stamp = timestamp;
+  camera_info.header.frame_id = frame_id;
+  camera_info.width = width;
+  camera_info.height = height;
+  if (confidence_camera_info_publisher_) {
+    confidence_camera_info_publisher_->publish(camera_info);
+  }
+
+  if (!confidence_image_publisher_ || confidence_image_publisher_->get_subscription_count() == 0) {
+    return;
+  }
+  sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
+  cv_bridge::CvImage(std_msgs::msg::Header(), encoding, confidence_image_).toImageMsg(*image_msg);
+  image_msg->header.stamp = timestamp;
+  image_msg->header.frame_id = frame_id;
+  image_msg->is_bigendian = false;
+  image_msg->step = width * unit_step_size;
+  confidence_image_publisher_->publish(std::move(image_msg));
+}
+
 void OBCameraNode::setupCameraInfo() {
   std::string color_camera_name = camera_name_ + "_color";
   if (!color_info_url_.empty()) {
@@ -4668,6 +5048,9 @@ void OBCameraNode::setupPublishers() {
       depth_unaligned_publisher_ = std::make_shared<image_transport_publisher>(
           *node_, "depth/image_unaligned", depth_image_qos_profile);
     }
+  }
+  if (enable_enhanced_depth_.load()) {
+    setupConfidencePublishers();
   }
 
   if (enable_sync_output_accel_gyro_) {
@@ -5395,6 +5778,12 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       RCLCPP_DEBUG_ONCE(logger_,
                         "Depth registration is disabled or align filter is null or depth frame is "
                         "null or color frame is null");
+    }
+
+    if (enable_enhanced_depth_.load()) {
+      frame_set = processEnhancedDepthFilter(frame_set);
+      depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
+      color_frame = frame_set->getFrame(OB_FRAME_COLOR);
     }
 
     // Refresh frame from current frameset before logging to reflect post-filter/alignment output.
@@ -6884,6 +7273,73 @@ bool OBCameraNode::applyNamedDepthFilterConfig(
   return true;
 }
 
+bool OBCameraNode::applyEnhancedDepthFilterConfig(
+    bool enabled, const std::vector<float> &positional_params,
+    const std::vector<orbbec_camera_msgs::msg::DepthFilterParam> &named_params,
+    std::string &message) {
+  if (positional_params.size() > 1) {
+    message = "EnhancedDepthFilter only supports one positional parameter";
+    return false;
+  }
+  if (!positional_params.empty() && !named_params.empty()) {
+    message = "filter_param and filter_config cannot be used at the same time";
+    return false;
+  }
+
+  bool has_confidence_threshold = false;
+  float confidence_threshold = enhanced_depth_confidence_threshold_;
+  if (!positional_params.empty()) {
+    has_confidence_threshold = true;
+    confidence_threshold = positional_params[0];
+  }
+  for (const auto &param : named_params) {
+    if (param.name != "confidence_threshold") {
+      message = "Unknown filter config '" + param.name + "' for EnhancedDepthFilter";
+      return false;
+    }
+    double parsed_value = 0.0;
+    if (!parseFilterConfigDouble(param.value, parsed_value, message)) {
+      return false;
+    }
+    has_confidence_threshold = true;
+    confidence_threshold = static_cast<float>(parsed_value);
+  }
+
+  std::string validate_message;
+  if (enabled && !validateEnhancedDepthFilterConfig(validate_message)) {
+    message = validate_message;
+    return false;
+  }
+
+  const float previous_threshold = enhanced_depth_confidence_threshold_;
+  if (has_confidence_threshold) {
+    enhanced_depth_confidence_threshold_ = confidence_threshold;
+  }
+
+  if (enabled) {
+    if (!ensureEnhancedDepthFilter(message)) {
+      enhanced_depth_confidence_threshold_ = previous_threshold;
+      return false;
+    }
+  } else if (has_confidence_threshold && enhanced_depth_filter_) {
+    try {
+      applyEnhancedDepthConfidenceThreshold();
+    } catch (const std::exception &e) {
+      enhanced_depth_confidence_threshold_ = previous_threshold;
+      message = e.what();
+      return false;
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(enhanced_depth_filter_mutex_);
+    enable_enhanced_depth_.store(enabled);
+  }
+  filter_status_["EnhancedDepthFilter"] = enabled;
+  publishDepthFiltersStatus();
+  return true;
+}
+
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
   try {
@@ -6928,6 +7384,17 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
     }
     if (is_disp_outliers_filter && has_positional_params) {
       fail("DispOutliersFilter search_mode expects filter_config value FULL or OFFSET_80");
+      return;
+    }
+
+    if (normalized_request_filter_name == "EnhancedDepthFilter") {
+      std::string message;
+      if (!applyEnhancedDepthFilterConfig(request->filter_enable, request->filter_param,
+                                          request->filter_config, message)) {
+        fail(message);
+        return;
+      }
+      response->success = true;
       return;
     }
 
@@ -6995,7 +7462,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
               hardware_noise_removal_filter_threshold_ = request->filter_param[0];
             }
           } else {
-            fail("The filter switch setting is successful, but the filter parameter setting fails");
+            fail(
+                "The filter switch setting is successful, but the filter parameter setting "
+                "fails");
             return;
           }
         }
