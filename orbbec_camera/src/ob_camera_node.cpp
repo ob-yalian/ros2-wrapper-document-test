@@ -4845,26 +4845,16 @@ std::shared_ptr<ob::FrameSet> OBCameraNode::processEnhancedDepthFilter(
 }
 
 void OBCameraNode::setupConfidencePublishers() {
-  if (confidence_image_publisher_ && confidence_camera_info_publisher_) {
+  if (confidence_image_publisher_) {
     return;
   }
   auto image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
-  auto camera_info_qos_profile = getRMWQosProfileFromString(camera_info_qos_[DEPTH]);
   if (use_intra_process_) {
     image_qos_profile = rmw_qos_profile_default;
-    camera_info_qos_profile = rmw_qos_profile_default;
   }
-  if (!confidence_image_publisher_) {
-    confidence_image_publisher_ = node_->create_publisher<sensor_msgs::msg::Image>(
-        "confidence/image_raw",
-        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_qos_profile), image_qos_profile));
-  }
-  if (!confidence_camera_info_publisher_) {
-    confidence_camera_info_publisher_ = node_->create_publisher<sensor_msgs::msg::CameraInfo>(
-        "confidence/camera_info",
-        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(camera_info_qos_profile),
-                    camera_info_qos_profile));
-  }
+  confidence_image_publisher_ = node_->create_publisher<sensor_msgs::msg::Image>(
+      "confidence/image_raw",
+      rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_qos_profile), image_qos_profile));
 }
 
 void OBCameraNode::publishConfidenceFrame(const std::shared_ptr<ob::Frame> &confidence_frame) {
@@ -4872,10 +4862,7 @@ void OBCameraNode::publishConfidenceFrame(const std::shared_ptr<ob::Frame> &conf
     return;
   }
   setupConfidencePublishers();
-  if ((!confidence_image_publisher_ ||
-       confidence_image_publisher_->get_subscription_count() == 0) &&
-      (!confidence_camera_info_publisher_ ||
-       confidence_camera_info_publisher_->get_subscription_count() == 0)) {
+  if (!confidence_image_publisher_ || confidence_image_publisher_->get_subscription_count() == 0) {
     return;
   }
 
@@ -4906,47 +4893,6 @@ void OBCameraNode::publishConfidenceFrame(const std::shared_ptr<ob::Frame> &conf
   std::string frame_id =
       depth_registration_ ? depth_aligned_frame_id_[DEPTH] : optical_frame_id_[DEPTH];
 
-  OBCameraIntrinsic intrinsic{};
-  OBCameraDistortion distortion{};
-  bool has_camera_params = false;
-  try {
-    auto stream_profile = confidence_frame->getStreamProfile();
-    if (stream_profile) {
-      auto video_stream_profile = stream_profile->as<ob::VideoStreamProfile>();
-      if (video_stream_profile) {
-        intrinsic = video_stream_profile->getIntrinsic();
-        distortion = video_stream_profile->getDistortion();
-        has_camera_params = true;
-      }
-    }
-  } catch (const std::exception &) {
-    has_camera_params = false;
-  }
-  if (!has_camera_params && stream_profile_.count(DEPTH) && stream_profile_[DEPTH]) {
-    auto depth_profile = stream_profile_[DEPTH]->as<ob::VideoStreamProfile>();
-    if (depth_profile) {
-      intrinsic = depth_profile->getIntrinsic();
-      distortion = depth_profile->getDistortion();
-      has_camera_params = true;
-    }
-  }
-  if (!has_camera_params) {
-    RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
-                          "Failed to get confidence camera info");
-    return;
-  }
-  auto camera_info = convertToCameraInfo(intrinsic, distortion, width);
-  camera_info.header.stamp = timestamp;
-  camera_info.header.frame_id = frame_id;
-  camera_info.width = width;
-  camera_info.height = height;
-  if (confidence_camera_info_publisher_) {
-    confidence_camera_info_publisher_->publish(camera_info);
-  }
-
-  if (!confidence_image_publisher_ || confidence_image_publisher_->get_subscription_count() == 0) {
-    return;
-  }
   sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
   cv_bridge::CvImage(std_msgs::msg::Header(), encoding, confidence_image_).toImageMsg(*image_msg);
   image_msg->header.stamp = timestamp;

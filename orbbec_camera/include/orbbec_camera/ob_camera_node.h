@@ -934,7 +934,6 @@ class OBCameraNode {
   std::string enhanced_depth_model_path_;
   float enhanced_depth_confidence_threshold_ = -1.0f;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr confidence_image_publisher_;
-  rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr confidence_camera_info_publisher_;
   cv::Mat confidence_image_;
   OBStreamType align_target_stream_ = OB_STREAM_COLOR;
   bool retry_on_usb3_detection_failure_ = false;
