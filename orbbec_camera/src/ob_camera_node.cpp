@@ -4688,13 +4688,13 @@ void OBCameraNode::applyEnhancedDepthConfidenceThreshold() {
     return;
   }
   auto range = enhanced_depth_filter_->getConfidenceThresholdRange();
-  const auto confidence_threshold = static_cast<uint32_t>(enhanced_depth_confidence_threshold_);
+  const int confidence_threshold = enhanced_depth_confidence_threshold_;
   if (confidence_threshold < range.min || confidence_threshold > range.max) {
     std::ostringstream ss;
     ss << "Enhanced depth confidence threshold is out of range " << range.min << " - " << range.max;
     throw std::runtime_error(ss.str());
   }
-  enhanced_depth_filter_->setConfidenceThreshold(confidence_threshold);
+  enhanced_depth_filter_->setConfidenceThreshold(static_cast<uint32_t>(confidence_threshold));
 }
 
 bool OBCameraNode::ensureEnhancedDepthFilter(std::string &message) {
