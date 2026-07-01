@@ -4071,10 +4071,8 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<bool>(enable_enhanced_depth, "enable_enhanced_depth", false);
   enable_enhanced_depth_.store(enable_enhanced_depth);
   setAndGetNodeParameter<std::string>(enhanced_depth_model_path_, "enhanced_depth_model_path", "");
-  double enhanced_depth_confidence_threshold = 0.20;
-  setAndGetNodeParameter<double>(enhanced_depth_confidence_threshold,
-                                 "enhanced_depth_confidence_threshold", 0.20);
-  enhanced_depth_confidence_threshold_ = static_cast<float>(enhanced_depth_confidence_threshold);
+  setAndGetNodeParameter<int>(enhanced_depth_confidence_threshold_,
+                              "enhanced_depth_confidence_threshold", 51);
   setAndGetNodeParameter<bool>(enable_point_cloud_, "enable_point_cloud", false);
   setAndGetNodeParameter<std::string>(ir_info_url_, "ir_info_url", "");
   setAndGetNodeParameter<std::string>(color_info_url_, "color_info_url", "");
@@ -4686,17 +4684,17 @@ bool OBCameraNode::validateEnhancedDepthFilterConfig(std::string &message) const
 }
 
 void OBCameraNode::applyEnhancedDepthConfidenceThreshold() {
-  if (!enhanced_depth_filter_ || enhanced_depth_confidence_threshold_ < 0.0f) {
+  if (!enhanced_depth_filter_ || enhanced_depth_confidence_threshold_ < 0) {
     return;
   }
   auto range = enhanced_depth_filter_->getConfidenceThresholdRange();
-  if (enhanced_depth_confidence_threshold_ < range.min ||
-      enhanced_depth_confidence_threshold_ > range.max) {
+  const auto confidence_threshold = static_cast<uint32_t>(enhanced_depth_confidence_threshold_);
+  if (confidence_threshold < range.min || confidence_threshold > range.max) {
     std::ostringstream ss;
     ss << "Enhanced depth confidence threshold is out of range " << range.min << " - " << range.max;
     throw std::runtime_error(ss.str());
   }
-  enhanced_depth_filter_->setConfidenceThreshold(enhanced_depth_confidence_threshold_);
+  enhanced_depth_filter_->setConfidenceThreshold(confidence_threshold);
 }
 
 bool OBCameraNode::ensureEnhancedDepthFilter(std::string &message) {
@@ -7233,10 +7231,21 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
   }
 
   bool has_confidence_threshold = false;
-  float confidence_threshold = enhanced_depth_confidence_threshold_;
+  int confidence_threshold = enhanced_depth_confidence_threshold_;
+  auto parse_confidence_threshold = [&message](double value, int &threshold) {
+    if (std::floor(value) != value || value < 0.0 || value > 255.0) {
+      message =
+          "EnhancedDepthFilter confidence_threshold expects an integer value in range 0 - 255";
+      return false;
+    }
+    threshold = static_cast<int>(value);
+    return true;
+  };
   if (!positional_params.empty()) {
+    if (!parse_confidence_threshold(positional_params[0], confidence_threshold)) {
+      return false;
+    }
     has_confidence_threshold = true;
-    confidence_threshold = positional_params[0];
   }
   for (const auto &param : named_params) {
     if (param.name != "confidence_threshold") {
@@ -7247,8 +7256,10 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
     if (!parseFilterConfigDouble(param.value, parsed_value, message)) {
       return false;
     }
+    if (!parse_confidence_threshold(parsed_value, confidence_threshold)) {
+      return false;
+    }
     has_confidence_threshold = true;
-    confidence_threshold = static_cast<float>(parsed_value);
   }
 
   std::string validate_message;
@@ -7257,7 +7268,7 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
     return false;
   }
 
-  const float previous_threshold = enhanced_depth_confidence_threshold_;
+  const int previous_threshold = enhanced_depth_confidence_threshold_;
   if (has_confidence_threshold) {
     enhanced_depth_confidence_threshold_ = confidence_threshold;
   }

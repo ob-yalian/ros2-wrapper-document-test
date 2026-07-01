@@ -932,7 +932,7 @@ class OBCameraNode {
   std::mutex enhanced_depth_filter_mutex_;
   std::atomic_bool enable_enhanced_depth_{false};
   std::string enhanced_depth_model_path_;
-  float enhanced_depth_confidence_threshold_ = -1.0f;
+  int enhanced_depth_confidence_threshold_ = -1;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr confidence_image_publisher_;
   cv::Mat confidence_image_;
   OBStreamType align_target_stream_ = OB_STREAM_COLOR;

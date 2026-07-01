@@ -230,7 +230,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
         DeclareLaunchArgument('enable_enhanced_depth', default_value='false'),
         DeclareLaunchArgument('enhanced_depth_model_path', default_value=''),
-        DeclareLaunchArgument('enhanced_depth_confidence_threshold', default_value='0.20'),
+        DeclareLaunchArgument('enhanced_depth_confidence_threshold', default_value='51'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),
