@@ -2220,20 +2220,20 @@ public:
      *
      * @param value The confidence threshold.
      */
-    void setConfidenceThreshold(float value) {
-        setConfigValue("confidence_threshold", value);
+    void setConfidenceThreshold(uint32_t value) {
+        setConfigValue("confidence_threshold", static_cast<double>(value));
     }
 
     /**
      * @brief Get the property range of the confidence threshold range.
      */
-    OBFloatPropertyRange getConfidenceThresholdRange() {
-        OBFloatPropertyRange range{};
-        const auto          &schemaVec = getConfigSchemaVec();
+    OBIntPropertyRange getConfidenceThresholdRange() {
+        OBIntPropertyRange range{};
+        const auto        &schemaVec = getConfigSchemaVec();
         for(const auto &item: schemaVec) {
             const char *name = "confidence_threshold";
             if(std::strcmp(item.name, name) == 0) {
-                range = getPropertyRange<OBFloatPropertyRange>(item, getConfigValue(name));
+                range = getPropertyRange<OBIntPropertyRange>(item, getConfigValue(name));
                 break;
             }
         }
