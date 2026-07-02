@@ -3774,19 +3774,6 @@ void OBCameraNode::stopStreams() {
     return;
   }
 
-  // Stop diagnostic timer first to prevent crashes during shutdown
-  try {
-    if (diagnostic_timer_) {
-      diagnostic_timer_->cancel();
-      diagnostic_timer_.reset();
-    }
-    if (diagnostic_updater_) {
-      diagnostic_updater_.reset();
-    }
-  } catch (...) {
-    // Ignore exceptions during diagnostic cleanup
-  }
-
   // Mark pipeline as stopping to prevent new operations
   pipeline_started_.store(false);
 
@@ -4207,7 +4194,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(align_mode_, "align_mode", "HW");
   align_mode_ =
       normalizeClosedSetParameterValue(logger_, "align_mode", align_mode_, {"HW", "SW"}, "HW");
-  setAndGetNodeParameter<double>(diagnostic_period_, "diagnostic_period", 1.0);
+  setAndGetNodeParameter<double>(diagnostic_period_, "diagnostic_period", 0.0);
   setAndGetNodeParameter<bool>(enable_laser_, "enable_laser", true);
   std::string align_target_stream_str_;
   setAndGetNodeParameter<std::string>(align_target_stream_str_, "align_target_stream", "COLOR");
