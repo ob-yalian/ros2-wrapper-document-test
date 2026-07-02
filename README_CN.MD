@@ -5,21 +5,38 @@
   </a>
   <h1><a href="https://github.com/orbbec/OrbbecSDK_ROS2">OrbbecSDK ROS2 Wrapper v2</a></h1>
 
-<!-- Language: -->
-  <p><a href="./README.MD">English</a> | <a href="./README_CN.MD">中文</a></p>
-  <hr>
-
 <!-- Labels: -->
   <!-- First row: -->
-  <img src="https://img.shields.io/badge/ROS-Foxy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Foxy"> <img src="https://img.shields.io/badge/ROS-Humble-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Humble"> <img src="https://img.shields.io/badge/ROS-Jazzy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Jazzy"> <img src="https://img.shields.io/badge/Ubuntu-20.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 20.04"> <img src="https://img.shields.io/badge/Ubuntu-22.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 22.04"> <img src="https://img.shields.io/badge/Ubuntu-24.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 24.04">
+  <a href="https://docs.ros.org/en/foxy/">
+    <img src="https://img.shields.io/badge/ROS-Foxy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Foxy">
+  </a>
+  <a href="https://docs.ros.org/en/humble/">
+    <img src="https://img.shields.io/badge/ROS-Humble-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Humble">
+  </a>
+  <a href="https://docs.ros.org/en/jazzy/">
+    <img src="https://img.shields.io/badge/ROS-Jazzy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Jazzy">
+  </a>
+  <img src="https://img.shields.io/badge/Ubuntu-20.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 20.04">
+  <img src="https://img.shields.io/badge/Ubuntu-22.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 22.04">
+  <img src="https://img.shields.io/badge/Ubuntu-24.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 24.04">
 
   <!-- Second row: -->
   <br>
-  <img src="https://img.shields.io/badge/branch-v2--main-555555?style=flat-square" height="20" alt="branch v2-main"> <img src="https://img.shields.io/badge/license-Apache--2.0-6bcf00?style=flat-square" height="20" alt="license Apache-2.0"> <a href="https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2"><img src="https://img.shields.io/badge/Gitee-mirror-c71d23?style=flat-square" height="20" alt="Gitee mirror"></a>
-
-<!-- Short description: -->
-  <br>
-  <h3>Orbbec 相机 ROS 2 驱动封装</h3>
+  <a href="https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main">
+    <img src="https://img.shields.io/badge/branch-v2--main-555555?style=flat-square" height="20" alt="branch v2-main">
+  </a>
+  <a href="http://www.apache.org/licenses/LICENSE-2.0">
+    <img src="https://img.shields.io/badge/license-Apache--2.0-6bcf00?style=flat-square" height="20" alt="license Apache-2.0">
+  </a>
+  <a href="https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2">
+    <img src="https://img.shields.io/badge/Gitee-mirror-c71d23?style=flat-square" height="20" alt="Gitee mirror">
+  </a>
+  <a href="./README.MD">
+    <img src="https://img.shields.io/badge/README-English-0059b3?style=flat-square" height="20" alt="README English">
+  </a>
+  <a href="./README_CN.MD">
+    <img src="https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-c71d23?style=flat-square" height="20" alt="README 中文">
+  </a>
 </div>
 
 ## 简介
