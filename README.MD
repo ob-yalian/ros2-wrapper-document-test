@@ -5,6 +5,11 @@
   </a>
   <h1><a href="https://github.com/orbbec/OrbbecSDK_ROS2">OrbbecSDK ROS2 Wrapper v2</a></h1>
 
+<!-- Language: -->
+  <p align="center">
+    <a href="./README.MD">English</a> | <a href="./README_CN.MD">中文</a>
+  </p>
+
 <!-- Labels: -->
   <!-- First row: -->
   <a href="https://docs.ros.org/en/foxy/">
@@ -30,12 +35,6 @@
   </a>
   <a href="https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2">
     <img src="https://img.shields.io/badge/Gitee-mirror-c71d23?style=flat-square" height="20" alt="Gitee mirror">
-  </a>
-  <a href="./README.MD">
-    <img src="https://img.shields.io/badge/README-English-0059b3?style=flat-square" height="20" alt="README English">
-  </a>
-  <a href="./README_CN.MD">
-    <img src="https://img.shields.io/badge/README-%E4%B8%AD%E6%96%87-c71d23?style=flat-square" height="20" alt="README 中文">
   </a>
 </div>
 
