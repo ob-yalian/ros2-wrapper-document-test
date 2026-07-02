@@ -1,6 +1,26 @@
-# OrbbecSDK ROS2 Wrapper v2
+<div align="center">
+<!-- Title: -->
+  <a href="https://www.orbbec.com/products/">
+    <img src="./docs/images/orbbec-logo-horizontal.png" width="500" alt="Orbbec">
+  </a>
+  <h1><a href="https://github.com/orbbec/OrbbecSDK_ROS2">OrbbecSDK ROS2 Wrapper v2</a></h1>
 
-[English](./README.MD) | [中文](./README_CN.MD)
+<!-- Language: -->
+  <p><a href="./README.MD">English</a> | <a href="./README_CN.MD">中文</a></p>
+  <hr>
+
+<!-- Labels: -->
+  <!-- First row: -->
+  <img src="https://img.shields.io/badge/ROS-Foxy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Foxy"> <img src="https://img.shields.io/badge/ROS-Humble-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Humble"> <img src="https://img.shields.io/badge/ROS-Jazzy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Jazzy"> <img src="https://img.shields.io/badge/Ubuntu-20.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 20.04"> <img src="https://img.shields.io/badge/Ubuntu-22.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 22.04"> <img src="https://img.shields.io/badge/Ubuntu-24.04-0078d4?style=flat-square&amp;logo=ubuntu&amp;logoColor=white" height="20" alt="Ubuntu 24.04">
+
+  <!-- Second row: -->
+  <br>
+  <img src="https://img.shields.io/badge/branch-v2--main-555555?style=flat-square" height="20" alt="branch v2-main"> <img src="https://img.shields.io/badge/license-Apache--2.0-6bcf00?style=flat-square" height="20" alt="license Apache-2.0"> <a href="https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2"><img src="https://img.shields.io/badge/Gitee-mirror-c71d23?style=flat-square" height="20" alt="Gitee mirror"></a>
+
+<!-- Short description: -->
+  <br>
+  <h3>Orbbec 相机 ROS 2 驱动封装</h3>
+</div>
 
 ## 简介
 
