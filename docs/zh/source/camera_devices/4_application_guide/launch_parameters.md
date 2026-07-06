@@ -251,7 +251,7 @@
   * 设置自动曝光策略。可选值：`default`、`motion`，默认值为 `motion`。
   > **支持模组**：Gemini 305 系列。
   > **兼容说明**：该参数替代旧参数 `enable_sports_mode`。
-* **`depth_downscale`** / **`left_ir_downscale`** /**`right_ir_downscale`**
+* **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
   * 设置下采样倍数。可用`ros2 run orbbec_camera list_camera_profile_mode_node`查看可设置分辨率。**默认值：** `1`
   > **支持模组**：Gemini 305。
 * **`enable_false_positive_filter`**
