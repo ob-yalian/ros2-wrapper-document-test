@@ -318,14 +318,14 @@
       # depth or color
       ros2 service call /camera/set_ae_reference_stream orbbec_camera_msgs/srv/SetString "{data: depth}"
     ```
-    > **Supported Modules**: Gemini 305 series.
+    > **Supported Modules**: Gemini 301 series.
     > **Compatibility**: Replaces the old `/camera/set_ae_mode` service. The old values `depthbased/colorbased` map to `depth/color`.
 *   `/camera/set_ae_strategy`
     ```bash
       # default or motion
       ros2 service call /camera/set_ae_strategy orbbec_camera_msgs/srv/SetString "{data: motion}"
     ```
-    > **Supported Modules**: Gemini 305 series.
+    > **Supported Modules**: Gemini 301 series.
     > **Compatibility**: Replaces the old `/camera/set_sports_mode` service.
 
 ### Point cloud decimation

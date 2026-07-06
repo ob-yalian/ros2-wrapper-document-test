@@ -318,14 +318,14 @@
       # depth or color
       ros2 service call /camera/set_ae_reference_stream orbbec_camera_msgs/srv/SetString "{data: depth}"
     ```
-    > **支持模组**：Gemini 305 系列。
+    > **支持模组**：Gemini 301 系列。
     > **兼容说明**：替代旧服务 `/camera/set_ae_mode`，旧值 `depthbased/colorbased` 对应新值 `depth/color`。
 *   `/camera/set_ae_strategy`
     ```bash
       # default or motion
       ros2 service call /camera/set_ae_strategy orbbec_camera_msgs/srv/SetString "{data: motion}"
     ```
-    > **支持模组**：Gemini 305 系列。
+    > **支持模组**：Gemini 301 系列。
     > **兼容说明**：替代旧服务 `/camera/set_sports_mode`。
 
 ### 点云下采样

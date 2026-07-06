@@ -121,9 +121,9 @@ The following are the launch parameters available:
 *   **`color_powerline_freq`**
     *   Set the power line freq. The possible values are `disable`, `50hz`, `60hz`, `auto`.
 *   **`color_preset`**
-    *   Set the Color preset by name. Supported on Gemini 330 series and Gemini 305 series devices. Common options include `Default`, `Warm Biased AWB`, and `Cold Biased AWB`; the exact list is reported by the device. The name comparison is case-insensitive.
+    *   Set the Color preset by name. Supported on Gemini 330 series and Gemini 301 series devices. Common options include `Default`, `Warm Biased AWB`, and `Cold Biased AWB`; the exact list is reported by the device. The name comparison is case-insensitive.
 *   **`color_anti_flicker`**
-    *   Enable Color anti-flicker. Supported by Gemini 330 series firmware `1.7.13` and above, and Gemini 305 series firmware `1.0.54` and above.
+    *   Enable Color anti-flicker. Supported by Gemini 330 series firmware `1.7.13` and above, and Gemini 301 series firmware `1.0.54` and above.
 *   **`enable_color_decimation_filter`** / **`color_decimation_filter_scale`**
     *   Enable the Color decimation filter and set its scale.
 *   **`color_ae_roi_[left|right|top|bottom]`**
@@ -183,7 +183,7 @@ The following are the launch parameters available:
     *   The frame number of each stream after each trigger in triggering mode.
 *   **`sync_io_voltage_level`**
     *   Set the sync IO voltage level. Default: `-1`, which means do not set it. This is only supported on devices that expose the property; it can also be changed at runtime with `/camera/set_sync_io_voltage_level`.
-    > **Supported Modules**: Gemini 305 series.
+    > **Supported Modules**: Gemini 301 series.
 
 ### Network Cameras
 * **`enumerate_net_device`**
@@ -246,15 +246,15 @@ The following are the launch parameters available:
   > **Supported Modules**: Gemini 435Le
 * **`ae_reference_stream`**
   * Set the auto-exposure reference stream. Options: `depth`, `color`. Default: `depth`.
-  > **Supported Modules**: Gemini 305 series.
+  > **Supported Modules**: Gemini 301 series.
   > **Compatibility**: This replaces the old `ae_mode` parameter. The old values `depthbased/colorbased` map to `depth/color`.
 * **`ae_strategy`**
   * Set the auto-exposure strategy. Options: `default`, `motion`. Default: `motion`.
-  > **Supported Modules**: Gemini 305 series.
+  > **Supported Modules**: Gemini 301 series.
   > **Compatibility**: This replaces the old `enable_sports_mode` parameter.
 * **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
   * Set the downsampling multiple. You can use `ros2 run orbbec_camera list_camera_profile_mode_node` to view the settable resolution. **Default value:** `1`
-  > **Supported Modules**: Gemini 305
+  > **Supported Modules**: Gemini 301 series
 * **`enable_false_positive_filter`**
   * Enable this option to reduce ghosting noise.
   > **Supported Modules**: DaBaiA / DaBaiAL / Gemini 330 series / Gemini345 / Gemini345Lg

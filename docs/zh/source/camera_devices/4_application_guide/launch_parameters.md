@@ -121,9 +121,9 @@
 *   **`color_powerline_freq`**
     *   设置电源线频率。可能的值为 `disable`、`50hz`、`60hz`、`auto`。
 *   **`color_preset`**
-    *   通过名称设置彩色 preset。Gemini 330 系列和 Gemini 305 系列设备支持。常见可选值包括 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，具体列表以设备返回为准。名称匹配大小写不敏感。
+    *   通过名称设置彩色 preset。Gemini 330 系列和 Gemini 301 系列设备支持。常见可选值包括 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，具体列表以设备返回为准。名称匹配大小写不敏感。
 *   **`color_anti_flicker`**
-    *   启用彩色防闪烁功能。Gemini 330 系列固件 `1.7.13` 及以上支持；Gemini 305 系列固件 `1.0.54` 及以上支持。
+    *   启用彩色防闪烁功能。Gemini 330 系列固件 `1.7.13` 及以上支持；Gemini 301 系列固件 `1.0.54` 及以上支持。
 *   **`enable_color_decimation_filter`** / **`color_decimation_filter_scale`**
     *   启用彩色抽取滤波器并设置其比例。
 *   **`color_ae_roi_[left|right|top|bottom]`**
@@ -184,7 +184,7 @@
     *   触发模式下每次触发后每个流的帧数。
 *   **`sync_io_voltage_level`**
     *   设置同步 IO 电压等级。默认值为 `-1`，表示不设置。仅支持具备该属性的设备；可通过 `/camera/set_sync_io_voltage_level` 服务在运行时修改。
-    > **支持模组**：Gemini 305 系列。
+    > **支持模组**：Gemini 301 系列。
 
 ### 网络相机
 * **`enumerate_net_device`**
@@ -245,15 +245,15 @@
   > **支持模组**：Gemini 435Le。
 * **`ae_reference_stream`**
   * 设置自动曝光参考流。可选值：`depth`、`color`，默认值为 `depth`。
-  > **支持模组**：Gemini 305 系列。
+  > **支持模组**：Gemini 301 系列。
   > **兼容说明**：该参数替代旧参数 `ae_mode`，旧值 `depthbased/colorbased` 对应新值 `depth/color`。
 * **`ae_strategy`**
   * 设置自动曝光策略。可选值：`default`、`motion`，默认值为 `motion`。
-  > **支持模组**：Gemini 305 系列。
+  > **支持模组**：Gemini 301 系列。
   > **兼容说明**：该参数替代旧参数 `enable_sports_mode`。
 * **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
   * 设置下采样倍数。可用`ros2 run orbbec_camera list_camera_profile_mode_node`查看可设置分辨率。**默认值：** `1`
-  > **支持模组**：Gemini 305。
+  > **支持模组**：Gemini 301 系列。
 * **`enable_false_positive_filter`**
   * 启用鬼影滤波。可减少重影噪声。
   > **支持模组**：DaBaiA / DaBaiAL / Gemini 330 系列 / Gemini345 / Gemini345Lg。
