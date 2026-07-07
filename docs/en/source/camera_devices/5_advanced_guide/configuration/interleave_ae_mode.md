@@ -64,10 +64,10 @@ When the `interleave_ae_mode` parameter is set to `laser` and `interleave_frame_
 
 ## Run the launch
 
-Setting the interleave_ae parameter,`colcon build` again and run launch
+You can set the interleave_ae related parameters directly when launching:
 
 ```bash
-ros2 launch orbbec_camera gemini_330_series.launch.py
+ros2 launch orbbec_camera gemini_330_series.launch.py interleave_ae_mode:=laser interleave_frame_enable:=true
 ```
 
 **Example Visualization**

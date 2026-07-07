@@ -64,10 +64,10 @@ interleave_ae 相关参数在 [gemini_330_series.launch.py](https://github.com/o
 
 ## 运行启动文件
 
-设置 interleave_ae 参数，重新 `colcon build` 并运行启动文件
+可以在启动时直接设置 interleave_ae 相关参数：
 
 ```bash
-ros2 launch orbbec_camera gemini_330_series.launch.py
+ros2 launch orbbec_camera gemini_330_series.launch.py interleave_ae_mode:=laser interleave_frame_enable:=true
 ```
 
 **示例可视化**

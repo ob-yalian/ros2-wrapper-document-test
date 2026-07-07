@@ -40,8 +40,8 @@ disparity_search_offset 相关参数在 [gemini_330_series.launch.py](https://gi
 
 ## 运行启动文件
 
-设置 disparity_search_offset 参数，重新 `colcon build` 并运行启动文件
+可以在启动时直接设置 disparity_search_offset 相关参数：
 
 ```bash
-ros2 launch orbbec_camera gemini_330_series.launch.py
+ros2 launch orbbec_camera gemini_330_series.launch.py disparity_range_mode:=128 disparity_search_offset:=45
 ```

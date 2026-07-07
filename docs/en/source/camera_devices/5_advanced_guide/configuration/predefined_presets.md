@@ -54,7 +54,7 @@ ros2 launch orbbec_camera gemini2L.launch.py config_file_path:=gemini2L_dual_ir.
 
 The configuration file is located at `orbbec_camera/config/gemini2L_dual_ir.yaml`. It sets `depth_work_mode` to `In-scene Calibration`, disables the normal `ir` stream, and enables `left_ir` and `right_ir`.
 
-## Gemini 305
+## Gemini 301 series
 
 | Defaults | Features |
 | --- | --- |
@@ -67,7 +67,7 @@ The configuration file is located at `orbbec_camera/config/gemini2L_dual_ir.yaml
 > Since the parameter configuration of `Dual Color Streams` mode is quite different from that of `Default` mode, we provide the corresponding YAML configuration file.
 Please set `config_file_path` to `gemini305_dual_color.yaml`, the configuration file is located in the config directory.
 
-Gemini 305 also supports Color preset selection with the `color_preset` parameter. Set the preset by name, for example `Default`, `Warm Biased AWB`, or `Cold Biased AWB`. The available names are reported by the device.
+The Gemini 301 series also supports Color preset selection with the `color_preset` parameter. Set the preset by name, for example `Default`, `Warm Biased AWB`, or `Cold Biased AWB`. The available names are reported by the device.
 
 ## Extended presets
 
