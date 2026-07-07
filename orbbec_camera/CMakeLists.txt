@@ -292,7 +292,7 @@ install(TARGETS ${PROJECT_NAME} frame_latency start_benchmark multi_save_rgbir A
         LIBRARY DESTINATION lib RUNTIME DESTINATION bin
 )
 
-install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY include/orbbec_camera DESTINATION include/orbbec_camera)
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME}/)
 install(DIRECTORY config DESTINATION share/${PROJECT_NAME}/)
 install(DIRECTORY examples DESTINATION share/${PROJECT_NAME}/)
