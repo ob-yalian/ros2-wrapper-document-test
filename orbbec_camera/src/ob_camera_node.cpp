@@ -645,6 +645,30 @@ void OBCameraNode::publishDepthFiltersStatus() {
   depth_filters_status_pub_->publish(msg);
 }
 
+void OBCameraNode::publishLrmObstacleDistance() {
+  if (!lrm_obstacle_distance_pub_) {
+    return;
+  }
+  if (lrm_obstacle_distance_pub_->get_subscription_count() == 0) {
+    return;
+  }
+  try {
+    std_msgs::msg::Int32 msg;
+    msg.data = device_->getIntProperty(OB_PROP_LDP_MEASURE_DISTANCE_INT);
+    lrm_obstacle_distance_pub_->publish(msg);
+  } catch (const ob::Error &e) {
+    auto message = orbbec_camera::formatObErrorWithStatus(e);
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
+                         "Failed to publish LRM obstacle distance: %s", message.c_str());
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
+                         "Failed to publish LRM obstacle distance: %s", e.what());
+  } catch (...) {
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
+                         "Failed to publish LRM obstacle distance: unknown error");
+  }
+}
+
 OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> device,
                            std::shared_ptr<Parameters> parameters, bool use_intra_process,
                            bool is_playback_device)
@@ -806,6 +830,10 @@ void OBCameraNode::clean() noexcept {
     if (software_trigger_timer_) {
       software_trigger_timer_->cancel();
       software_trigger_timer_.reset();
+    }
+    if (lrm_obstacle_distance_timer_) {
+      lrm_obstacle_distance_timer_->cancel();
+      lrm_obstacle_distance_timer_.reset();
     }
     if (diagnostic_updater_) {
       diagnostic_updater_.reset();
@@ -4319,6 +4347,20 @@ void OBCameraNode::getParameters() {
 
   setAndGetNodeParameter<bool>(show_fps_enable_, "show_fps_enable", false);
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
+  setAndGetNodeParameter<bool>(enable_lrm_obstacle_distance_publish_,
+                               "enable_lrm_obstacle_distance_publish", false);
+  setAndGetNodeParameter<double>(lrm_obstacle_distance_publish_rate_,
+                                 "lrm_obstacle_distance_publish_rate", 10.0);
+  if (enable_lrm_obstacle_distance_publish_ && !enable_ldp_) {
+    RCLCPP_INFO_STREAM(logger_, "enable_lrm_obstacle_distance_publish is true, enabling LDP");
+    enable_ldp_ = true;
+  }
+  if (lrm_obstacle_distance_publish_rate_ <= 0.0) {
+    RCLCPP_WARN_STREAM(logger_, "Invalid lrm_obstacle_distance_publish_rate "
+                                    << lrm_obstacle_distance_publish_rate_
+                                    << ", using 10.0 Hz instead");
+    lrm_obstacle_distance_publish_rate_ = 10.0;
+  }
   setAndGetNodeParameter<std::string>(intra_camera_sync_reference_, "intra_camera_sync_reference",
                                       "Middle");
   setAndGetNodeParameter<std::string>(ae_reference_stream_, "ae_reference_stream", "");
@@ -4744,6 +4786,20 @@ void OBCameraNode::setupPublishers() {
   depth_filters_status_pub_ =
       node_->create_publisher<DepthFiltersStatus>("depth_filters/status", extrinsics_qos);
   publishDepthFiltersStatus();
+
+  if (enable_lrm_obstacle_distance_publish_) {
+    lrm_obstacle_distance_pub_ =
+        node_->create_publisher<std_msgs::msg::Int32>("lrm/obstacle_distance", rclcpp::QoS(10));
+    RCLCPP_INFO_STREAM(logger_, "Publishing LRM obstacle distance on lrm/obstacle_distance at "
+                                    << lrm_obstacle_distance_publish_rate_ << " Hz");
+    auto publish_period = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::duration<double>(1.0 / lrm_obstacle_distance_publish_rate_));
+    if (publish_period < std::chrono::milliseconds(1)) {
+      publish_period = std::chrono::milliseconds(1);
+    }
+    lrm_obstacle_distance_timer_ =
+        node_->create_wall_timer(publish_period, [this]() { publishLrmObstacleDistance(); });
+  }
 }
 
 void OBCameraNode::publishPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {

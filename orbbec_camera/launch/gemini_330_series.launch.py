@@ -203,6 +203,8 @@ def generate_launch_description():
         DeclareLaunchArgument('disparity_to_depth_mode', default_value='HW'),
         DeclareLaunchArgument('enable_ldp', default_value='false'),
         DeclareLaunchArgument('ldp_power_level', default_value='-1'),
+        DeclareLaunchArgument('enable_lrm_obstacle_distance_publish', default_value='false'),
+        DeclareLaunchArgument('lrm_obstacle_distance_publish_rate', default_value='10.0'),
         DeclareLaunchArgument('sync_mode', default_value='standalone'),
         DeclareLaunchArgument('depth_delay_us', default_value='0'),
         DeclareLaunchArgument('color_delay_us', default_value='0'),
