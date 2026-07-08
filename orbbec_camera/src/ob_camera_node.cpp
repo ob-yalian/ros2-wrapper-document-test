@@ -712,13 +712,16 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     d2c_viewer_ = std::make_unique<D2CViewer>(node_, rgb_qos, depth_qos, use_intra_process_);
   }
   if (enable_stream_[COLOR]) {
-    rgb_buffer_ = new uint8_t[width_[COLOR] * height_[COLOR] * 4];
+    rgb_buffer_size_ = static_cast<size_t>(width_[COLOR]) * height_[COLOR] * 4;
+    rgb_buffer_ = new uint8_t[rgb_buffer_size_];
   }
   if (enable_stream_[COLOR_LEFT]) {
-    rgb_buffer_left_ = new uint8_t[width_[COLOR_LEFT] * height_[COLOR_LEFT] * 4];
+    rgb_buffer_left_size_ = static_cast<size_t>(width_[COLOR_LEFT]) * height_[COLOR_LEFT] * 4;
+    rgb_buffer_left_ = new uint8_t[rgb_buffer_left_size_];
   }
   if (enable_stream_[COLOR_RIGHT]) {
-    rgb_buffer_right_ = new uint8_t[width_[COLOR_RIGHT] * height_[COLOR_RIGHT] * 4];
+    rgb_buffer_right_size_ = static_cast<size_t>(width_[COLOR_RIGHT]) * height_[COLOR_RIGHT] * 4;
+    rgb_buffer_right_ = new uint8_t[rgb_buffer_right_size_];
   }
   if (enable_colored_point_cloud_ && enable_stream_[DEPTH] && enable_stream_[COLOR]) {
     rgb_point_cloud_buffer_size_ = width_[COLOR] * height_[COLOR] * sizeof(OBColorPoint);
@@ -872,10 +875,13 @@ void OBCameraNode::clean() noexcept {
   try {
     delete[] rgb_buffer_;
     rgb_buffer_ = nullptr;
+    rgb_buffer_size_ = 0;
     delete[] rgb_buffer_left_;
     rgb_buffer_left_ = nullptr;
+    rgb_buffer_left_size_ = 0;
     delete[] rgb_buffer_right_;
     rgb_buffer_right_ = nullptr;
+    rgb_buffer_right_size_ = 0;
 
     if (jpeg_decoder_) {
       jpeg_decoder_.reset();
@@ -1051,6 +1057,7 @@ void OBCameraNode::setupDevices() {
   if (depth_registration_ && align_mode_ == "SW") {
     RCLCPP_DEBUG_STREAM(logger_, "Create align filter");
     align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
+    RCLCPP_INFO_STREAM(logger_, "set align mode to " << align_mode_);
   }
   if (should_apply_launch_config("disparity_to_depth_mode") && !disparity_to_depth_mode_.empty() &&
       sensors_.find(DEPTH) != sensors_.end() &&
@@ -4543,7 +4550,7 @@ void OBCameraNode::setupPipelineConfig() {
   if (depth_registration_ && enable_stream_[COLOR] && enable_stream_[DEPTH] &&
       align_mode_ == "HW") {
     OBAlignMode align_mode = ALIGN_D2C_HW_MODE;
-    RCLCPP_INFO_STREAM(logger_, "set align mode to " << magic_enum::enum_name(align_mode));
+    RCLCPP_INFO_STREAM(logger_, "set align mode to " << align_mode_);
     pipeline_config_->setAlignMode(align_mode);
     RCLCPP_INFO_STREAM(logger_, "enable depth scale " << (enable_depth_scale_ ? "ON" : "OFF"));
     pipeline_config_->setDepthScaleRequire(enable_depth_scale_);
@@ -4656,19 +4663,7 @@ void OBCameraNode::setupPublishers() {
     }
   }
 
-  if (depth_registration_ && align_mode_ == "SW") {
-    auto depth_image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
-    if (use_intra_process_) {
-      depth_image_qos_profile = rmw_qos_profile_default;
-    }
-    if (use_intra_process_) {
-      depth_unaligned_publisher_ = std::make_shared<image_rcl_publisher>(
-          *node_, "depth/image_unaligned", depth_image_qos_profile);
-    } else {
-      depth_unaligned_publisher_ = std::make_shared<image_transport_publisher>(
-          *node_, "depth/image_unaligned", depth_image_qos_profile);
-    }
-  }
+  syncSoftwareAlignment();
 
   if (enable_sync_output_accel_gyro_) {
     std::string topic_name = stream_name_[GYRO] + "_" + stream_name_[ACCEL] + "/sample";
@@ -4744,6 +4739,32 @@ void OBCameraNode::setupPublishers() {
   depth_filters_status_pub_ =
       node_->create_publisher<DepthFiltersStatus>("depth_filters/status", extrinsics_qos);
   publishDepthFiltersStatus();
+}
+
+void OBCameraNode::syncSoftwareAlignment() {
+  if (depth_registration_ && align_mode_ == "SW") {
+    if (!align_filter_) {
+      align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
+      RCLCPP_INFO_STREAM(logger_, "set align mode to " << align_mode_);
+    }
+    if (!depth_unaligned_publisher_) {
+      auto depth_image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
+      if (use_intra_process_) {
+        depth_image_qos_profile = rmw_qos_profile_default;
+      }
+      if (use_intra_process_) {
+        depth_unaligned_publisher_ = std::make_shared<image_rcl_publisher>(
+            *node_, "depth/image_unaligned", depth_image_qos_profile);
+      } else {
+        depth_unaligned_publisher_ = std::make_shared<image_transport_publisher>(
+            *node_, "depth/image_unaligned", depth_image_qos_profile);
+      }
+    }
+    return;
+  }
+
+  align_filter_.reset();
+  depth_unaligned_publisher_.reset();
 }
 
 void OBCameraNode::publishPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {
@@ -5383,13 +5404,49 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
       publishRawDepthImage(depth_frame);
-      if (auto new_frame = align_filter_->process(frame_set)) {
-        auto new_frame_set = new_frame->as<ob::FrameSet>();
-        CHECK_NOTNULL(new_frame_set.get());
-        frame_set = new_frame_set;
+      auto target_frame_type = STREAM_TYPE_TO_FRAME_TYPE.at(align_target_stream_);
+      if (!frame_set->getFrame(target_frame_type) || !color_frame) {
+        RCLCPP_DEBUG_STREAM(
+            logger_, "Depth registration requires depth and color frames, skip software alignment");
       } else {
-        RCLCPP_ERROR(logger_, "Failed to align depth frame to color frame");
-        return;
+        auto align_color_frame = color_frame;
+        if (align_target_stream_ == OB_STREAM_DEPTH) {
+          ob::FormatConvertFilter align_color_format_convert_filter;
+          switch (color_frame->getFormat()) {
+            case OB_FORMAT_YUYV:
+              align_color_format_convert_filter.setFormatConvertType(FORMAT_YUYV_TO_RGB888);
+              align_color_frame = align_color_format_convert_filter.process(color_frame);
+              break;
+            case OB_FORMAT_UYVY:
+              align_color_format_convert_filter.setFormatConvertType(FORMAT_UYVY_TO_RGB888);
+              align_color_frame = align_color_format_convert_filter.process(color_frame);
+              break;
+            case OB_FORMAT_MJPG:
+              align_color_format_convert_filter.setFormatConvertType(FORMAT_MJPEG_TO_RGB888);
+              align_color_frame = align_color_format_convert_filter.process(color_frame);
+              break;
+            default:
+              break;
+          }
+          if (!align_color_frame) {
+            RCLCPP_ERROR_STREAM(logger_, "Failed to convert color frame for C2D alignment");
+          } else if (align_color_frame != color_frame) {
+            color_frame = align_color_frame;
+            frame_set->pushFrame(color_frame);
+          }
+        }
+        if (align_color_frame) {
+          if (auto new_frame = align_filter_->process(frame_set)) {
+            auto new_frame_set = new_frame->as<ob::FrameSet>();
+            CHECK_NOTNULL(new_frame_set.get());
+            frame_set = new_frame_set;
+            depth_frame = frame_set->getFrame(OB_FRAME_DEPTH);
+            color_frame = frame_set->getFrame(OB_FRAME_COLOR);
+          } else {
+            RCLCPP_ERROR(logger_, "Failed to align depth frame to color frame");
+            return;
+          }
+        }
       }
     } else {
       RCLCPP_DEBUG_ONCE(logger_,
@@ -5695,6 +5752,24 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
     if (!video_frame) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to convert frame to video frame");
       return false;
+    }
+    uint8_t **target_buffer = nullptr;
+    size_t *target_buffer_size = nullptr;
+    if (stream_index == COLOR_LEFT) {
+      target_buffer = &rgb_buffer_left_;
+      target_buffer_size = &rgb_buffer_left_size_;
+    } else if (stream_index == COLOR_RIGHT) {
+      target_buffer = &rgb_buffer_right_;
+      target_buffer_size = &rgb_buffer_right_size_;
+    } else {
+      target_buffer = &rgb_buffer_;
+      target_buffer_size = &rgb_buffer_size_;
+    }
+    if (video_frame->getDataSize() > *target_buffer_size) {
+      delete[](*target_buffer);
+      *target_buffer_size = video_frame->getDataSize();
+      *target_buffer = new uint8_t[*target_buffer_size];
+      buffer = *target_buffer;
     }
     CHECK_NOTNULL(buffer);
     memcpy(buffer, video_frame->getData(), video_frame->getDataSize());

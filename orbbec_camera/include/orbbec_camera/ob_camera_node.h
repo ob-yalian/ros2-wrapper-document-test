@@ -18,6 +18,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include <cstddef>
 #include <memory>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
@@ -293,6 +294,8 @@ class OBCameraNode {
 
   void setupPublishers();
 
+  void syncSoftwareAlignment();
+
   void publishDepthFiltersStatus();
 
   DepthFilterState buildDepthFilterState(const std::string& filter_name, bool enabled,
@@ -328,6 +331,8 @@ class OBCameraNode {
 
   void setStreamsEnableCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
                                 std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+  void setImageRegistrationModeCallback(const std::shared_ptr<SetString::Request> request,
+                                        std::shared_ptr<SetString::Response> response);
 
   void getStreamsEnableCallback(
       const std::shared_ptr<orbbec_camera_msgs::srv::GetBool::Request> request,
@@ -699,6 +704,7 @@ class OBCameraNode {
   rclcpp::Service<SetInt32>::SharedPtr set_sync_io_voltage_level_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_streams_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
+  rclcpp::Service<SetString>::SharedPtr set_image_registration_mode_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
   rclcpp::Service<SetUserCalibParams>::SharedPtr set_user_calib_params_srv_;
   rclcpp::Service<SetString>::SharedPtr set_ae_reference_stream_srv_;
@@ -832,6 +838,9 @@ class OBCameraNode {
   uint8_t* rgb_buffer_ = nullptr;
   uint8_t* rgb_buffer_left_ = nullptr;
   uint8_t* rgb_buffer_right_ = nullptr;
+  size_t rgb_buffer_size_ = 0;
+  size_t rgb_buffer_left_size_ = 0;
+  size_t rgb_buffer_right_size_ = 0;
   bool is_left_color_frame_decoded_ = false;
   bool is_right_color_frame_decoded_ = false;
   bool is_color_frame_decoded_ = false;
