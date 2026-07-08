@@ -25,6 +25,7 @@ rosidl_generate_interfaces(
     "msg/Metadata.msg"
     "msg/IMUInfo.msg"
     "msg/RGBD.msg"
+    "msg/StreamProfile.msg"
     "srv/GetBool.srv"
     "srv/GetDeviceConfig.srv"
     "srv/GetDeviceInfo.srv"
@@ -38,6 +39,7 @@ rosidl_generate_interfaces(
     "srv/GetUserCalibParams.srv"
     "srv/SetUserCalibParams.srv"
     "srv/SetBagRecording.srv"
+    "srv/SetStreamProfile.srv"
     DEPENDENCIES
     sensor_msgs
     std_msgs
