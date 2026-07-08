@@ -3638,8 +3638,12 @@ bool OBCameraNode::applyStreamProfiles(const std::vector<PendingStreamProfile> &
     stopColorFrameThreads();
     clearColorFrameQueues();
 
+    bool profile_affects_hw_d2c_color_undistortion = false;
     for (const auto &pending_profile : pending_profiles) {
       const auto &stream_index = pending_profile.stream_index;
+      if (stream_index == COLOR || stream_index == DEPTH) {
+        profile_affects_hw_d2c_color_undistortion = true;
+      }
       auto selected_profile = pending_profile.profile;
       const auto old_format = format_[stream_index];
       stream_profile_[stream_index] = selected_profile;
@@ -3666,6 +3670,9 @@ bool OBCameraNode::applyStreamProfiles(const std::vector<PendingStreamProfile> &
         images_[stream_index] = cv::Mat(height_[stream_index], width_[stream_index],
                                         image_format_[stream_index], cv::Scalar(0, 0, 0));
       }
+    }
+    if (profile_affects_hw_d2c_color_undistortion && shouldUseHwD2CColorUndistortion()) {
+      hw_d2c_color_undistortion_configured_ = false;
     }
 
     setupImageBuffers();
