@@ -3548,6 +3548,7 @@ bool OBCameraNode::validateStreamProfileRequest(
   }
 
   std::unordered_set<std::string> requested_streams;
+  bool has_changes = false;
   for (const auto &profile : request->profiles) {
     const auto stream_index = getImageStreamByName(profile.stream_name);
     if (!stream_index) {
@@ -3606,6 +3607,10 @@ bool OBCameraNode::validateStreamProfileRequest(
     try {
       auto selected_profile = selectVideoStreamProfile(
           *stream_index, requested_width, requested_height, requested_fps, requested_format);
+      has_changes = has_changes || selected_profile->getWidth() != width_[*stream_index] ||
+                    selected_profile->getHeight() != height_[*stream_index] ||
+                    selected_profile->getFps() != fps_[*stream_index] ||
+                    selected_profile->getFormat() != format_[*stream_index];
       pending_profiles.push_back(
           {*stream_index, requested_width, requested_height, requested_fps, selected_profile});
     } catch (const ob::Error &e) {
@@ -3616,6 +3621,10 @@ bool OBCameraNode::validateStreamProfileRequest(
       message = "Unsupported profile for " + profile.stream_name + ": " + e.what();
       return false;
     }
+  }
+  if (!has_changes) {
+    message = "requested stream profiles are already active";
+    return false;
   }
   return true;
 }
