@@ -37,6 +37,7 @@
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/empty.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
+#include <std_msgs/msg/int32.hpp>
 
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
@@ -294,6 +295,8 @@ class OBCameraNode {
   void setupPublishers();
 
   void publishDepthFiltersStatus();
+
+  void publishLrmObstacleDistance();
 
   DepthFilterState buildDepthFilterState(const std::string& filter_name, bool enabled,
                                          const std::shared_ptr<ob::Filter>& filter) const;
@@ -943,11 +946,15 @@ class OBCameraNode {
   std::string export_config_json_file_path_ = "";
   // soft ware trigger
   rclcpp::TimerBase::SharedPtr software_trigger_timer_;
+  rclcpp::TimerBase::SharedPtr lrm_obstacle_distance_timer_;
   rclcpp::TimerBase::SharedPtr diagnostic_timer_;
+  rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr lrm_obstacle_distance_pub_;
   std::mutex diagnostic_mutex_;
   std::condition_variable diagnostic_cv_;
   bool diagnostic_running_ = false;
   std::chrono::milliseconds software_trigger_period_{33};
+  bool enable_lrm_obstacle_distance_publish_ = false;
+  double lrm_obstacle_distance_publish_rate_ = 10.0;
   bool enable_heartbeat_ = false;
   bool enable_firmware_log_ = false;
   std::map<stream_index_pair, bool> enable_undistortion_;
