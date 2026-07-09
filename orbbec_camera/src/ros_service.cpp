@@ -357,6 +357,10 @@ void OBCameraNode::setupCameraCtrlServices() {
       "set_image_registration_mode", [this](const std::shared_ptr<SetString::Request> request,
                                             std::shared_ptr<SetString::Response> response) {
         setImageRegistrationModeCallback(request, response);
+  set_stream_profile_srv_ = node_->create_service<SetStreamProfile>(
+      "set_stream_profile", [this](const std::shared_ptr<SetStreamProfile::Request> request,
+                                   std::shared_ptr<SetStreamProfile::Response> response) {
+        setStreamProfileCallback(request, response);
       });
   get_streams_enable_srv_ = node_->create_service<GetBool>(
       "get_streams_enable", [this](const std::shared_ptr<GetBool::Request> request,
@@ -746,6 +750,33 @@ void OBCameraNode::setImageRegistrationModeCallback(
     rollback_after_error(e.what());
   } catch (...) {
     rollback_after_error("unknown error");
+void OBCameraNode::setStreamProfileCallback(
+    const std::shared_ptr<SetStreamProfile::Request>& request,
+    std::shared_ptr<SetStreamProfile::Response>& response) {
+  try {
+    std::vector<PendingStreamProfile> pending_profiles;
+    std::string message;
+    if (!validateStreamProfileRequest(request, pending_profiles, message)) {
+      response->success = false;
+      response->message = message;
+      return;
+    }
+    if (!applyStreamProfiles(pending_profiles, message)) {
+      response->success = false;
+      response->message = message;
+      return;
+    }
+    response->success = true;
+    response->message = message;
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
   }
 }
 

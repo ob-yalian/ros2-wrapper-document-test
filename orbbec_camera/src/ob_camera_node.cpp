@@ -23,6 +23,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -709,51 +710,12 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     }
   }
 
-#if defined(USE_RK_HW_DECODER)
-  if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
-    jpeg_decoder_ = std::make_unique<RKJPEGDecoder>(width_[COLOR], height_[COLOR]);
-  }
-  if (enable_stream_[COLOR_LEFT] && width_.count(COLOR_LEFT) && height_.count(COLOR_LEFT)) {
-    jpeg_decoder_left_ = std::make_unique<RKJPEGDecoder>(width_[COLOR_LEFT], height_[COLOR_LEFT]);
-  }
-  if (enable_stream_[COLOR_RIGHT] && width_.count(COLOR_RIGHT) && height_.count(COLOR_RIGHT)) {
-    jpeg_decoder_right_ =
-        std::make_unique<RKJPEGDecoder>(width_[COLOR_RIGHT], height_[COLOR_RIGHT]);
-  }
-#elif defined(USE_NV_HW_DECODER)
-  if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
-    jpeg_decoder_ = std::make_unique<JetsonNvJPEGDecoder>(width_[COLOR], height_[COLOR]);
-  }
-  if (enable_stream_[COLOR_LEFT] && width_.count(COLOR_LEFT) && height_.count(COLOR_LEFT)) {
-    jpeg_decoder_left_ =
-        std::make_unique<JetsonNvJPEGDecoder>(width_[COLOR_LEFT], height_[COLOR_LEFT]);
-  }
-  if (enable_stream_[COLOR_RIGHT] && width_.count(COLOR_RIGHT) && height_.count(COLOR_RIGHT)) {
-    jpeg_decoder_right_ =
-        std::make_unique<JetsonNvJPEGDecoder>(width_[COLOR_RIGHT], height_[COLOR_RIGHT]);
-  }
-#endif
   if (enable_d2c_viewer_) {
     auto rgb_qos = getRMWQosProfileFromString(image_qos_[COLOR]);
     auto depth_qos = getRMWQosProfileFromString(image_qos_[DEPTH]);
     d2c_viewer_ = std::make_unique<D2CViewer>(node_, rgb_qos, depth_qos, use_intra_process_);
   }
-  if (enable_stream_[COLOR]) {
-    rgb_buffer_size_ = static_cast<size_t>(width_[COLOR]) * height_[COLOR] * 4;
-    rgb_buffer_ = new uint8_t[rgb_buffer_size_];
-  }
-  if (enable_stream_[COLOR_LEFT]) {
-    rgb_buffer_left_size_ = static_cast<size_t>(width_[COLOR_LEFT]) * height_[COLOR_LEFT] * 4;
-    rgb_buffer_left_ = new uint8_t[rgb_buffer_left_size_];
-  }
-  if (enable_stream_[COLOR_RIGHT]) {
-    rgb_buffer_right_size_ = static_cast<size_t>(width_[COLOR_RIGHT]) * height_[COLOR_RIGHT] * 4;
-    rgb_buffer_right_ = new uint8_t[rgb_buffer_right_size_];
-  }
-  if (enable_colored_point_cloud_ && enable_stream_[DEPTH] && enable_stream_[COLOR]) {
-    rgb_point_cloud_buffer_size_ = width_[COLOR] * height_[COLOR] * sizeof(OBColorPoint);
-    xy_table_data_size_ = width_[DEPTH] * height_[DEPTH] * 2;
-  }
+  setupImageBuffers();
   is_camera_node_initialized_ = true;
 
   fps_counter_color_ = std::make_unique<FpsCounter>("Color", logger_, 1);
@@ -864,18 +826,7 @@ void OBCameraNode::clean() noexcept {
 
   RCLCPP_DEBUG_STREAM(logger_, "Stop color frame thread");
   try {
-    if (colorFrameThread_ && colorFrameThread_->joinable()) {
-      color_frame_queue_cv_.notify_all();
-      colorFrameThread_->join();
-    }
-    if (leftColorFrameThread_ && leftColorFrameThread_->joinable()) {
-      left_color_frame_queue_cv_.notify_all();
-      leftColorFrameThread_->join();
-    }
-    if (rightColorFrameThread_ && rightColorFrameThread_->joinable()) {
-      right_color_frame_queue_cv_.notify_all();
-      rightColorFrameThread_->join();
-    }
+    stopColorFrameThreads();
   } catch (...) {
     RCLCPP_DEBUG_STREAM(logger_, "Exception while stopping color frame thread");
   }
@@ -3552,27 +3503,397 @@ void OBCameraNode::setupProfiles() {
     }
   }
 }
-void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {
-  if (format_[stream_index] == OB_FORMAT_Y8) {
-    image_format_[stream_index] = CV_8UC1;
-    encoding_[stream_index] = stream_index.first == OB_STREAM_DEPTH
-                                  ? sensor_msgs::image_encodings::TYPE_8UC1
-                                  : sensor_msgs::image_encodings::MONO8;
-    unit_step_size_[stream_index] = sizeof(uint8_t);
+
+std::shared_ptr<ob::VideoStreamProfile> OBCameraNode::selectVideoStreamProfile(
+    const stream_index_pair &stream_index, int width, int height, int fps, OBFormat format) {
+  auto sensor_it = sensors_.find(stream_index);
+  if (sensor_it == sensors_.end() || !sensor_it->second) {
+    throw std::runtime_error("Sensor is not available for stream " + stream_name_[stream_index]);
   }
-  if (format_[stream_index] == OB_FORMAT_MJPG) {
-    if (stream_index.first == OB_STREAM_IR || stream_index.first == OB_STREAM_IR_LEFT ||
-        stream_index.first == OB_STREAM_IR_RIGHT) {
+  auto profiles = sensor_it->second->getStreamProfileList();
+  if (!profiles || profiles->getCount() == 0) {
+    throw std::runtime_error("No stream profiles available for stream " +
+                             stream_name_[stream_index]);
+  }
+
+  std::shared_ptr<ob::VideoStreamProfile> selected_profile;
+  if (width == 0 && height == 0 && fps == 0) {
+    selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
+  } else if (isGemini305SeriesPID(pid_) && stream_index == DEPTH) {
+    OBHardwareDecimationConfig conf;
+    conf.originWidth = width;
+    conf.originHeight = height;
+    conf.factor = depth_decimation_factor_;
+    selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
+  } else if (isGemini305SeriesPID(pid_) && stream_index == INFRA1) {
+    OBHardwareDecimationConfig conf;
+    conf.originWidth = width;
+    conf.originHeight = height;
+    conf.factor = left_ir_decimation_factor_;
+    selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
+  } else if (isGemini305SeriesPID(pid_) && stream_index == INFRA2) {
+    OBHardwareDecimationConfig conf;
+    conf.originWidth = width;
+    conf.originHeight = height;
+    conf.factor = right_ir_decimation_factor_;
+    selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
+  } else {
+    selected_profile = profiles->getVideoStreamProfile(width, height, format, fps);
+  }
+
+  if (!selected_profile) {
+    throw std::runtime_error("Requested stream profile is not supported");
+  }
+  return selected_profile;
+}
+
+std::optional<stream_index_pair> OBCameraNode::getImageStreamByName(
+    const std::string &stream_name) const {
+  if (stream_name == "color") {
+    return COLOR;
+  }
+  if (stream_name == "left_color") {
+    return COLOR_LEFT;
+  }
+  if (stream_name == "right_color") {
+    return COLOR_RIGHT;
+  }
+  if (stream_name == "depth") {
+    return DEPTH;
+  }
+  if (stream_name == "ir") {
+    return INFRA0;
+  }
+  if (stream_name == "left_ir") {
+    return INFRA1;
+  }
+  if (stream_name == "right_ir") {
+    return INFRA2;
+  }
+  return std::nullopt;
+}
+
+bool OBCameraNode::validateStreamProfileRequest(
+    const std::shared_ptr<SetStreamProfile::Request> &request,
+    std::vector<PendingStreamProfile> &pending_profiles, std::string &message) {
+  pending_profiles.clear();
+  if (!request || request->profiles.empty()) {
+    message = "profiles is empty";
+    return false;
+  }
+
+  std::unordered_set<std::string> requested_streams;
+  bool has_changes = false;
+  for (const auto &profile : request->profiles) {
+    const auto stream_index = getImageStreamByName(profile.stream_name);
+    if (!stream_index) {
+      message = "Unsupported stream_name: " + profile.stream_name +
+                ". Supported stream_name values: color, left_color, right_color, depth, ir, "
+                "left_ir, right_ir";
+      return false;
+    }
+    if (!requested_streams.insert(profile.stream_name).second) {
+      message = "Duplicated stream_name: " + profile.stream_name;
+      return false;
+    }
+    if (!enable_stream_[*stream_index]) {
+      message = "Stream is not enabled: " + profile.stream_name;
+      return false;
+    }
+
+    if (profile.width < 0 || profile.height < 0 || profile.fps < 0) {
+      message = profile.stream_name + " width, height and fps must be non-negative";
+      return false;
+    }
+    if ((profile.width > 0) != (profile.height > 0)) {
+      message = profile.stream_name + " width and height must be provided together";
+      return false;
+    }
+    if (profile.width <= 0 && profile.fps <= 0 && profile.format.empty()) {
+      message = profile.stream_name + " must provide resolution, fps or format";
+      return false;
+    }
+
+    const int requested_width = profile.width > 0 ? profile.width : width_[*stream_index];
+    const int requested_height = profile.height > 0 ? profile.height : height_[*stream_index];
+    const int requested_fps = profile.fps > 0 ? profile.fps : fps_[*stream_index];
+    if (requested_width <= 0 || requested_height <= 0 || requested_fps <= 0) {
+      message = profile.stream_name + " current width, height and fps must be positive";
+      return false;
+    }
+
+    OBFormat requested_format = format_[*stream_index];
+    if (!profile.format.empty()) {
+      std::string format_name;
+      format_name.reserve(profile.format.size());
+      std::transform(profile.format.begin(), profile.format.end(), std::back_inserter(format_name),
+                     [](unsigned char ch) { return static_cast<char>(std::toupper(ch)); });
+      if (format_name == "ANY") {
+        requested_format = OB_FORMAT_UNKNOWN;
+      } else {
+        requested_format = OBFormatFromString(format_name);
+        if (requested_format == OB_FORMAT_UNKNOWN) {
+          message = "Unsupported format: " + profile.format;
+          return false;
+        }
+      }
+    }
+
+    try {
+      auto selected_profile = selectVideoStreamProfile(
+          *stream_index, requested_width, requested_height, requested_fps, requested_format);
+      has_changes = has_changes || selected_profile->getWidth() != width_[*stream_index] ||
+                    selected_profile->getHeight() != height_[*stream_index] ||
+                    selected_profile->getFps() != fps_[*stream_index] ||
+                    selected_profile->getFormat() != format_[*stream_index];
+      pending_profiles.push_back(
+          {*stream_index, requested_width, requested_height, requested_fps, selected_profile});
+    } catch (const ob::Error &e) {
+      message = "Unsupported profile for " + profile.stream_name + ": " +
+                orbbec_camera::formatObErrorWithStatus(e);
+      return false;
+    } catch (const std::exception &e) {
+      message = "Unsupported profile for " + profile.stream_name + ": " + e.what();
+      return false;
+    }
+  }
+  if (!has_changes) {
+    message = "requested stream profiles are already active";
+    return false;
+  }
+  return true;
+}
+
+bool OBCameraNode::applyStreamProfiles(const std::vector<PendingStreamProfile> &pending_profiles,
+                                       std::string &message) {
+  if (pending_profiles.empty()) {
+    message = "profiles is empty";
+    return false;
+  }
+
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  try {
+    const bool restart_pipeline = pipeline_started_.load();
+    const bool interleave_frame_enable = interleave_frame_enable_;
+    if (restart_pipeline) {
+      stopStreams();
+      interleave_frame_enable_ = interleave_frame_enable;
+    }
+    stopColorFrameThreads();
+    clearColorFrameQueues();
+
+    bool profile_affects_hw_d2c_color_undistortion = false;
+    for (const auto &pending_profile : pending_profiles) {
+      const auto &stream_index = pending_profile.stream_index;
+      if (stream_index == COLOR || stream_index == DEPTH) {
+        profile_affects_hw_d2c_color_undistortion = true;
+      }
+      auto selected_profile = pending_profile.profile;
+      const auto old_format = format_[stream_index];
+      stream_profile_[stream_index] = selected_profile;
+      height_[stream_index] = static_cast<int>(selected_profile->getHeight());
+      width_[stream_index] = static_cast<int>(selected_profile->getWidth());
+      fps_[stream_index] = static_cast<int>(selected_profile->getFps());
+      format_[stream_index] = selected_profile->getFormat();
+      format_str_[stream_index] = OBFormatToString(format_[stream_index]);
+      updateImageConfig(stream_index);
+      if (old_format != format_[stream_index]) {
+        setupImagePublisher(stream_index);
+      }
+      if (selected_profile->format() == OB_FORMAT_BGRA) {
+        images_[stream_index] =
+            cv::Mat(height_[stream_index], width_[stream_index], CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        encoding_[stream_index] = sensor_msgs::image_encodings::BGRA8;
+        unit_step_size_[stream_index] = 4 * sizeof(uint8_t);
+      } else if (selected_profile->format() == OB_FORMAT_RGBA) {
+        images_[stream_index] =
+            cv::Mat(height_[stream_index], width_[stream_index], CV_8UC4, cv::Scalar(0, 0, 0, 0));
+        encoding_[stream_index] = sensor_msgs::image_encodings::RGBA8;
+        unit_step_size_[stream_index] = 4 * sizeof(uint8_t);
+      } else {
+        images_[stream_index] = cv::Mat(height_[stream_index], width_[stream_index],
+                                        image_format_[stream_index], cv::Scalar(0, 0, 0));
+      }
+    }
+    if (profile_affects_hw_d2c_color_undistortion && shouldUseHwD2CColorUndistortion()) {
+      hw_d2c_color_undistortion_configured_ = false;
+    }
+
+    setupImageBuffers();
+    clearColorFrameQueues();
+    {
+      std::lock_guard<std::mutex> frame_info_lock(frame_info_logged_mutex_);
+      frame_info_logged_.clear();
+    }
+    if (restart_pipeline) {
+      startStreams();
+      message = "stream profiles updated";
+    } else {
+      message = "stream profiles updated, changes will take effect when streams are started";
+    }
+    return true;
+  } catch (const ob::Error &e) {
+    message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception &e) {
+    message = e.what();
+  } catch (...) {
+    message = "unknown error";
+  }
+  return false;
+}
+
+void OBCameraNode::clearColorFrameQueues() {
+  {
+    std::lock_guard<std::mutex> lock(color_frame_queue_lock_);
+    std::queue<std::shared_ptr<ob::FrameSet>> empty;
+    std::swap(color_frame_queue_, empty);
+  }
+  {
+    std::lock_guard<std::mutex> lock(left_color_frame_queue_lock_);
+    std::queue<std::shared_ptr<ob::FrameSet>> empty;
+    std::swap(left_color_frame_queue_, empty);
+  }
+  {
+    std::lock_guard<std::mutex> lock(right_color_frame_queue_lock_);
+    std::queue<std::shared_ptr<ob::FrameSet>> empty;
+    std::swap(right_color_frame_queue_, empty);
+  }
+  is_color_frame_decoded_ = false;
+  is_left_color_frame_decoded_ = false;
+  is_right_color_frame_decoded_ = false;
+}
+
+void OBCameraNode::stopColorFrameThreads() {
+  if (!colorFrameThread_ && !leftColorFrameThread_ && !rightColorFrameThread_) {
+    return;
+  }
+
+  stop_color_frame_threads_.store(true);
+  color_frame_queue_cv_.notify_all();
+  left_color_frame_queue_cv_.notify_all();
+  right_color_frame_queue_cv_.notify_all();
+
+  if (colorFrameThread_ && colorFrameThread_->joinable()) {
+    colorFrameThread_->join();
+  }
+  if (leftColorFrameThread_ && leftColorFrameThread_->joinable()) {
+    leftColorFrameThread_->join();
+  }
+  if (rightColorFrameThread_ && rightColorFrameThread_->joinable()) {
+    rightColorFrameThread_->join();
+  }
+
+  colorFrameThread_.reset();
+  leftColorFrameThread_.reset();
+  rightColorFrameThread_.reset();
+  stop_color_frame_threads_.store(false);
+}
+
+void OBCameraNode::setupImageBuffers() {
+  delete[] rgb_buffer_;
+  rgb_buffer_ = nullptr;
+  rgb_buffer_size_ = 0;
+  delete[] rgb_buffer_left_;
+  rgb_buffer_left_ = nullptr;
+  rgb_buffer_left_size_ = 0;
+  delete[] rgb_buffer_right_;
+  rgb_buffer_right_ = nullptr;
+  rgb_buffer_right_size_ = 0;
+  jpeg_decoder_.reset();
+  jpeg_decoder_left_.reset();
+  jpeg_decoder_right_.reset();
+
+#if defined(USE_RK_HW_DECODER)
+  if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
+    jpeg_decoder_ = std::make_unique<RKJPEGDecoder>(width_[COLOR], height_[COLOR]);
+  }
+  if (enable_stream_[COLOR_LEFT] && width_.count(COLOR_LEFT) && height_.count(COLOR_LEFT)) {
+    jpeg_decoder_left_ = std::make_unique<RKJPEGDecoder>(width_[COLOR_LEFT], height_[COLOR_LEFT]);
+  }
+  if (enable_stream_[COLOR_RIGHT] && width_.count(COLOR_RIGHT) && height_.count(COLOR_RIGHT)) {
+    jpeg_decoder_right_ =
+        std::make_unique<RKJPEGDecoder>(width_[COLOR_RIGHT], height_[COLOR_RIGHT]);
+  }
+#elif defined(USE_NV_HW_DECODER)
+  if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
+    jpeg_decoder_ = std::make_unique<JetsonNvJPEGDecoder>(width_[COLOR], height_[COLOR]);
+  }
+  if (enable_stream_[COLOR_LEFT] && width_.count(COLOR_LEFT) && height_.count(COLOR_LEFT)) {
+    jpeg_decoder_left_ =
+        std::make_unique<JetsonNvJPEGDecoder>(width_[COLOR_LEFT], height_[COLOR_LEFT]);
+  }
+  if (enable_stream_[COLOR_RIGHT] && width_.count(COLOR_RIGHT) && height_.count(COLOR_RIGHT)) {
+    jpeg_decoder_right_ =
+        std::make_unique<JetsonNvJPEGDecoder>(width_[COLOR_RIGHT], height_[COLOR_RIGHT]);
+  }
+#endif
+  if (enable_stream_[COLOR] && width_.count(COLOR) && height_.count(COLOR)) {
+    rgb_buffer_size_ = static_cast<size_t>(width_[COLOR]) * height_[COLOR] * 4;
+    rgb_buffer_ = new uint8_t[rgb_buffer_size_];
+  }
+  if (enable_stream_[COLOR_LEFT] && width_.count(COLOR_LEFT) && height_.count(COLOR_LEFT)) {
+    rgb_buffer_left_size_ = static_cast<size_t>(width_[COLOR_LEFT]) * height_[COLOR_LEFT] * 4;
+    rgb_buffer_left_ = new uint8_t[rgb_buffer_left_size_];
+  }
+  if (enable_stream_[COLOR_RIGHT] && width_.count(COLOR_RIGHT) && height_.count(COLOR_RIGHT)) {
+    rgb_buffer_right_size_ = static_cast<size_t>(width_[COLOR_RIGHT]) * height_[COLOR_RIGHT] * 4;
+    rgb_buffer_right_ = new uint8_t[rgb_buffer_right_size_];
+  }
+  rgb_point_cloud_buffer_size_ = 0;
+  xy_table_data_size_ = 0;
+  if (enable_colored_point_cloud_ && enable_stream_[DEPTH] && enable_stream_[COLOR]) {
+    rgb_point_cloud_buffer_size_ = width_[COLOR] * height_[COLOR] * sizeof(OBColorPoint);
+    xy_table_data_size_ = width_[DEPTH] * height_[DEPTH] * 2;
+  }
+}
+
+void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {
+  const auto format = format_[stream_index];
+  const bool is_depth_stream = stream_index.first == OB_STREAM_DEPTH;
+  const bool is_ir_stream = stream_index.first == OB_STREAM_IR ||
+                            stream_index.first == OB_STREAM_IR_LEFT ||
+                            stream_index.first == OB_STREAM_IR_RIGHT;
+  const bool is_color_stream =
+      stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT;
+
+  if (format == OB_FORMAT_Y8 || format == OB_FORMAT_GRAY) {
+    image_format_[stream_index] = CV_8UC1;
+    encoding_[stream_index] = is_depth_stream ? sensor_msgs::image_encodings::TYPE_8UC1
+                                              : sensor_msgs::image_encodings::MONO8;
+    unit_step_size_[stream_index] = sizeof(uint8_t);
+  } else if (format == OB_FORMAT_Y10 || format == OB_FORMAT_Y11 || format == OB_FORMAT_Y12 ||
+             format == OB_FORMAT_Y14 || format == OB_FORMAT_Y16 || format == OB_FORMAT_Z16 ||
+             format == OB_FORMAT_RW16) {
+    image_format_[stream_index] = CV_16UC1;
+    encoding_[stream_index] = is_depth_stream ? sensor_msgs::image_encodings::TYPE_16UC1
+                                              : sensor_msgs::image_encodings::MONO16;
+    unit_step_size_[stream_index] = sizeof(uint16_t);
+  } else if (format == OB_FORMAT_MJPG || format == OB_FORMAT_MJPEG) {
+    if (is_ir_stream) {
       image_format_[stream_index] = CV_8UC1;
       encoding_[stream_index] = sensor_msgs::image_encodings::MONO8;
       unit_step_size_[stream_index] = sizeof(uint8_t);
+    } else if (is_color_stream) {
+      image_format_[stream_index] = CV_8UC3;
+      encoding_[stream_index] = sensor_msgs::image_encodings::RGB8;
+      unit_step_size_[stream_index] = 3 * sizeof(uint8_t);
     }
-  }
-  if (format_[stream_index] == OB_FORMAT_Y16 &&
-      (stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT)) {
-    image_format_[stream_index] = CV_16UC1;
-    encoding_[stream_index] = sensor_msgs::image_encodings::MONO16;
-    unit_step_size_[stream_index] = sizeof(uint16_t);
+  } else if (format == OB_FORMAT_BGR) {
+    image_format_[stream_index] = CV_8UC3;
+    encoding_[stream_index] = sensor_msgs::image_encodings::BGR8;
+    unit_step_size_[stream_index] = 3 * sizeof(uint8_t);
+  } else if (format == OB_FORMAT_RGB || format == OB_FORMAT_RGB888) {
+    image_format_[stream_index] = CV_8UC3;
+    encoding_[stream_index] = sensor_msgs::image_encodings::RGB8;
+    unit_step_size_[stream_index] = 3 * sizeof(uint8_t);
+  } else if (format == OB_FORMAT_BGRA) {
+    image_format_[stream_index] = CV_8UC4;
+    encoding_[stream_index] = sensor_msgs::image_encodings::BGRA8;
+    unit_step_size_[stream_index] = 4 * sizeof(uint8_t);
+  } else if (format == OB_FORMAT_RGBA) {
+    image_format_[stream_index] = CV_8UC4;
+    encoding_[stream_index] = sensor_msgs::image_encodings::RGBA8;
+    unit_step_size_[stream_index] = 4 * sizeof(uint8_t);
   }
 }
 int OBCameraNode::init_interleave_hdr_param() {
@@ -4641,6 +4962,40 @@ void OBCameraNode::setupCameraInfo() {
   }
 }
 
+void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
+  if (!enable_stream_[stream_index]) {
+    image_publishers_.erase(stream_index);
+    compressed_image_publishers_.erase(stream_index);
+    return;
+  }
+
+  const std::string topic = stream_name_[stream_index] + "/image_raw";
+  auto image_qos_profile = getRMWQosProfileFromString(image_qos_[stream_index]);
+  if (use_intra_process_) {
+    image_qos_profile = rmw_qos_profile_default;
+  }
+
+  const bool is_mjpg_color_stream =
+      (stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
+      format_[stream_index] == OB_FORMAT_MJPG;
+  if (use_intra_process_ || is_mjpg_color_stream) {
+    image_publishers_[stream_index] =
+        std::make_shared<image_rcl_publisher>(*node_, topic, image_qos_profile);
+  } else {
+    image_publishers_[stream_index] =
+        std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
+  }
+
+  if (is_mjpg_color_stream) {
+    compressed_image_publishers_[stream_index] =
+        node_->create_publisher<sensor_msgs::msg::CompressedImage>(
+            topic + "/compressed",
+            rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_qos_profile), image_qos_profile));
+  } else {
+    compressed_image_publishers_.erase(stream_index);
+  }
+}
+
 void OBCameraNode::setupPublishers() {
   using PointCloud2 = sensor_msgs::msg::PointCloud2;
   using CameraInfo = sensor_msgs::msg::CameraInfo;
@@ -4666,31 +5021,9 @@ void OBCameraNode::setupPublishers() {
       continue;
     }
     std::string name = stream_name_[stream_index];
-    std::string topic = name + "/image_raw";
-    auto image_qos = image_qos_[stream_index];
-    auto image_qos_profile = getRMWQosProfileFromString(image_qos);
-    if (use_intra_process_) {
-      image_qos_profile = rmw_qos_profile_default;
-    }
-    const bool is_mjpg_color_stream =
-        (stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
-        format_[stream_index] == OB_FORMAT_MJPG;
-    if (use_intra_process_ || is_mjpg_color_stream) {
-      image_publishers_[stream_index] =
-          std::make_shared<image_rcl_publisher>(*node_, topic, image_qos_profile);
-    } else {
-      image_publishers_[stream_index] =
-          std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
-    }
-    if ((is_mjpg_color_stream) && format_[stream_index] == OB_FORMAT_MJPG) {
-      compressed_image_publishers_[stream_index] =
-          node_->create_publisher<sensor_msgs::msg::CompressedImage>(
-              topic + "/compressed",
-              rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_qos_profile),
-                          image_qos_profile));
-    }
+    setupImagePublisher(stream_index);
 
-    topic = name + "/camera_info";
+    std::string topic = name + "/camera_info";
     auto camera_info_qos = camera_info_qos_[stream_index];
     auto camera_info_qos_profile = getRMWQosProfileFromString(camera_info_qos);
     if (use_intra_process_) {
@@ -5608,12 +5941,15 @@ void OBCameraNode::logFrameInfoOnce(const stream_index_pair &stream_index,
 }
 
 void OBCameraNode::onNewColorFrameCallback() {
-  while (enable_stream_[COLOR] && rclcpp::ok() && is_running_.load()) {
+  while (enable_stream_[COLOR] && rclcpp::ok() && is_running_.load() &&
+         !stop_color_frame_threads_.load()) {
     std::unique_lock<std::mutex> lock(color_frame_queue_lock_);
-    color_frame_queue_cv_.wait(
-        lock, [this]() { return !color_frame_queue_.empty() || !(is_running_.load()); });
+    color_frame_queue_cv_.wait(lock, [this]() {
+      return !color_frame_queue_.empty() || !(is_running_.load()) ||
+             stop_color_frame_threads_.load();
+    });
 
-    if (!rclcpp::ok() || !is_running_.load()) {
+    if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
       break;
     }
     std::shared_ptr<ob::FrameSet> frameSet = color_frame_queue_.front();
@@ -5627,12 +5963,15 @@ void OBCameraNode::onNewColorFrameCallback() {
 }
 
 void OBCameraNode::onNewLeftColorFrameCallback() {
-  while (enable_stream_[COLOR_LEFT] && rclcpp::ok() && is_running_.load()) {
+  while (enable_stream_[COLOR_LEFT] && rclcpp::ok() && is_running_.load() &&
+         !stop_color_frame_threads_.load()) {
     std::unique_lock<std::mutex> lock(left_color_frame_queue_lock_);
-    left_color_frame_queue_cv_.wait(
-        lock, [this]() { return !left_color_frame_queue_.empty() || !(is_running_.load()); });
+    left_color_frame_queue_cv_.wait(lock, [this]() {
+      return !left_color_frame_queue_.empty() || !(is_running_.load()) ||
+             stop_color_frame_threads_.load();
+    });
 
-    if (!rclcpp::ok() || !is_running_.load()) {
+    if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
       break;
     }
     std::shared_ptr<ob::FrameSet> frameSet = left_color_frame_queue_.front();
@@ -5645,12 +5984,15 @@ void OBCameraNode::onNewLeftColorFrameCallback() {
 }
 
 void OBCameraNode::onNewRightColorFrameCallback() {
-  while (enable_stream_[COLOR_RIGHT] && rclcpp::ok() && is_running_.load()) {
+  while (enable_stream_[COLOR_RIGHT] && rclcpp::ok() && is_running_.load() &&
+         !stop_color_frame_threads_.load()) {
     std::unique_lock<std::mutex> lock(right_color_frame_queue_lock_);
-    right_color_frame_queue_cv_.wait(
-        lock, [this]() { return !right_color_frame_queue_.empty() || !(is_running_.load()); });
+    right_color_frame_queue_cv_.wait(lock, [this]() {
+      return !right_color_frame_queue_.empty() || !(is_running_.load()) ||
+             stop_color_frame_threads_.load();
+    });
 
-    if (!rclcpp::ok() || !is_running_.load()) {
+    if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
       break;
     }
     std::shared_ptr<ob::FrameSet> frameSet = right_color_frame_queue_.front();

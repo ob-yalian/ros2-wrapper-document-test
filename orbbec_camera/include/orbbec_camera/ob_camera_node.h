@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
 #include <unordered_map>
@@ -65,6 +66,7 @@
 #include "orbbec_camera_msgs/srv/set_string.hpp"
 #include "orbbec_camera_msgs/srv/set_filter.hpp"
 #include "orbbec_camera_msgs/srv/set_arrays.hpp"
+#include "orbbec_camera_msgs/srv/set_stream_profile.hpp"
 #include "orbbec_camera_msgs/srv/get_user_calib_params.hpp"
 #include "orbbec_camera_msgs/srv/set_user_calib_params.hpp"
 #include "orbbec_camera/constants.h"
@@ -124,6 +126,7 @@ using SetBool = std_srvs::srv::SetBool;
 using GetBool = orbbec_camera_msgs::srv::GetBool;
 using SetFilter = orbbec_camera_msgs::srv::SetFilter;
 using SetArrays = orbbec_camera_msgs::srv::SetArrays;
+using SetStreamProfile = orbbec_camera_msgs::srv::SetStreamProfile;
 using SetUserCalibParams = orbbec_camera_msgs::srv::SetUserCalibParams;
 using GetUserCalibParams = orbbec_camera_msgs::srv::GetUserCalibParams;
 using DepthFilterState = orbbec_camera_msgs::msg::DepthFilterState;
@@ -240,6 +243,14 @@ class OBCameraNode {
     double timestamp_ = -1;  // in nanoseconds
   };
 
+  struct PendingStreamProfile {
+    stream_index_pair stream_index;
+    int requested_width = 0;
+    int requested_height = 0;
+    int requested_fps = 0;
+    std::shared_ptr<ob::VideoStreamProfile> profile;
+  };
+
   void setupDevices();
 
   void loadConfigJson();
@@ -269,6 +280,24 @@ class OBCameraNode {
 
   void setupProfiles();
 
+  std::shared_ptr<ob::VideoStreamProfile> selectVideoStreamProfile(
+      const stream_index_pair& stream_index, int width, int height, int fps, OBFormat format);
+
+  std::optional<stream_index_pair> getImageStreamByName(const std::string& stream_name) const;
+
+  bool validateStreamProfileRequest(const std::shared_ptr<SetStreamProfile::Request>& request,
+                                    std::vector<PendingStreamProfile>& pending_profiles,
+                                    std::string& message);
+
+  bool applyStreamProfiles(const std::vector<PendingStreamProfile>& pending_profiles,
+                           std::string& message);
+
+  void clearColorFrameQueues();
+
+  void stopColorFrameThreads();
+
+  void setupImageBuffers();
+
   void updateImageConfig(const stream_index_pair& stream_index);
 
   void printSensorProfiles(const std::shared_ptr<ob::Sensor>& sensor);
@@ -278,6 +307,8 @@ class OBCameraNode {
   void getParameters();
 
   void setupTopics();
+
+  void setupImagePublisher(const stream_index_pair& stream_index);
 
   void setupPipelineConfig();
 
@@ -482,6 +513,9 @@ class OBCameraNode {
 
   void setAEStrategyCallback(const std::shared_ptr<SetString::Request>& request,
                              std::shared_ptr<SetString::Response>& response);
+
+  void setStreamProfileCallback(const std::shared_ptr<SetStreamProfile::Request>& request,
+                                std::shared_ptr<SetStreamProfile::Response>& response);
 
   void setUserCalibParamsCallback(const std::shared_ptr<SetUserCalibParams::Request>& request,
                                   std::shared_ptr<SetUserCalibParams::Response>& response);
@@ -708,6 +742,7 @@ class OBCameraNode {
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_streams_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
   rclcpp::Service<SetString>::SharedPtr set_image_registration_mode_srv_;
+  rclcpp::Service<SetStreamProfile>::SharedPtr set_stream_profile_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
   rclcpp::Service<SetUserCalibParams>::SharedPtr set_user_calib_params_srv_;
   rclcpp::Service<SetString>::SharedPtr set_ae_reference_stream_srv_;
@@ -851,6 +886,7 @@ class OBCameraNode {
   // For color
   std::queue<std::shared_ptr<ob::FrameSet>> color_frame_queue_;
   std::shared_ptr<std::thread> colorFrameThread_ = nullptr;
+  std::atomic_bool stop_color_frame_threads_{false};
   std::mutex color_frame_queue_lock_;
   std::condition_variable color_frame_queue_cv_;
 
