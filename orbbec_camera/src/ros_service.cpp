@@ -74,6 +74,28 @@ std::string disparityToDepthModeToString(bool hardware_enabled, bool software_en
   return "disable";
 }
 
+bool isPropertySupported(const std::shared_ptr<ob::Device>& device, OBPropertyID property_id,
+                         OBPermissionType permission) {
+  if (!device) {
+    return false;
+  }
+  try {
+    return device->isPropertySupported(property_id, permission);
+  } catch (...) {
+    return false;
+  }
+}
+
+bool isPropertyReadable(const std::shared_ptr<ob::Device>& device, OBPropertyID property_id) {
+  return isPropertySupported(device, property_id, OB_PERMISSION_READ) ||
+         isPropertySupported(device, property_id, OB_PERMISSION_READ_WRITE);
+}
+
+bool isPropertyWritable(const std::shared_ptr<ob::Device>& device, OBPropertyID property_id) {
+  return isPropertySupported(device, property_id, OB_PERMISSION_WRITE) ||
+         isPropertySupported(device, property_id, OB_PERMISSION_READ_WRITE);
+}
+
 std::string OBSyncModeToString(const OBMultiDeviceSyncMode& mode) {
   switch (mode) {
     case OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_FREE_RUN:
@@ -180,56 +202,80 @@ void OBCameraNode::setupCameraCtrlServices() {
           setRotationCallback(request, response, stream_index);
         });
   }
-  set_fan_work_mode_srv_ = node_->create_service<SetInt32>(
-      "set_fan_work_mode", [this](const std::shared_ptr<SetInt32::Request> request,
-                                  std::shared_ptr<SetInt32::Response> response) {
-        setFanWorkModeCallback(request, response);
-      });
-  set_floor_enable_srv_ = node_->create_service<SetBool>(
-      "set_floor_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+  if (isPropertyWritable(device_, OB_PROP_FAN_WORK_MODE_INT)) {
+    set_fan_work_mode_srv_ = node_->create_service<SetInt32>(
+        "set_fan_work_mode", [this](const std::shared_ptr<SetInt32::Request> request,
+                                    std::shared_ptr<SetInt32::Response> response) {
+          setFanWorkModeCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_FLOOD_BOOL)) {
+    set_floor_enable_srv_ = node_->create_service<SetBool>(
+        "set_floor_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                   const std::shared_ptr<SetBool::Request> request,
+                                   std::shared_ptr<SetBool::Response> response) {
+          setFloorEnableCallback(request_header, request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT) ||
+      isPropertyWritable(device_, OB_PROP_LASER_BOOL)) {
+    set_laser_enable_srv_ = node_->create_service<SetBool>(
+        "set_laser_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                   const std::shared_ptr<SetBool::Request> request,
+                                   std::shared_ptr<SetBool::Response> response) {
+          setLaserEnableCallback(request_header, request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_LDP_BOOL) &&
+      ((isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT) &&
+        isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT)) ||
+       (isPropertyReadable(device_, OB_PROP_LASER_BOOL) &&
+        isPropertyWritable(device_, OB_PROP_LASER_BOOL)))) {
+    set_ldp_enable_srv_ = node_->create_service<SetBool>(
+        "set_ldp_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                  const std::shared_ptr<SetBool::Request> request,
                                  std::shared_ptr<SetBool::Response> response) {
-        setFloorEnableCallback(request_header, request, response);
-      });
-  set_laser_enable_srv_ = node_->create_service<SetBool>(
-      "set_laser_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                                 const std::shared_ptr<SetBool::Request> request,
-                                 std::shared_ptr<SetBool::Response> response) {
-        setLaserEnableCallback(request_header, request, response);
-      });
-  set_ldp_enable_srv_ = node_->create_service<SetBool>(
-      "set_ldp_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                               const std::shared_ptr<SetBool::Request> request,
-                               std::shared_ptr<SetBool::Response> response) {
-        setLdpEnableCallback(request_header, request, response);
-      });
-  get_ldp_status_srv_ = node_->create_service<GetBool>(
-      "get_ldp_status", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                               const std::shared_ptr<GetBool::Request> request,
-                               std::shared_ptr<GetBool::Response> response) {
-        (void)request_header;
-        getLdpStatusCallback(request, response);
-      });
-  get_laser_status_srv_ = node_->create_service<GetBool>(
-      "get_laser_status", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+          setLdpEnableCallback(request_header, request, response);
+        });
+  }
+  if (isPropertyReadable(device_, OB_PROP_LDP_BOOL) &&
+      isPropertyReadable(device_, OB_PROP_LDP_STATUS_BOOL)) {
+    get_ldp_status_srv_ = node_->create_service<GetBool>(
+        "get_ldp_status", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                  const std::shared_ptr<GetBool::Request> request,
                                  std::shared_ptr<GetBool::Response> response) {
-        (void)request_header;
-        getLaserStatusCallback(request, response);
-      });
-  set_ptp_config_srv_ = node_->create_service<SetBool>(
-      "set_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                               const std::shared_ptr<SetBool::Request> request,
-                               std::shared_ptr<SetBool::Response> response) {
-        setPtpConfigCallback(request_header, request, response);
-      });
-  get_ptp_config_srv_ = node_->create_service<GetBool>(
-      "get_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                               const std::shared_ptr<GetBool::Request> request,
-                               std::shared_ptr<GetBool::Response> response) {
-        (void)request_header;
-        getPtpConfigCallback(request, response);
-      });
+          (void)request_header;
+          getLdpStatusCallback(request, response);
+        });
+  }
+  if (isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT) ||
+      isPropertyReadable(device_, OB_PROP_LASER_BOOL)) {
+    get_laser_status_srv_ = node_->create_service<GetBool>(
+        "get_laser_status", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                   const std::shared_ptr<GetBool::Request> request,
+                                   std::shared_ptr<GetBool::Response> response) {
+          (void)request_header;
+          getLaserStatusCallback(request, response);
+        });
+  }
+  if (isPropertyReadable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL) &&
+      isPropertyWritable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL)) {
+    set_ptp_config_srv_ = node_->create_service<SetBool>(
+        "set_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                 const std::shared_ptr<SetBool::Request> request,
+                                 std::shared_ptr<SetBool::Response> response) {
+          setPtpConfigCallback(request_header, request, response);
+        });
+  }
+  if (isPropertyReadable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL)) {
+    get_ptp_config_srv_ = node_->create_service<GetBool>(
+        "get_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                 const std::shared_ptr<GetBool::Request> request,
+                                 std::shared_ptr<GetBool::Response> response) {
+          (void)request_header;
+          getPtpConfigCallback(request, response);
+        });
+  }
 
   get_white_balance_srv_ = node_->create_service<GetInt32>(
       "get_white_balance", [this](const std::shared_ptr<GetInt32::Request> request,
@@ -281,31 +327,42 @@ void OBCameraNode::setupCameraCtrlServices() {
                                    std::shared_ptr<SetString::Response> response) {
         exportConfigJsonCallback(request, response);
       });
-  switch_ir_camera_srv_ = node_->create_service<SetString>(
-      "switch_ir", [this](const std::shared_ptr<SetString::Request> request,
-                          std::shared_ptr<SetString::Response> response) {
-        switchIRCameraCallback(request, response);
-      });
-  set_ir_long_exposure_srv_ = node_->create_service<SetBool>(
-      "set_ir_long_exposure", [this](const std::shared_ptr<SetBool::Request> request,
-                                     std::shared_ptr<SetBool::Response> response) {
-        setIRLongExposureCallback(request, response);
-      });
-  get_lrm_measure_distance_srv_ = node_->create_service<GetInt32>(
-      "get_lrm_measure_distance", [this](const std::shared_ptr<GetInt32::Request> request,
-                                         std::shared_ptr<GetInt32::Response> response) {
-        getLrmMeasureDistanceCallback(request, response);
-      });
-  set_reset_timestamp_srv_ = node_->create_service<SetBool>(
-      "set_reset_timestamp", [this](const std::shared_ptr<SetBool::Request> request,
-                                    std::shared_ptr<SetBool::Response> response) {
-        setRESETTimestampCallback(request, response);
-      });
-  set_interleaver_laser_sync_srv_ = node_->create_service<SetInt32>(
-      "set_sync_interleaverlaser", [this](const std::shared_ptr<SetInt32::Request> request,
-                                          std::shared_ptr<SetInt32::Response> response) {
-        setSYNCInterleaveLaserCallback(request, response);
-      });
+  if (isPropertyWritable(device_, OB_PROP_IR_CHANNEL_DATA_SOURCE_INT)) {
+    switch_ir_camera_srv_ = node_->create_service<SetString>(
+        "switch_ir", [this](const std::shared_ptr<SetString::Request> request,
+                            std::shared_ptr<SetString::Response> response) {
+          switchIRCameraCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_IR_LONG_EXPOSURE_BOOL)) {
+    set_ir_long_exposure_srv_ = node_->create_service<SetBool>(
+        "set_ir_long_exposure", [this](const std::shared_ptr<SetBool::Request> request,
+                                       std::shared_ptr<SetBool::Response> response) {
+          setIRLongExposureCallback(request, response);
+        });
+  }
+  if (isPropertyReadable(device_, OB_PROP_LDP_MEASURE_DISTANCE_INT)) {
+    get_lrm_measure_distance_srv_ = node_->create_service<GetInt32>(
+        "get_lrm_measure_distance", [this](const std::shared_ptr<GetInt32::Request> request,
+                                           std::shared_ptr<GetInt32::Response> response) {
+          getLrmMeasureDistanceCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_TIMER_RESET_TRIGGER_OUT_ENABLE_BOOL) &&
+      isPropertyWritable(device_, OB_PROP_TIMER_RESET_SIGNAL_BOOL)) {
+    set_reset_timestamp_srv_ = node_->create_service<SetBool>(
+        "set_reset_timestamp", [this](const std::shared_ptr<SetBool::Request> request,
+                                      std::shared_ptr<SetBool::Response> response) {
+          setRESETTimestampCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT)) {
+    set_interleaver_laser_sync_srv_ = node_->create_service<SetInt32>(
+        "set_sync_interleaverlaser", [this](const std::shared_ptr<SetInt32::Request> request,
+                                            std::shared_ptr<SetInt32::Response> response) {
+          setSYNCInterleaveLaserCallback(request, response);
+        });
+  }
   set_sync_host_time_srv_ = node_->create_service<SetBool>(
       "set_sync_hosttime", [this](const std::shared_ptr<SetBool::Request> request,
                                   std::shared_ptr<SetBool::Response> response) {
@@ -378,21 +435,27 @@ void OBCameraNode::setupCameraCtrlServices() {
                                            std::shared_ptr<GetInt32::Response> response) {
         getPointCloudDecimationCallback(request, response);
       });
-  set_disparity_range_mode_srv_ = node_->create_service<SetInt32>(
-      "set_disparity_range_mode", [this](const std::shared_ptr<SetInt32::Request> request,
-                                         std::shared_ptr<SetInt32::Response> response) {
-        setDisparityRangeModeCallback(request, response);
-      });
-  set_disparity_search_offset_srv_ = node_->create_service<SetInt32>(
-      "set_disparity_search_offset", [this](const std::shared_ptr<SetInt32::Request> request,
+  if (isPropertyWritable(device_, OB_PROP_DISP_SEARCH_RANGE_MODE_INT)) {
+    set_disparity_range_mode_srv_ = node_->create_service<SetInt32>(
+        "set_disparity_range_mode", [this](const std::shared_ptr<SetInt32::Request> request,
+                                           std::shared_ptr<SetInt32::Response> response) {
+          setDisparityRangeModeCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_DISP_SEARCH_OFFSET_INT)) {
+    set_disparity_search_offset_srv_ = node_->create_service<SetInt32>(
+        "set_disparity_search_offset", [this](const std::shared_ptr<SetInt32::Request> request,
+                                              std::shared_ptr<SetInt32::Response> response) {
+          setDisparitySearchOffsetCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT)) {
+    set_sync_io_voltage_level_srv_ = node_->create_service<SetInt32>(
+        "set_sync_io_voltage_level", [this](const std::shared_ptr<SetInt32::Request> request,
                                             std::shared_ptr<SetInt32::Response> response) {
-        setDisparitySearchOffsetCallback(request, response);
-      });
-  set_sync_io_voltage_level_srv_ = node_->create_service<SetInt32>(
-      "set_sync_io_voltage_level", [this](const std::shared_ptr<SetInt32::Request> request,
-                                          std::shared_ptr<SetInt32::Response> response) {
-        setSyncIoVoltageLevelCallback(request, response);
-      });
+          setSyncIoVoltageLevelCallback(request, response);
+        });
+  }
 }
 
 void OBCameraNode::getPointCloudDecimationCallback(
@@ -1241,10 +1304,10 @@ void OBCameraNode::setLaserEnableCallback(
   int laser_enable = request->data ? 1 : 0;
   try {
     bool property_modified = false;
-    if (device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
+    if (isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT)) {
       device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_enable);
       property_modified = true;
-    } else if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
+    } else if (isPropertyWritable(device_, OB_PROP_LASER_BOOL)) {
       device_->setIntProperty(OB_PROP_LASER_BOOL, laser_enable);
       property_modified = true;
     }
@@ -1273,12 +1336,19 @@ void OBCameraNode::setLdpEnableCallback(
   bool ldp_enable = request->data;
   try {
     bool property_modified = false;
-    if (device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
+    if (!isPropertyWritable(device_, OB_PROP_LDP_BOOL)) {
+      response->success = false;
+      response->message = "LDP property is not supported";
+      return;
+    }
+    if (isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT) &&
+        isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT)) {
       auto laser_enable = device_->getIntProperty(OB_PROP_LASER_CONTROL_INT);
       device_->setBoolProperty(OB_PROP_LDP_BOOL, ldp_enable);
       device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_enable);
       property_modified = true;
-    } else if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
+    } else if (isPropertyReadable(device_, OB_PROP_LASER_BOOL) &&
+               isPropertyWritable(device_, OB_PROP_LASER_BOOL)) {
       if (!ldp_enable) {
         auto laser_enable = device_->getIntProperty(OB_PROP_LASER_BOOL);
         device_->setBoolProperty(OB_PROP_LDP_BOOL, ldp_enable);
@@ -1291,6 +1361,10 @@ void OBCameraNode::setLdpEnableCallback(
     }
     if (property_modified) {
       enable_ldp_ = ldp_enable;
+    } else {
+      response->success = false;
+      response->message = "Laser property is not supported";
+      return;
     }
     response->success = true;
   } catch (const ob::Error& e) {
@@ -1750,10 +1824,14 @@ void OBCameraNode::getLaserStatusCallback(const std::shared_ptr<GetBool::Request
                                           std::shared_ptr<GetBool::Response>& response) {
   (void)request;
   try {
-    if (device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
+    if (isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT)) {
       response->data = device_->getBoolProperty(OB_PROP_LASER_CONTROL_INT);
-    } else if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
+    } else if (isPropertyReadable(device_, OB_PROP_LASER_BOOL)) {
       response->data = device_->getBoolProperty(OB_PROP_LASER_BOOL);
+    } else {
+      response->success = false;
+      response->message = "Laser property is not supported";
+      return;
     }
     response->success = true;
   } catch (const ob::Error& e) {
@@ -1775,8 +1853,8 @@ void OBCameraNode::setPtpConfigCallback(
   (void)request_header;
 
   try {
-    if (!device_->isPropertySupported(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL,
-                                      OB_PERMISSION_READ_WRITE)) {
+    if (!isPropertyReadable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL) ||
+        !isPropertyWritable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL)) {
       response->success = false;
       RCLCPP_ERROR(logger_, "PTP clock sync property is not supported or not writable");
       return;
