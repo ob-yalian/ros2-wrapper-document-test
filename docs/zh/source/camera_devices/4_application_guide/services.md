@@ -167,6 +167,7 @@
     ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString
     ```
 *   `/camera/export_config_json`
+    导出当前设备配置为 SDK JSON 文件。Gemini 330 系列的 JSON 导入导出流程请参考 [Gemini 330 系列 SDK JSON 配置导入与导出](../5_advanced_guide/configuration/sdk_json_config.md)。
     ```bash
     ros2 service call /camera/export_config_json orbbec_camera_msgs/srv/SetString "{data: '/tmp/orbbec_camera_config.json'}"
     ```
@@ -212,6 +213,7 @@
 ### 深度滤波器配置
 
 *   `/camera/set_filter`
+    `FalsePositiveFilter` 的启动参数、状态确认和命名参数调参示例可参考 [Gemini 330 系列鬼影滤波](../5_advanced_guide/configuration/false_positive_filter.md)。
     ```bash
     # filter_name 为滤波器名称，filter_enable 表示是否开启滤波器开关。
     # filter_param 为旧的按位置传参方式；filter_config 为新的命名参数方式。

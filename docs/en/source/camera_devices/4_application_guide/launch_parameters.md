@@ -258,8 +258,8 @@ The following are the launch parameters available:
   * Set the downsampling multiple. You can use `ros2 run orbbec_camera list_camera_profile_mode_node` to view the settable resolution. **Default value:** `1`
   > **Supported Modules**: Gemini 301 series
 * **`enable_false_positive_filter`**
-  * Enable this option to reduce ghosting noise.
-  > **Supported Modules**: DaBaiA / DaBaiAL / Gemini 330 series / Gemini345 / Gemini345Lg
+  * Enable this option to reduce ghosting noise. For usage examples and runtime tuning, see [False Positive Filtering for Gemini 330 Series](../5_advanced_guide/configuration/false_positive_filter.md).
+  > **Supported Modules**: Gemini 330 series / Gemini 340 series
 * **`enable_edge_noise_removal_filter`**
   * Enable EdgeNoiseRemovalFilter to reduce edge noise in depth frames.
   > **Supported Modules**: DaBai Max Pro
@@ -330,11 +330,11 @@ The following are the launch parameters available:
 *   **`config_file_path`**
     *   The path to the YAML configuration file. Default is `""`. If not specified, default parameters from the launch file will be used. Some presets or special modes are configured through YAML. See [predefined presets](../5_advanced_guide/configuration/predefined_presets.md).
 *   **`load_config_json_file_path`**
-    *   SDK JSON configuration import path. When set, the node imports the JSON configuration during initialization. For Gemini 330 series, use `gemini_330_series_sdk_json.launch.py` as the dedicated SDK JSON launch file.
-    *   If the JSON contains `application_config`, the node syncs stream enable states, resolution, frame rate, format, undistortion, point cloud, HDR merge, and device-level decimation from it when those values are not explicitly overridden by launch parameters.
+    *   SDK JSON configuration import path. When set, the node imports the JSON configuration during initialization. For Gemini 330 series, use `gemini_330_series_sdk_json.launch.py` as the dedicated SDK JSON launch file. See [SDK JSON Import and Export for Gemini 330 Series](../5_advanced_guide/configuration/sdk_json_config.md).
+    *   If the JSON contains `application_config`, the node syncs stream enable states, resolution, frame rate, format, undistortion, point cloud, HDR merge, and device-level decimation from it when the corresponding launch / YAML parameters have not been passed to the node.
 *   **`export_config_json_file_path`**
-    *   SDK JSON configuration export path. When set, the node exports the current device configuration to JSON after initialization. You can also export at runtime with the `/camera/export_config_json` service.
-    *   Before export, the node syncs the current ROS sensor stream, point cloud, and HDR merge settings into the SDK `application_config` when the device supports it.
+    *   SDK JSON configuration export path. When set, the node exports the current device configuration to JSON after initialization. You can also export at runtime with the `/camera/export_config_json` service. See [SDK JSON Import and Export for Gemini 330 Series](../5_advanced_guide/configuration/sdk_json_config.md).
+    *   Before export, the node syncs the current ROS2 sensor stream, point cloud, and HDR merge settings into the SDK `application_config` when the device supports it.
 *   **`frame_aggregate_mode`**
     *   Set frame aggregate output mode. Optional values: `full_frame`, `color_frame`, `ANY`, `disable`.
     *   This parameter is case-insensitive. Invalid values are reported and replaced with the default value.

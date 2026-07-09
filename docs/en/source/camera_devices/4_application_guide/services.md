@@ -167,6 +167,7 @@
     ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString
     ```
 *   `/camera/export_config_json`
+    Export the current device configuration to an SDK JSON file. For the Gemini 330 series JSON import and export workflow, see [SDK JSON Import and Export for Gemini 330 Series](../5_advanced_guide/configuration/sdk_json_config.md).
     ```bash
     ros2 service call /camera/export_config_json orbbec_camera_msgs/srv/SetString "{data: '/tmp/orbbec_camera_config.json'}"
     ```
@@ -212,6 +213,7 @@
 ### Depth Filter Configuration
 
 *   `/camera/set_filter`
+    For `FalsePositiveFilter` startup parameters, status checks, and named-parameter tuning examples, see [False Positive Filtering for Gemini 330 Series](../5_advanced_guide/configuration/false_positive_filter.md).
     ```bash
     # filter_name is the filter name, and filter_enable indicates whether the filter is enabled.
     # filter_param is the legacy positional parameter form; filter_config is the new named parameter form.
