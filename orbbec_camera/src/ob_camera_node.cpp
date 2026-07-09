@@ -3642,9 +3642,10 @@ bool OBCameraNode::validateStreamProfileRequest(
     try {
       auto selected_profile = selectVideoStreamProfile(
           *stream_index, requested_width, requested_height, requested_fps, requested_format);
-      has_changes = has_changes || selected_profile->getWidth() != width_[*stream_index] ||
-                    selected_profile->getHeight() != height_[*stream_index] ||
-                    selected_profile->getFps() != fps_[*stream_index] ||
+      has_changes = has_changes ||
+                    static_cast<int>(selected_profile->getWidth()) != width_[*stream_index] ||
+                    static_cast<int>(selected_profile->getHeight()) != height_[*stream_index] ||
+                    static_cast<int>(selected_profile->getFps()) != fps_[*stream_index] ||
                     selected_profile->getFormat() != format_[*stream_index];
       pending_profiles.push_back(
           {*stream_index, requested_width, requested_height, requested_fps, selected_profile});

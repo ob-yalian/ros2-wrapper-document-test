@@ -357,6 +357,7 @@ void OBCameraNode::setupCameraCtrlServices() {
       "set_image_registration_mode", [this](const std::shared_ptr<SetString::Request> request,
                                             std::shared_ptr<SetString::Response> response) {
         setImageRegistrationModeCallback(request, response);
+      });
   set_stream_profile_srv_ = node_->create_service<SetStreamProfile>(
       "set_stream_profile", [this](const std::shared_ptr<SetStreamProfile::Request> request,
                                    std::shared_ptr<SetStreamProfile::Response> response) {
@@ -750,6 +751,9 @@ void OBCameraNode::setImageRegistrationModeCallback(
     rollback_after_error(e.what());
   } catch (...) {
     rollback_after_error("unknown error");
+  }
+}
+
 void OBCameraNode::setStreamProfileCallback(
     const std::shared_ptr<SetStreamProfile::Request>& request,
     std::shared_ptr<SetStreamProfile::Response>& response) {
