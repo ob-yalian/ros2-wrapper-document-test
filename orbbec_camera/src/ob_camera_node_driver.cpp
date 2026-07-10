@@ -37,6 +37,8 @@
 std::string g_camera_name = "orbbec_camera";  // Assuming this is declared elsewhere
 std::string g_time_domain = "global";         // Assuming this is declared elsewhere
 namespace {
+constexpr auto kStreamStartDelayAfterReboot = std::chrono::seconds(5);
+
 std::string getLogDirectoryForCamera(const std::string &camera_name) {
   const char *log_dir_override = std::getenv("ORBBEC_LOG_DIR");
   if (log_dir_override && log_dir_override[0] != '\0') {
@@ -905,6 +907,7 @@ void OBCameraNodeDriver::rebootDeviceCallback(
       } else {
         std::string current_device_uid = device_unique_id_;
         RCLCPP_INFO_STREAM(logger_, "Rebooting device with UID: " << current_device_uid);
+        delay_stream_start_after_reboot_ = true;
         if (ob_lidar_node_) {
           ob_lidar_node_->rebootDevice();
         } else if (ob_camera_node_) {
@@ -1329,6 +1332,12 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
     }
   }
 
+  const bool should_delay_stream_start = delay_stream_start_after_reboot_.exchange(false) &&
+                                         isGemini305SeriesPID(device_info_->getPid());
+  if (should_delay_stream_start) {
+    std::this_thread::sleep_for(kStreamStartDelayAfterReboot);
+  }
+
   if (ob_camera_node_) {
     ob_camera_node_->startIMU();
     ob_camera_node_->startStreams();
@@ -1739,6 +1748,7 @@ void OBCameraNodeDriver::firmwareUpdateCallback(OBFwUpdateState state, const cha
           RCLCPP_WARN_STREAM(logger_, "Exception during sync timer cleanup in firmware update");
         }
       }
+      delay_stream_start_after_reboot_ = true;
       device_->reboot();
     } else if (ob_lidar_node_) {
       ob_lidar_node_.reset();
