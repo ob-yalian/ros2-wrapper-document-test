@@ -316,7 +316,7 @@
     *   SDK和ROS节点日志级别。默认只输出设备当前状态；需要更多调试信息时可设置为 `debug`。可选值：`none`、`debug`、`info`、`warn`、`error`、`fatal`。
     *   SDK日志和崩溃文件默认保存在 `~/.ros/Log`，ROS日志仍保存在 `~/.ros/log`。
 * **`log_file_name`**
-  * 保存的SDK日志文件名。当`log_level`为`debug`时生效；实际路径通常为 `~/.ros/Log/<camera_name>/<log_file_name>`。
+  * SDK 日志文件名。为空时，日志默认以节点启动时间命名，格式为 `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`；指定后，实际路径为 `~/.ros/Log/<camera_name>/<log_file_name>`。
 *   **`enable_firmware_log`**
     *   启用固件日志。该开关与 `enable_heartbeat` 解耦，适合在需要抓取固件日志时单独开启。
 *   **`diagnostic_period`**

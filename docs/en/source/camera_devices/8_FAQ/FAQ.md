@@ -29,12 +29,12 @@ If the camera node crashes unexpectedly, it will generate a crash log under `~/.
 
 **1. SDK debug logs**
 
-Set the launch parameter `log_level` to `debug`. After running, the SDK will generate log files under `~/.ros/Log/<camera_name>/`. If you want a more recognizable file name for this test, you can set the parameter `log_file_name`.
+Set the launch parameter `log_level` to `debug`. After running, the SDK will generate log files under `~/.ros/Log/<camera_name>/`.
 
-- The actual SDK log file path is usually `~/.ros/Log/<camera_name>/<log_file_name>`.
-- In multi-camera setups, SDK logs are separated by `camera_name`, for example `~/.ros/Log/camera_01/camera_01.log` and `~/.ros/Log/camera_02/camera_02.log`.
-- SDK logs are appended to the same file: multiple launches will continue writing into the same log file.
-- Recommendation: before packaging logs to send to technical support, delete old log files, then reproduce the issue and collect new logs. This keeps the logs cleaner and makes troubleshooting more accurate.
+- When `log_file_name` is empty, the SDK log file is named after the node startup time in the format `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`, for example `~/.ros/Log/camera/OrbbecSDK_20260713_143025.log`.
+- You can also use `log_file_name` to specify the file name; the resulting path is `~/.ros/Log/<camera_name>/<log_file_name>`. When a fixed file name is specified, multiple launches may continue writing to the same file.
+- In multi-camera setups, SDK logs are stored in separate directories by `camera_name`. The current `multi_camera.launch.py` and `multi_camera_synced.launch.py` explicitly use `camera_01.log` and `camera_02.log`.
+- When submitting an issue, provide the SDK log file that corresponds to the time when the issue occurred. If a fixed file name is used, delete or back up the old log before reproducing the issue.
 
 **2. ROS 2 logs (`~/.ros/log`)**
 

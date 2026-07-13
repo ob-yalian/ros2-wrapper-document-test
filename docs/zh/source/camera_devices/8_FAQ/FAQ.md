@@ -29,12 +29,12 @@
 
 **1. SDK debug 日志**
 
-将 launch 参数 `log_level` 设为 `debug` 运行后，会在 `~/.ros/Log/<camera_name>/` 目录下生成 SDK 日志文件。如果需要为本次测试指定一个更易识别的日志文件名，可以修改参数 `log_file_name`。
+将 launch 参数 `log_level` 设为 `debug` 运行后，会在 `~/.ros/Log/<camera_name>/` 目录下生成 SDK 日志文件。
 
-- `log_file_name` 对应的实际文件路径通常为 `~/.ros/Log/<camera_name>/<log_file_name>`。
-- 多相机场景下，SDK 日志按 `camera_name` 分目录保存，例如 `~/.ros/Log/camera_01/camera_01.log`、`~/.ros/Log/camera_02/camera_02.log`。
-- SDK 日志是追加写入的：多次启动会在同一个文件里不断累积日志。
-- 建议：在准备打包日志发给技术支持前，先删除旧的日志文件，然后重新复现问题并采集新的日志，这样日志更干净、定位更准确。
+- `log_file_name` 为空时，SDK 日志默认以节点启动时间命名，格式为 `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`，例如 `~/.ros/Log/camera/OrbbecSDK_20260713_143025.log`。
+- 也可以通过 `log_file_name` 指定文件名，实际路径为 `~/.ros/Log/<camera_name>/<log_file_name>`。显式指定固定文件名后，多次启动可能继续写入同一个文件。
+- 多相机场景下，SDK 日志按 `camera_name` 分目录保存。当前 `multi_camera.launch.py` 和 `multi_camera_synced.launch.py` 会分别指定 `camera_01.log`、`camera_02.log`。
+- 提交问题时，请根据问题发生时间提供对应的 SDK 日志文件；如果使用固定文件名，建议先删除或备份旧日志，再重新复现问题。
 
 **2. ROS2 日志（~/.ros/log）**
 
