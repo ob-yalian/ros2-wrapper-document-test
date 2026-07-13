@@ -27,28 +27,33 @@
 
 ### 如何采集和保存日志
 
-**1. SDK debug 日志**
+请按以下步骤采集日志：
 
-将 launch 参数 `log_level` 设为 `debug` 运行后，会在 `~/.ros/Log/<camera_name>/` 目录下生成 SDK 日志文件。
+1. 将 launch 参数 `log_level` 设为 `debug`。
+2. 启动 launch，记下启动时间，然后重新复现问题。
+3. 将以下两类日志一起提供给技术支持：
 
-- `log_file_name` 为空时，SDK 日志默认以节点启动时间命名，格式为 `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`，例如 `~/.ros/Log/camera/OrbbecSDK_20260713_143025.log`。
-- 也可以通过 `log_file_name` 指定文件名，实际路径为 `~/.ros/Log/<camera_name>/<log_file_name>`。显式指定固定文件名后，多次启动可能继续写入同一个文件。
+   - **SDK 日志**：`~/.ros/Log/<camera_name>/` 中与启动 launch 时间对应的日志文件。
+   - **ROS2 日志**：`~/.ros/log/` 中与启动 launch 时间对应的日志文件。
+
+SDK 日志通常以启动时间命名。多相机或无法确定具体文件时，可提供本次测试新生成的全部日志。如果使用多相机 launch 中的固定日志名，建议复现问题前先删除或备份旧的 SDK 日志。
+
+#### 开发者排查说明
+
+**SDK 日志**
+
+- SDK 日志保存在 `~/.ros/Log/<camera_name>/`。
+- `log_file_name` 为空时，日志默认以节点启动时间命名，格式为 `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`，例如 `~/.ros/Log/camera/OrbbecSDK_20260713_143025.log`。
+- 指定 `log_file_name` 后，实际路径为 `~/.ros/Log/<camera_name>/<log_file_name>`。使用固定文件名时，多次启动可能继续写入同一个文件。
 - 多相机场景下，SDK 日志按 `camera_name` 分目录保存。当前 `multi_camera.launch.py` 和 `multi_camera_synced.launch.py` 会分别指定 `camera_01.log`、`camera_02.log`。
-- 提交问题时，请根据问题发生时间提供对应的 SDK 日志文件；如果使用固定文件名，建议先删除或备份旧日志，再重新复现问题。
 
-**2. ROS2 日志（~/.ros/log）**
+**ROS2 日志**
 
-在 launch 文件中，将节点（或可组合节点容器）的 `output` 参数设为 `"log"`，即可将 ROS2 日志保存到本地：
-
-- 设置为 `output="log"` 后，ROS2 日志将保存在 `~/.ros/log/` 目录下。
-- 每次 `ros2 launch` 会在 `~/.ros/log/` 下生成一个时间戳目录，里面有 `launch.log`；同时还会生成 `component_container_<pid>_<timestamp>.log` 一类的进程日志文件。
-- 二者区别如下：
-  - `launch.log` 包含所有相机容器输出汇总后的日志。
-  - `component_container_<pid>_<timestamp>.log` 记录的是某个容器进程本身的运行输出。
-- 多相机场景下，`component_container_<pid>_<timestamp>.log` 是按“容器进程”区分的。
-- 在一机一容器的多相机 launch 中，可以看做“一路相机对应一个 `component_container_*.log`”；如果你把多路相机加载到同一个容器里，那么同一个 `component_container_*.log` 里也就包含多路相机日志。
-- 区分具体是哪一路相机时，请以日志内容中的命名空间或节点名为准，例如 `camera_01.camera_01`、`camera_02.camera_02`。
-- 如需提交问题，请同时打包 `~/.ros/Log/` 目录下的 SDK 日志和 `~/.ros/log/` 下对应时间的 ROS2 日志，一并提供。
+- 将节点或可组合节点容器的 `output` 设为 `"log"` 后，ROS2 日志保存在 `~/.ros/log/`。
+- 每次 `ros2 launch` 都会生成一个时间戳目录，其中包含 `launch.log`；同时还会生成 `component_container_<pid>_<timestamp>.log` 一类的进程日志文件。
+- `launch.log` 汇总所有相机容器的输出；`component_container_<pid>_<timestamp>.log` 记录对应容器进程的运行输出。
+- 多相机场景下，进程日志按容器区分。一机一容器时，可以看作一路相机对应一个进程日志；多路相机共用容器时，同一个进程日志会包含多路相机输出。
+- 可根据日志中的命名空间或节点名区分相机，例如 `camera_01.camera_01`、`camera_02.camera_02`。
 
 ### 为什么有这么多启动文件？
 

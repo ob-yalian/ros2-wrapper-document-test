@@ -27,28 +27,33 @@ If the camera node crashes unexpectedly, it will generate a crash log under `~/.
 
 ### How to Collect and Save Logs
 
-**1. SDK debug logs**
+Follow these steps to collect logs:
 
-Set the launch parameter `log_level` to `debug`. After running, the SDK will generate log files under `~/.ros/Log/<camera_name>/`.
+1. Set the launch parameter `log_level` to `debug`.
+2. Start the launch file, note its startup time, and then reproduce the issue.
+3. Send both of the following to technical support:
 
-- When `log_file_name` is empty, the SDK log file is named after the node startup time in the format `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`, for example `~/.ros/Log/camera/OrbbecSDK_20260713_143025.log`.
-- You can also use `log_file_name` to specify the file name; the resulting path is `~/.ros/Log/<camera_name>/<log_file_name>`. When a fixed file name is specified, multiple launches may continue writing to the same file.
+   - **SDK logs**: the log files under `~/.ros/Log/<camera_name>/` that match the launch startup time.
+   - **ROS 2 logs**: the log files under `~/.ros/log/` that match the launch startup time.
+
+SDK log files are usually named with the startup time. For multiple cameras, or if you are unsure which files are relevant, send all logs newly generated during the test. When using a fixed log file name from a multi-camera launch, delete or back up the old SDK logs before reproducing the issue.
+
+#### Details for Developers
+
+**SDK logs**
+
+- SDK logs are stored under `~/.ros/Log/<camera_name>/`.
+- When `log_file_name` is empty, the log file is named after the node startup time in the format `OrbbecSDK_<YYYYMMDD_HHMMSS>.log`, for example `~/.ros/Log/camera/OrbbecSDK_20260713_143025.log`.
+- When `log_file_name` is specified, the resulting path is `~/.ros/Log/<camera_name>/<log_file_name>`. With a fixed file name, multiple launches may continue writing to the same file.
 - In multi-camera setups, SDK logs are stored in separate directories by `camera_name`. The current `multi_camera.launch.py` and `multi_camera_synced.launch.py` explicitly use `camera_01.log` and `camera_02.log`.
-- When submitting an issue, provide the SDK log file that corresponds to the time when the issue occurred. If a fixed file name is used, delete or back up the old log before reproducing the issue.
 
-**2. ROS 2 logs (`~/.ros/log`)**
+**ROS 2 logs**
 
-In the launch file, set the node (or composable node container) parameter `output` to `"log"` to save ROS 2 logs locally.
-
-- After setting `output="log"`, ROS 2 logs will be stored in the `~/.ros/log/` directory.
-- Each `ros2 launch` run creates a timestamped directory under `~/.ros/log/` containing `launch.log`, and also generates process log files such as `component_container_<pid>_<timestamp>.log`.
-- The difference is:
-  - `launch.log` contains the merged output from all camera containers.
-  - `component_container_<pid>_<timestamp>.log` records the runtime output of a specific container process.
-- In multi-camera setups, `component_container_<pid>_<timestamp>.log` is separated by container process.
-- In one-camera-per-container multi-camera launches, you can treat it as “one camera corresponds to one `component_container_*.log`”. If multiple cameras are loaded into the same container, that `component_container_*.log` will also contain logs from multiple cameras.
-- To identify the exact camera, rely on the namespace or node name in the log content, for example `camera_01.camera_01` and `camera_02.camera_02`.
-- When submitting an issue, please package both the SDK logs under `~/.ros/Log/` and the corresponding ROS 2 logs under `~/.ros/log/` for the same time period.
+- After setting the node or composable node container `output` to `"log"`, ROS 2 logs are stored under `~/.ros/log/`.
+- Each `ros2 launch` run creates a timestamped directory containing `launch.log`, together with process log files such as `component_container_<pid>_<timestamp>.log`.
+- `launch.log` contains the merged output from all camera containers. Each `component_container_<pid>_<timestamp>.log` records the runtime output of a specific container process.
+- In multi-camera setups, process logs are separated by container. With one camera per container, one process log corresponds to one camera. If cameras share a container, its process log contains output from multiple cameras.
+- Identify each camera by the namespace or node name in the log, for example `camera_01.camera_01` and `camera_02.camera_02`.
 
 ### Why Are There So Many Launch Files?
 
