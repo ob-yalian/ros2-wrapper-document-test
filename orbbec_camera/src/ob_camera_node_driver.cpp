@@ -79,7 +79,7 @@ void signalHandler(int sig) {
     _exit(sig);
   }
 
-  std::cout << "Received signal: " << sig << std::endl;
+  std::cerr << "Received signal: " << sig << std::endl;
   if (sig == SIGINT || sig == SIGTERM) {
     static int signal_count = 0;
     signal_count++;
@@ -113,7 +113,7 @@ void signalHandler(int sig) {
       std::filesystem::create_directories(log_dir);
     }
 
-    std::cout << "Log crash stack trace to " << log_file_path.string() << std::endl;
+    std::cerr << "Log crash stack trace to " << log_file_path.string() << std::endl;
     std::ofstream log_file(log_file_path, std::ios::app);
 
     if (log_file.is_open()) {
