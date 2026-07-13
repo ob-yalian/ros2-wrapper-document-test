@@ -1108,22 +1108,10 @@ void OBCameraNodeDriver::exportBagPresetJson(const std::string &bag_path) {
 void OBCameraNodeDriver::initializeBagPlayback() {
   RCLCPP_INFO_STREAM(logger_, "Starting bag file playback: " << bag_filename_);
   try {
-    auto preset_path = std::filesystem::path(bag_filename_);
-    if (preset_path.extension() == ".bag") {
-      preset_path.replace_extension(".json");
-    } else {
-      preset_path += ".json";
-    }
-
-    std::string preset_path_str;
-    if (std::filesystem::is_regular_file(preset_path)) {
-      preset_path_str = preset_path.string();
-      RCLCPP_INFO_STREAM(logger_, "Loading bag preset JSON: " << preset_path_str);
-    }
-    playback_device_ = std::make_shared<ob::PlaybackDevice>(bag_filename_, preset_path_str);
+    playback_device_ = std::make_shared<ob::PlaybackDevice>(bag_filename_);
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to initialize bag playback: "
-                                     << orbbec_camera::formatObErrorWithStatus(e));
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Failed to open bag file: " << orbbec_camera::formatObErrorWithStatus(e));
     return;
   }
 
