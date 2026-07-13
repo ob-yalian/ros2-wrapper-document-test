@@ -40,6 +40,7 @@ class FrameTimestampCsvLogger {
 
   void recordPreImagePublish(OBStreamType stream_type, const std::shared_ptr<ob::Frame> &frame,
                              int64_t publish_system_us, int64_t publish_steady_us);
+  void recordImagePublishSkipped(OBStreamType stream_type, const std::shared_ptr<ob::Frame> &frame);
 
   void shutdown();
 
@@ -112,9 +113,10 @@ class FrameTimestampCsvLogger {
                                             const std::shared_ptr<ob::Frame> &frame,
                                             int64_t arrival_system_us, int64_t arrival_steady_us,
                                             bool image_publish_expected);
-  void recordPreImagePublishInternal(OBStreamType stream_type,
-                                     const std::shared_ptr<ob::Frame> &frame,
-                                     int64_t publish_system_us, int64_t publish_steady_us);
+  void completeImagePublishInternal(OBStreamType stream_type,
+                                    const std::shared_ptr<ob::Frame> &frame,
+                                    std::optional<int64_t> publish_system_us,
+                                    std::optional<int64_t> publish_steady_us);
 
   void populateArrivalData(StreamState &state, TrackedStream stream,
                            const std::shared_ptr<ob::Frame> &frame, int64_t arrival_system_us,

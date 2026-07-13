@@ -109,7 +109,15 @@ void FrameTimestampCsvLogger::recordPreImagePublish(OBStreamType stream_type,
   if (!enabled_ || !frame || !isTrackedStream(stream_type)) {
     return;
   }
-  recordPreImagePublishInternal(stream_type, frame, publish_system_us, publish_steady_us);
+  completeImagePublishInternal(stream_type, frame, publish_system_us, publish_steady_us);
+}
+
+void FrameTimestampCsvLogger::recordImagePublishSkipped(OBStreamType stream_type,
+                                                        const std::shared_ptr<ob::Frame> &frame) {
+  if (!enabled_ || !frame || !isTrackedStream(stream_type)) {
+    return;
+  }
+  completeImagePublishInternal(stream_type, frame, std::nullopt, std::nullopt);
 }
 
 void FrameTimestampCsvLogger::shutdown() {
@@ -257,10 +265,9 @@ void FrameTimestampCsvLogger::recordStandaloneFrameArrivalInternal(
   }
 }
 
-void FrameTimestampCsvLogger::recordPreImagePublishInternal(OBStreamType stream_type,
-                                                            const std::shared_ptr<ob::Frame> &frame,
-                                                            int64_t publish_system_us,
-                                                            int64_t publish_steady_us) {
+void FrameTimestampCsvLogger::completeImagePublishInternal(
+    OBStreamType stream_type, const std::shared_ptr<ob::Frame> &frame,
+    std::optional<int64_t> publish_system_us, std::optional<int64_t> publish_steady_us) {
   std::optional<PendingRow> ready_row;
   const auto frame_index = frame->getIndex();
 
@@ -275,10 +282,12 @@ void FrameTimestampCsvLogger::recordPreImagePublishInternal(OBStreamType stream_
                                                            : depth_frame_index_to_row_id_;
     auto row_id_it = row_map.find(frame_index);
     if (row_id_it == row_map.end()) {
-      RCLCPP_WARN_STREAM(logger_,
-                         "Frame timestamp CSV logger missed row mapping for stream "
-                             << (tracked_stream == TrackedStream::COLOR ? "color" : "depth")
-                             << " frame index " << frame_index);
+      if (publish_system_us.has_value()) {
+        RCLCPP_WARN_STREAM(logger_,
+                           "Frame timestamp CSV logger missed row mapping for stream "
+                               << (tracked_stream == TrackedStream::COLOR ? "color" : "depth")
+                               << " frame index " << frame_index);
+      }
       return;
     }
     const auto row_id = row_id_it->second;
@@ -290,8 +299,16 @@ void FrameTimestampCsvLogger::recordPreImagePublishInternal(OBStreamType stream_
 
     auto &state = tracked_stream == TrackedStream::COLOR ? pending_it->second.color
                                                          : pending_it->second.depth;
-    populatePublishData(state, tracked_stream, publish_system_us, publish_steady_us);
-    state.final = true;
+    if (state.final) {
+      return;
+    }
+    if (publish_system_us.has_value() && publish_steady_us.has_value()) {
+      populatePublishData(state, tracked_stream, publish_system_us.value(),
+                          publish_steady_us.value());
+      state.final = true;
+    } else {
+      finalizeStreamWithoutPublish(state);
+    }
 
     if (isRowReady(pending_it->second)) {
       ready_row = pending_it->second;
@@ -440,6 +457,8 @@ void FrameTimestampCsvLogger::flushPendingRowsLocked(std::vector<PendingRow> &ro
     row.depth.final = true;
     rows.push_back(std::move(row));
   }
+  std::stable_sort(rows.begin(), rows.end(),
+                   [](const auto &lhs, const auto &rhs) { return lhs.row_id < rhs.row_id; });
   pending_rows_.clear();
   color_frame_index_to_row_id_.clear();
   depth_frame_index_to_row_id_.clear();

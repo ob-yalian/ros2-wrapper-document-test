@@ -6238,6 +6238,12 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (frame == nullptr) {
     return;
   }
+  const auto record_image_publish_skipped = [&]() {
+    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
+        (stream_index == COLOR || stream_index == DEPTH)) {
+      frame_timestamp_csv_logger_->recordImagePublishSkipped(stream_index.first, frame);
+    }
+  };
   CHECK_NOTNULL(image_publishers_[stream_index]);
   const bool has_raw_image_subscriber =
       image_publishers_[stream_index]->get_subscription_count() > 0;
@@ -6250,6 +6256,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       has_subscriber || (metadata_publishers_.count(stream_index) &&
                          metadata_publishers_[stream_index]->get_subscription_count() > 0);
   if (!has_subscriber) {
+    record_image_publish_skipped();
     return;
   }
   std::shared_ptr<ob::VideoFrame> video_frame;
@@ -6278,6 +6285,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if (!video_frame) {
     RCLCPP_ERROR(logger_, "Failed to convert frame to video frame");
+    record_image_publish_skipped();
     return;
   }
   int width = static_cast<int>(video_frame->getWidth());
@@ -6286,11 +6294,13 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   auto timestamp = fromUsToROSTime(frame_timestamp);
   if (!device_) {
     RCLCPP_ERROR_STREAM(logger_, "device is null in onNewFrameCallback");
+    record_image_publish_skipped();
     return;
   }
   auto device_info = device_->getDeviceInfo();
   if (!device_info || !device_info.get()) {
     RCLCPP_ERROR_STREAM(logger_, "device_info is null in onNewFrameCallback");
+    record_image_publish_skipped();
     return;
   }
   OBCameraIntrinsic intrinsic;
@@ -6363,6 +6373,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     CHECK(camera_info_publishers_.count(stream_index) > 0);
     camera_info_publishers_[stream_index]->publish(camera_info);
     publishMetadata(frame, stream_index, camera_info.header);
+    record_image_publish_skipped();
     return;
   }
 
@@ -6374,6 +6385,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       (has_raw_image_subscriber || save_images_[stream_index])) {
     if (frame->getType() == OB_FRAME_COLOR && !is_color_frame_decoded_) {
       RCLCPP_ERROR(logger_, "color frame is not decoded");
+      record_image_publish_skipped();
       return;
     }
     if (frame->getType() == OB_FRAME_COLOR_LEFT && !is_left_color_frame_decoded_) {
@@ -6418,6 +6430,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     image_msg->header.frame_id = frame_id;
     saveImageToFile(stream_index, image, *image_msg);
     if (!has_raw_image_subscriber) {
+      record_image_publish_skipped();
       return;
     }
     if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
