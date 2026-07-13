@@ -43,6 +43,7 @@
 
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
+#include <sensor_msgs/msg/image.hpp>
 #include <camera_info_manager/camera_info_manager.hpp>
 
 #include <image_publisher/image_publisher.hpp>
@@ -334,6 +335,7 @@ class OBCameraNode {
 
   DepthFilterState buildDepthFilterState(const std::string& filter_name, bool enabled,
                                          const std::shared_ptr<ob::Filter>& filter) const;
+  DepthFilterState buildEnhancedDepthFilterState() const;
 
   static std::string normalizeDepthFilterName(const std::string& filter_name);
 
@@ -345,6 +347,18 @@ class OBCameraNode {
   bool applyNamedDepthFilterConfig(
       const std::string& filter_name, bool enabled,
       const std::vector<orbbec_camera_msgs::msg::DepthFilterParam>& params, std::string& message);
+  bool applyEnhancedDepthFilterConfig(
+      bool enabled, const std::vector<float>& positional_params,
+      const std::vector<orbbec_camera_msgs::msg::DepthFilterParam>& named_params,
+      std::string& message);
+  bool validateEnhancedDepthFilterConfig(std::string& message) const;
+  bool ensureEnhancedDepthFilter(std::string& message);
+  void applyEnhancedDepthConfidenceThreshold();
+  std::shared_ptr<ob::FrameSet> processEnhancedDepthFilter(
+      const std::shared_ptr<ob::FrameSet>& frame_set);
+  bool convertEnhancedDepthColorFrame(const std::shared_ptr<ob::FrameSet>& frame_set);
+  void setupConfidencePublishers();
+  void publishConfidenceFrame(const std::shared_ptr<ob::Frame>& confidence_frame);
 
   void setupCameraInfo();
 
@@ -962,6 +976,14 @@ class OBCameraNode {
   double diagnostic_period_ = 1.0;
   bool enable_laser_ = false;
   std::unique_ptr<ob::Align> align_filter_ = nullptr;
+  std::shared_ptr<ob::EnhancedDepthFilter> enhanced_depth_filter_ = nullptr;
+  ob::FormatConvertFilter enhanced_depth_format_convert_filter_;
+  std::mutex enhanced_depth_filter_mutex_;
+  std::atomic_bool enable_enhanced_depth_{false};
+  std::string enhanced_depth_model_path_;
+  int enhanced_depth_confidence_threshold_ = -1;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr confidence_image_publisher_;
+  cv::Mat confidence_image_;
   OBStreamType align_target_stream_ = OB_STREAM_COLOR;
   bool retry_on_usb3_detection_failure_ = false;
   bool config_json_loaded_ = false;
