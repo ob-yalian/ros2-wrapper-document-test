@@ -1322,6 +1322,22 @@ void OBCameraNode::setupDevices() {
                          "Current color gain: " << device_->getIntProperty(OB_PROP_COLOR_GAIN_INT));
     }
   }
+  if (color_mjpeg_quality_ != -1) {
+    if (!device_->isPropertySupported(OB_PROP_MJPEG_QUALITY_INT, OB_PERMISSION_WRITE)) {
+      RCLCPP_WARN_STREAM(logger_, "color_mjpeg_quality is not supported by this device");
+    } else {
+      auto range = device_->getIntPropertyRange(OB_PROP_MJPEG_QUALITY_INT);
+      if (color_mjpeg_quality_ < range.min || color_mjpeg_quality_ > range.max) {
+        RCLCPP_ERROR(logger_,
+                     "color MJPEG quality value is out of range[%d,%d], please check the value",
+                     range.min, range.max);
+      } else {
+        TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_MJPEG_QUALITY_INT, color_mjpeg_quality_);
+        RCLCPP_INFO_STREAM(logger_, "Current color MJPEG quality: "
+                                        << device_->getIntProperty(OB_PROP_MJPEG_QUALITY_INT));
+      }
+    }
+  }
   if (should_apply_launch_config("enable_color_auto_exposure_priority") &&
       device_->isPropertySupported(OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT, OB_PERMISSION_WRITE)) {
     int set_enable_color_auto_exposure_priority = enable_color_auto_exposure_priority_ ? 1 : 0;
@@ -2497,6 +2513,7 @@ void OBCameraNode::syncConfigJsonDeviceSettings() {
            OB_PROP_COLOR_AE_MAX_EXPOSURE_INT);
   sync_int("color", "color_exposure", color_exposure_, OB_PROP_COLOR_EXPOSURE_INT);
   sync_int("color", "color_gain", color_gain_, OB_PROP_COLOR_GAIN_INT);
+  sync_int("color", "color_mjpeg_quality", color_mjpeg_quality_, OB_PROP_MJPEG_QUALITY_INT);
   sync_int("color", "color_brightness", color_brightness_, OB_PROP_COLOR_BRIGHTNESS_INT);
   sync_bool("color", "enable_color_auto_white_balance", enable_color_auto_white_balance_,
             OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL);
@@ -4425,6 +4442,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(color_ae_roi_bottom_, "color_ae_roi_bottom", -1);
   setAndGetNodeParameter<int>(color_exposure_, "color_exposure", -1);
   setAndGetNodeParameter<int>(color_gain_, "color_gain", -1);
+  setAndGetNodeParameter<int>(color_mjpeg_quality_, "color_mjpeg_quality", -1);
   setAndGetNodeParameter<int>(color_white_balance_, "color_white_balance", -1);
   setAndGetNodeParameter<int>(color_ae_max_exposure_, "color_ae_max_exposure", -1);
   setAndGetNodeParameter<int>(color_ae_max_gain_, "color_ae_max_gain", -1);

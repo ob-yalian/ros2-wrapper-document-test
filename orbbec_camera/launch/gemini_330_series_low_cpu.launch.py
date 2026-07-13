@@ -106,6 +106,7 @@ def generate_launch_description():
         DeclareLaunchArgument('color_ae_roi_bottom', default_value='-1'),
         DeclareLaunchArgument('color_exposure', default_value='-1'),
         DeclareLaunchArgument('color_gain', default_value='-1'),
+        DeclareLaunchArgument('color_mjpeg_quality', default_value='-1'),
         DeclareLaunchArgument('enable_color_auto_white_balance', default_value='true'),
         DeclareLaunchArgument('color_white_balance', default_value='-1'),
         DeclareLaunchArgument('enable_color_auto_exposure', default_value='true'),

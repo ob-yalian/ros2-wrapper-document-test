@@ -799,6 +799,7 @@ class OBCameraNode {
   int color_ae_roi_bottom_ = -1;
   int color_exposure_ = -1;
   int color_gain_ = -1;
+  int color_mjpeg_quality_ = -1;
   int color_white_balance_ = -1;
   int color_ae_max_exposure_ = -1;
   int color_ae_max_gain_ = -1;
