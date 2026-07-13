@@ -1043,6 +1043,13 @@ void OBCameraNode::setupDevices() {
         logger_,
         "Current heartbeat: " << (device_->getBoolProperty(OB_PROP_HEARTBEAT_BOOL) ? "ON" : "OFF"));
   }
+  if (should_apply_launch_config("enable_fps_boost") &&
+      device_->isPropertySupported(OB_PROP_FPS_BOOST_BOOL, OB_PERMISSION_READ_WRITE)) {
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FPS_BOOST_BOOL, enable_fps_boost_);
+    RCLCPP_INFO_STREAM(
+        logger_,
+        "Current fps boost: " << (device_->getBoolProperty(OB_PROP_FPS_BOOST_BOOL) ? "ON" : "OFF"));
+  }
   if (should_apply_launch_config("enable_firmware_log")) {
     device_->enableFirmwareLog(enable_firmware_log_);
     RCLCPP_INFO_STREAM(logger_, "Set firmware log to " << (enable_firmware_log_ ? "ON" : "OFF"));
@@ -4649,6 +4656,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(max_depth_limit_, "max_depth_limit", 0);
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
+  setAndGetNodeParameter<bool>(enable_fps_boost_, "enable_fps_boost", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
   time_domain_ = normalizeClosedSetParameterValue(logger_, "time_domain", time_domain_,
                                                   {"global", "device", "system"}, "global");
