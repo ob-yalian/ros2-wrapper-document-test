@@ -772,8 +772,9 @@ void OBCameraNode::clean() noexcept {
     RCLCPP_DEBUG(logger_, "clean() already running, skip re-entry");
     return;
   }
-  // Set running flag to false first to signal all operations to stop
+  // Set running flags to false first to signal all operations to stop
   is_running_.store(false);
+  is_camera_node_initialized_.store(false);
 
   try {
     if (frame_timestamp_csv_logger_) {
@@ -833,8 +834,8 @@ void OBCameraNode::clean() noexcept {
 
   RCLCPP_DEBUG_STREAM(logger_, "stop streams");
   try {
-    stopStreams();
     stopIMU();
+    stopStreams();
     {
       std::lock_guard<std::mutex> lk(frame_info_logged_mutex_);
       frame_info_logged_.clear();
@@ -4118,6 +4119,7 @@ void OBCameraNode::startIMU() {
             imu_profile, [this, stream_index](const std::shared_ptr<ob::Frame> &frame) {
               onNewIMUFrameCallback(frame, stream_index);
             });
+        imu_started_[stream_index] = true;
       }
     }
   }
@@ -6552,7 +6554,7 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
 
 void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Frame> &accelframe,
                                                    const std::shared_ptr<ob::Frame> &gryoframe) {
-  if (!is_camera_node_initialized_) {
+  if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
   if (!imu_gyro_accel_publisher_) {
@@ -6601,7 +6603,7 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
 
 void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame,
                                          const stream_index_pair &stream_index) {
-  if (!is_camera_node_initialized_) {
+  if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
   if (!imu_publishers_.count(stream_index)) {
