@@ -30,6 +30,12 @@
 *   `/camera/ir/metadata`
     *   来自IR流固件的底层元数据。
 
+### LRM 障碍物距离
+
+*   `/camera/lrm/obstacle_distance`
+    *   发布 LRM 测得的障碍物距离，消息类型为 `std_msgs/msg/Int32`，单位为毫米。
+    *   **条件：** 仅在 `enable_lrm_obstacle_distance_publish` 为 `true` 时发布。发布频率由 `lrm_obstacle_distance_publish_rate` 设置，默认值为 `10.0` Hz。
+
 ### 点云话题
 
 *   `/camera/depth/points`

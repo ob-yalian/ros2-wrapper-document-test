@@ -108,6 +108,24 @@
     ros2 service call /camera/set_streams_enable std_srvs/srv/SetBool '{data: false}'
     ```
 
+### 运行时数据流配置
+
+*   `/camera/set_stream_profile`
+
+    用于在节点运行期间切换一个或多个已启用图像流的 Profile。`stream_name` 支持 `color`、`left_color`、`right_color`、`depth`、`ir`、`left_ir` 和 `right_ir`。宽、高、帧率或格式可以只填写需要修改的字段；未修改的数值字段填写 `0`，格式填写空字符串。切换时节点会停止并重新启动数据流；如果目标 Profile 已经生效，服务会返回失败。
+
+    ```bash
+    ros2 service call /camera/set_stream_profile orbbec_camera_msgs/srv/SetStreamProfile "{profiles: [{stream_name: color, width: 1280, height: 720, fps: 30, format: MJPG}]}"
+    ```
+
+*   `/camera/set_image_registration_mode`
+
+    运行时切换深度和彩色图像对齐模式。可选值为 `OFF`、`HW_D2C`、`SW_D2C` 和 `SW_C2D`，大小写不敏感。除 `OFF` 外，彩色流和深度流必须同时启用。切换时节点会自动重启数据流；失败时会恢复原对齐模式。
+
+    ```bash
+    ros2 service call /camera/set_image_registration_mode orbbec_camera_msgs/srv/SetString "{data: HW_D2C}"
+    ```
+
 ### 传感器与发射器控制
 
 *   `/camera/set_auto_white_balance` & `/camera/get_auto_white_balance`

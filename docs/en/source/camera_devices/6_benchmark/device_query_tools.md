@@ -10,6 +10,8 @@ This tool does not require the camera node to be running. It is useful for check
 
 Since v2.8.x, this tool also prints firmware version, preset list, preset version, local network interface name for Ethernet devices, and IP source type (`NONE`, `LLA`, `DHCP`, `PERSISTENT`). If one device fails during enumeration, the tool continues enumerating the remaining devices.
 
+For network devices, the tool also prints the device access state: `UNKNOWN`, `UNSUPPORTED`, `AVAILABLE`, `CONTROLLED`, `EXCLUSIVE`, `UNREACHABLE`, or `FW_NOT_SUPPORTED`. Use this state to determine whether the device is available, controlled by another client, or temporarily unreachable.
+
 ```bash
 ros2 run orbbec_camera list_devices_node
 ```

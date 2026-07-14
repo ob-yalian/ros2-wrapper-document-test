@@ -108,6 +108,24 @@
     ros2 service call /camera/set_streams_enable std_srvs/srv/SetBool '{data: false}'
     ```
 
+### Runtime Stream Configuration
+
+*   `/camera/set_stream_profile`
+
+    Switch one or more enabled image stream profiles while the node is running. `stream_name` accepts `color`, `left_color`, `right_color`, `depth`, `ir`, `left_ir`, and `right_ir`. Specify only the fields to change; use `0` for unchanged numeric fields and an empty string for an unchanged format. The node stops and restarts the streams during the switch. The service reports failure if the requested profile is already active.
+
+    ```bash
+    ros2 service call /camera/set_stream_profile orbbec_camera_msgs/srv/SetStreamProfile "{profiles: [{stream_name: color, width: 1280, height: 720, fps: 30, format: MJPG}]}"
+    ```
+
+*   `/camera/set_image_registration_mode`
+
+    Switch depth-color image registration at runtime. Valid values are `OFF`, `HW_D2C`, `SW_D2C`, and `SW_C2D`, case-insensitive. Both color and depth streams must be enabled for every mode except `OFF`. The node restarts streams automatically and restores the previous mode if the switch fails.
+
+    ```bash
+    ros2 service call /camera/set_image_registration_mode orbbec_camera_msgs/srv/SetString "{data: HW_D2C}"
+    ```
+
 ### Sensor & Emitter Control
 
 *   `/camera/set_auto_white_balance` & `/camera/get_auto_white_balance`
