@@ -210,7 +210,7 @@ def generate_launch_description():
         DeclareLaunchArgument('trigger_out_enabled', default_value='true'),
         DeclareLaunchArgument('enable_fps_boost', default_value='false'),
         DeclareLaunchArgument('software_trigger_enabled', default_value='true'),
-        DeclareLaunchArgument('frames_per_trigger', default_value='2'),
+        DeclareLaunchArgument('frames_per_trigger', default_value='1'),
         DeclareLaunchArgument('software_trigger_period', default_value='33'),  # ms
         DeclareLaunchArgument('enable_ptp_config', default_value='false'),#Only for Gemini 335Le
         DeclareLaunchArgument('enable_frame_sync', default_value='true'),

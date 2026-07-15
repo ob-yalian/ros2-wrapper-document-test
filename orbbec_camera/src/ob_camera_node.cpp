@@ -4698,7 +4698,7 @@ void OBCameraNode::getParameters() {
   if (time_domain_ == "global" && !is_playback_device_) {
     device_->enableGlobalTimestamp(true);
   }
-  setAndGetNodeParameter<int>(frames_per_trigger_, "frames_per_trigger", 2);
+  setAndGetNodeParameter<int>(frames_per_trigger_, "frames_per_trigger", 1);
   int software_trigger_period = 33;
   setAndGetNodeParameter<int>(software_trigger_period, "software_trigger_period", 33);
   software_trigger_period_ = std::chrono::milliseconds(software_trigger_period);
