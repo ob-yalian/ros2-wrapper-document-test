@@ -5209,12 +5209,10 @@ std::shared_ptr<ob::FrameSet> OBCameraNode::processEnhancedDepthFilter(
     RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 1000, message);
     return frame_set;
   }
-  if (!frame_set->getFrame(OB_FRAME_COLOR) || !frame_set->getFrame(OB_FRAME_DEPTH)) {
+  auto original_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
+  if (!original_color_frame || !frame_set->getFrame(OB_FRAME_DEPTH)) {
     RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
                           "Enhanced depth filter requires color and depth frames");
-    return frame_set;
-  }
-  if (!convertEnhancedDepthColorFrame(frame_set)) {
     return frame_set;
   }
 
@@ -5228,13 +5226,25 @@ std::shared_ptr<ob::FrameSet> OBCameraNode::processEnhancedDepthFilter(
   }
 
   try {
-    auto processed = filter->process(frame_set);
+    // Convert color only in the filter input so downstream publishers keep the configured format.
+    auto cloned_frame_set = ob::FrameFactory::createFrameFromOtherFrame(frame_set, false);
+    if (!cloned_frame_set || !cloned_frame_set->is<ob::FrameSet>()) {
+      RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
+                            "Failed to clone frameset for enhanced depth filter");
+      return frame_set;
+    }
+    auto filter_frame_set = cloned_frame_set->as<ob::FrameSet>();
+    if (!convertEnhancedDepthColorFrame(filter_frame_set)) {
+      return frame_set;
+    }
+    auto processed = filter->process(filter_frame_set);
     if (!processed || !processed->is<ob::FrameSet>()) {
       RCLCPP_ERROR_THROTTLE(logger_, *node_->get_clock(), 1000,
                             "Enhanced depth filter returned invalid frameset");
       return frame_set;
     }
     auto processed_frame_set = processed->as<ob::FrameSet>();
+    processed_frame_set->pushFrame(original_color_frame);
     publishConfidenceFrame(processed_frame_set->getFrame(OB_FRAME_CONFIDENCE));
     return processed_frame_set;
   } catch (const ob::Error &e) {
