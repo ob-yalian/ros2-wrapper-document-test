@@ -1,4 +1,4 @@
-# ROS 2 EnhancedDepthFilter Usage Guide
+# EnhancedDepthFilter Usage Guide
 
 The LingBot Enhanced Depth Filter (`EnhancedDepthFilter`) uses both color and depth information to improve depth image quality by reducing noise, filling depth holes, and refining object edges.
 
