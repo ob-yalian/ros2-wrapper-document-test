@@ -1,96 +1,149 @@
 # ROS 2 EnhancedDepthFilter Usage Guide
 
-## Scope
+The LingBot Enhanced Depth Filter (`EnhancedDepthFilter`) uses both color and depth information to improve depth image quality by reducing noise, filling depth holes, and refining object edges.
 
-`EnhancedDepthFilter` provides enhanced depth output for the Gemini 330 series. The relevant libraries in the current SDK version are packaged only for Linux ARM64. If this filter is enabled on another platform, the SDK reports an error directly.
+## Scope and Environment Requirements
 
-## Prerequisites
+EnhancedDepthFilter requires:
 
-1. The new LingBot License must be written to the device.
+* an NVIDIA Jetson running Linux ARM64;
+* a supported Gemini 330 series camera;
+* CUDA Runtime 12;
+* TensorRT 10 Runtime;
+* a valid LingBot-Depth License;
+* the EnhancedDepthFilter extension and `model.sm4` from the same OrbbecSDK release.
 
-2. An external model file must be prepared.
+The current ROS 2 package includes the EnhancedDepthFilter libraries only on Linux ARM64. Enabling the filter on another platform causes the node to fail during startup.
 
-3. Both the color and depth streams must be enabled at startup, together with D2C/C2D alignment and frame aggregation.
+## License
 
-Pass the model file path through a ROS launch parameter:
+The device must support License authorization and contain a valid LingBot-Depth License. For LicenseTool downloads, License applications, and device activation, see [LingBot-Depth-LicenseTool](https://github.com/orbbec/LingBot-Depth-LicenseTool).
 
-```plaintext
-enhanced_depth_model_path:=/path/to/model/file
+Before creating the filter, the driver checks whether the device supports License authorization and whether License information exists on the device. The filter still fails to initialize if the License is invalid, expired, or does not match the device.
+
+## Model File
+
+Download `model.sm4` from the [OrbbecSDK Releases](https://github.com/orbbec/OrbbecSDK_v2/releases). The model must come from the same release as the OrbbecSDK and EnhancedDepthFilter extension used by the current ROS 2 package. GitHub-generated Source Code archives do not include the model file.
+
+Pass the model path through a ROS launch parameter:
+
+```text
+enhanced_depth_model_path:=/path/to/model.sm4
 ```
 
-If enhanced depth is enabled but the model path is empty or the file does not exist, the node fails to start.
+The ROS 2 driver requires `enhanced_depth_model_path` to be set explicitly. An absolute path is recommended. If enhanced depth is enabled while the model path is empty or the file does not exist, the node fails to start. The model file cannot be changed at runtime.
 
-## Launch Example
+## Startup Requirements
 
-```plaintext
+The filter input must be an aligned frameset containing both Color and Depth frames:
+
+* both the Color and Depth streams must be enabled;
+* software alignment (`align_mode:=SW`) supports both D2C and C2D;
+* hardware alignment (`align_mode:=HW`) supports only alignment to Color, that is, D2C;
+* `frame_aggregate_mode:=full_frame` is recommended to ensure that each frameset contains both Color and Depth. EnhancedDepthFilter is skipped for a frameset if either frame is missing.
+
+For initial verification, use Color `640x480 RGB` and Depth `640x480 Y16`:
+
+```bash
 ros2 launch orbbec_camera gemini_330_series.launch.py \
-  enable_enhanced_depth:=true \
-  enhanced_depth_model_path:=/path/to/model/file \
-  enhanced_depth_confidence_threshold:=51 \
+  enable_color:=true \
+  color_width:=640 \
+  color_height:=480 \
+  color_format:=RGB \
+  enable_depth:=true \
+  depth_width:=640 \
+  depth_height:=480 \
+  depth_format:=Y16 \
   depth_registration:=true \
-  frame_aggregate_mode:=full_frame
+  align_mode:=SW \
+  align_target_stream:=COLOR \
+  frame_aggregate_mode:=full_frame \
+  enable_enhanced_depth:=true \
+  enhanced_depth_model_path:=/path/to/model.sm4 \
+  enhanced_depth_confidence_threshold:=51
 ```
 
 ## Parameters
 
 * `enable_enhanced_depth`: Whether to enable enhanced depth filtering. The default is `false`.
-
 * `enhanced_depth_model_path`: Path to the LingBot model file. This parameter is required when enhanced depth is enabled.
-
-* `enhanced_depth_confidence_threshold`: Confidence threshold. The default is `51`.
-
-* `depth_registration`: Alignment must be enabled so that D2C/C2D-aligned images can enter `EnhancedDepthFilter`.
-
-* `frame_aggregate_mode`: Frame aggregation mode. Set it to `full_frame` to ensure that color and depth images are received together.
+* `enhanced_depth_confidence_threshold`: Depth confidence threshold. It must be an integer from `0` to `255`. The default is `51`.
+* `depth_registration`: Must be `true` so that aligned images enter EnhancedDepthFilter.
+* `align_mode`: Alignment method. It can be `SW` or `HW`.
+* `align_target_stream`: Software alignment accepts `COLOR` or `DEPTH`; hardware alignment requires `COLOR`.
+* `frame_aggregate_mode`: The recommended value is `full_frame`, which ensures that Color and Depth frames are received together.
 
 ## Image Requirements
 
-For D2C, where depth is aligned to RGB:
+For D2C, where Depth is aligned to Color:
 
-* The color resolution must be one of `640x480`, `1280x720`, or `1280x800`.
+* the Color resolution must be `640x480`, `1280x720`, or `1280x800`;
+* the Depth resolution is not constrained by EnhancedDepthFilter, but the selected configuration must support D2C.
 
-* The depth resolution is unrestricted as long as the SDK supports D2C for it.
+For C2D, where Color is aligned to Depth:
 
-For C2D, where RGB is aligned to depth:
+* the Depth resolution must be `640x480`, `1280x720`, or `1280x800`;
+* the Color resolution is not constrained by EnhancedDepthFilter.
 
-* The depth resolution must be one of `640x480`, `1280x720`, or `1280x800`.
+Supported Depth input formats are:
 
-* The color resolution is unrestricted.
+```text
+Y10, Y11, Y12, Y14, Y16, Z16
+```
 
-Format requirements:
+EnhancedDepthFilter requires RGB Color input. The ROS 2 driver also accepts the following Color stream formats and converts them to RGB in the frameset copy used only by the filter:
 
-* The final color input to `EnhancedDepthFilter` is `RGB`. The driver attempts to convert certain other color formats to RGB.
+```text
+RGB, YUYV, UYVY, MJPG, BGR, RGBA, Y16, Y8
+```
 
-* The final depth input is `Y16`. The SDK accepts certain compressed or alias formats and expands them to Y16 internally.
+This conversion is used only by EnhancedDepthFilter and does not change the Color image format published to downstream consumers.
 
 ## Output Topics
 
-The output images include the enhanced depth image, the depth image before D2C, and the confidence image.
+The following topic names assume the default `camera_name:=camera`. If `camera_name` is changed, replace `/camera` with the actual namespace.
 
-The enhanced depth image is published on:
+| Topic | Description |
+| --- | --- |
+| `/camera/depth/image_raw` | Publishes the enhanced aligned depth image when filtering succeeds. If filtering fails at runtime, the driver continues to publish the current unenhanced aligned depth image. |
+| `/camera/depth/image_unaligned` | Publishes the depth image before software alignment. This topic is not published in hardware D2C mode. |
+| `/camera/confidence/image_raw` | Publishes the confidence image when filtering succeeds. Its encoding can be `mono8` or `mono16`. |
 
-```plaintext
-/camera/depth/image_raw
+## Check the Runtime Status
+
+Use the depth filter status topic to confirm whether EnhancedDepthFilter is enabled and check its current confidence threshold:
+
+```bash
+ros2 topic echo /camera/depth_filters/status
 ```
 
-The depth image before D2C is published on:
-
-```plaintext
-/camera/depth/image_unaligned
-```
-
-The confidence image is published on:
-
-```plaintext
-/camera/confidence/image_raw
-```
+Find `filter_name: "EnhancedDepthFilter"` in the output and check `enabled` and `confidence_threshold`.
 
 ## Runtime Adjustment
 
-Use the filter service to enable or disable `EnhancedDepthFilter` or adjust `confidence_threshold`.
+Use `/camera/set_filter` to enable or disable EnhancedDepthFilter or adjust `confidence_threshold`. `filter_param` accepts at most one parameter, which must be an integer from `0` to `255`.
 
-```plaintext
-ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: 'EnhancedDepthFilter', filter_enable: true, filter_param: [60]}"
+Enable the filter and set the confidence threshold to `60`:
+
+```bash
+ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: 'EnhancedDepthFilter', filter_enable: true, filter_param: [60], filter_config: []}"
 ```
 
-Changing `model_path` at runtime is not supported. To use a different model file, change the launch parameter and restart the node.
+Disable the filter:
+
+```bash
+ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: 'EnhancedDepthFilter', filter_enable: false, filter_param: [], filter_config: []}"
+```
+
+This service cannot change the model path, stream configuration, or alignment mode. To use a different model file, change the launch parameter and restart the node.
+
+## Troubleshooting
+
+| Symptom | Recommended action |
+| --- | --- |
+| The node fails to start because EnhancedDepthFilter cannot be found | Confirm that the system is NVIDIA Jetson/Linux ARM64 and that the ROS 2 package contains the EnhancedDepthFilter extension. |
+| A missing or unsupported License is reported | Use LicenseTool to check device support and apply for or activate a valid LingBot-Depth License. |
+| `model.sm4` cannot be found or model initialization fails | Check `enhanced_depth_model_path` and confirm that the model, SDK, and extension come from the same release. |
+| The resolution or format is not supported | Verify the feature first with Color `640x480 RGB` and Depth `640x480 Y16`. |
+| D2C/C2D is required | Confirm `depth_registration:=true`, then check `align_mode` and `align_target_stream`. |
+| `/camera/depth/image_raw` has data but no confidence image is published | Check the node log and `/camera/depth_filters/status`. If filtering fails at runtime, the driver falls back to the unenhanced depth frame. |
