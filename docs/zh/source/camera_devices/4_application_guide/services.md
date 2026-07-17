@@ -231,7 +231,7 @@
 ### 深度滤波器配置
 
 *   `/camera/set_filter`
-    `FalsePositiveFilter` 的启动参数、状态确认和命名参数调参示例可参考 [Gemini 330 系列鬼影滤波](../5_advanced_guide/configuration/false_positive_filter.md)。
+    `FalsePositiveFilter` 的启动参数、状态确认和命名参数调参示例可参考 [Gemini 330 系列鬼影滤波](../5_advanced_guide/configuration/false_positive_filter.md)。`EnhancedDepthFilter` 的环境要求、启动参数和状态确认方法可参考 [ROS2 EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
     ```bash
     # filter_name 为滤波器名称，filter_enable 表示是否开启滤波器开关。
     # filter_param 为旧的按位置传参方式；filter_config 为新的命名参数方式。
@@ -264,6 +264,9 @@
     # 设置 FalsePositiveFilter: []
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: FalsePositiveFilter, filter_enable: true, filter_param: []}'
 
+    # 设置 EnhancedDepthFilter: [confidence_threshold]，阈值必须是 0 到 255 之间的整数
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: EnhancedDepthFilter, filter_enable: true, filter_param: [60]}'
+
     # 设置 MgcNoiseRemovalFilter / LutNoiseRemovalFilter: []
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: MgcNoiseRemovalFilter, filter_enable: true, filter_param: []}'
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter '{filter_name: LutNoiseRemovalFilter, filter_enable: true, filter_param: []}'
@@ -275,6 +278,7 @@
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: NoiseRemovalFilter, filter_enable: true, filter_config: [{name: min_diff, value: '256'}, {name: max_size, value: '80'}]}"
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: HardwareNoiseRemovalFilter, filter_enable: true, filter_config: [{name: threshold, value: '0.2'}]}"
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: SpatialAdvancedFilter, filter_enable: true, filter_config: [{name: alpha, value: '0.5'}, {name: disp_diff, value: '160'}, {name: magnitude, value: '1'}, {name: radius, value: '8'}]}"
+    ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: EnhancedDepthFilter, filter_enable: true, filter_config: [{name: confidence_threshold, value: '60'}]}"
 
     # 设置 DispOutliersFilter。search_mode 支持 FULL 或 OFFSET_80，大小写不敏感。
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: DispOutliersFilter, filter_enable: true, filter_config: [{name: search_mode, value: 'FULL'}]}"
