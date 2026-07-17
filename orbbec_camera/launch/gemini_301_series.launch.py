@@ -197,24 +197,11 @@ def generate_launch_description():
         DeclareLaunchArgument('ir_gain', default_value='-1'),
         DeclareLaunchArgument('ir_ae_max_exposure', default_value='-1'),
         DeclareLaunchArgument('ir_brightness', default_value='-1'),
-        DeclareLaunchArgument('enable_sync_output_accel_gyro', default_value='false'),
-        DeclareLaunchArgument('enable_accel', default_value='false'),
-        DeclareLaunchArgument('enable_accel_data_correction', default_value='true'),
-        DeclareLaunchArgument('accel_rate', default_value='200hz'),
-        DeclareLaunchArgument('accel_range', default_value='4g'),
-        DeclareLaunchArgument('enable_gyro', default_value='false'),
-        DeclareLaunchArgument('enable_gyro_data_correction', default_value='true'),
-        DeclareLaunchArgument('gyro_rate', default_value='200hz'),
-        DeclareLaunchArgument('gyro_range', default_value='1000dps'),
-        DeclareLaunchArgument('linear_accel_cov', default_value='0.01'),
-        DeclareLaunchArgument('angular_vel_cov', default_value='0.01'),
         DeclareLaunchArgument('publish_tf', default_value='true'),
         DeclareLaunchArgument('tf_publish_rate', default_value='0.0'),
         DeclareLaunchArgument('ir_info_url', default_value=''),
         DeclareLaunchArgument('color_info_url', default_value=''),
 
-        DeclareLaunchArgument('device_access_mode', default_value='Default'), # Default, EA or CA . only for 335le
-        DeclareLaunchArgument('exposure_range_mode', default_value='default'),#default, ultimate or regular
         DeclareLaunchArgument('log_level', default_value='info'),
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
@@ -227,7 +214,7 @@ def generate_launch_description():
         DeclareLaunchArgument('trigger_out_delay_us', default_value='0'),
         DeclareLaunchArgument('trigger_out_enabled', default_value='true'),
         DeclareLaunchArgument('software_trigger_enabled', default_value='true'),
-        DeclareLaunchArgument('frames_per_trigger', default_value='2'),
+        DeclareLaunchArgument('frames_per_trigger', default_value='1'),
         DeclareLaunchArgument('software_trigger_period', default_value='33'),  # ms
         DeclareLaunchArgument('enable_frame_sync', default_value='true'),
         DeclareLaunchArgument('ordered_pc', default_value='false'),
@@ -236,9 +223,8 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_hdr_merge', default_value='false'),
         DeclareLaunchArgument('enable_sequence_id_filter', default_value='false'),
         DeclareLaunchArgument('enable_threshold_filter', default_value='false'),
-        DeclareLaunchArgument('enable_hardware_noise_removal_filter', default_value='false'),
+        DeclareLaunchArgument('enable_hardware_noise_removal_filter', default_value='true'),
         DeclareLaunchArgument('enable_noise_removal_filter', default_value='false'),
-        DeclareLaunchArgument('enable_disp_outliers_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_filter', default_value='false'),
         DeclareLaunchArgument('enable_temporal_filter', default_value='false'),
         DeclareLaunchArgument('enable_disparity_to_depth', default_value='true'),
@@ -296,9 +282,6 @@ def generate_launch_description():
         DeclareLaunchArgument('frame_aggregate_mode', default_value='ANY'), # full_frame, color_frame, ANY or disable
         DeclareLaunchArgument('interleave_ae_mode', default_value='hdr'),
         DeclareLaunchArgument('interleave_frame_enable', default_value='false'),
-        DeclareLaunchArgument('interleave_skip_enable', default_value='false'),
-        DeclareLaunchArgument('interleave_skip_index', default_value='1'), # 0:skip pattern ir  1: skip flood ir
-
         DeclareLaunchArgument('hdr_index1_depth_exposure', default_value='1'),
         DeclareLaunchArgument('hdr_index1_depth_gain', default_value='16'),
         DeclareLaunchArgument('hdr_index1_ir_brightness', default_value='30'),

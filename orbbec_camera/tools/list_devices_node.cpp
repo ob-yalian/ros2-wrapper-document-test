@@ -93,6 +93,43 @@ std::string ipSourceTypeToString(int ip_source_type) {
   }
 }
 
+std::string deviceAccessStateToString(OBDeviceAccessState state) {
+  switch (state) {
+    case OB_DEVICE_ACCESS_STATE_UNKNOWN:
+      return "UNKNOWN";
+    case OB_DEVICE_ACCESS_STATE_UNSUPPORTED:
+      return "UNSUPPORTED";
+    case OB_DEVICE_ACCESS_STATE_AVAILABLE:
+      return "AVAILABLE";
+    case OB_DEVICE_ACCESS_STATE_CONTROLLED:
+      return "CONTROLLED";
+    case OB_DEVICE_ACCESS_STATE_EXCLUSIVE:
+      return "EXCLUSIVE";
+    case OB_DEVICE_ACCESS_STATE_UNREACHABLE:
+      return "UNREACHABLE";
+    case OB_DEVICE_ACCESS_STATE_FW_NOT_SUPPORTED:
+      return "FW_NOT_SUPPORTED";
+    default:
+      return "UNKNOWN(" + std::to_string(static_cast<int>(state)) + ")";
+  }
+}
+
+void printDeviceAccessState(const std::shared_ptr<ob::DeviceList> &list, uint32_t index) {
+  auto logger = rclcpp::get_logger("list_device_node");
+  try {
+    const auto state = list->queryDeviceAccessState(index);
+    RCLCPP_INFO_STREAM(
+        logger, "device access state [serial: " << list->getSerialNumber(index)
+                                                << ", ip: " << list->getIpAddress(index)
+                                                << "]: " << deviceAccessStateToString(state));
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger, "device access state: UNKNOWN ("
+                                   << orbbec_camera::formatObErrorWithStatus(e) << ")");
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger, "device access state: UNKNOWN (" << e.what() << ")");
+  }
+}
+
 std::string boolToString(bool value) { return value ? "true" : "false"; }
 
 bool isPropertyReadable(const std::shared_ptr<ob::Device> &device, OBPropertyID property_id) {
@@ -224,6 +261,9 @@ int main(int argc, char **argv) {
     bool firmware_log_enabled = false;
     for (size_t i = 0; i < list->deviceCount(); i++) {
       try {
+        if (std::string(list->getConnectionType(i)) == "Ethernet") {
+          printDeviceAccessState(list, static_cast<uint32_t>(i));
+        }
         auto device_ = list->getDevice(i);
         if (isSdkLogEnabled(args.sdk_log_level)) {
           firmware_log_enabled = enableFirmwareLog(device_) || firmware_log_enabled;

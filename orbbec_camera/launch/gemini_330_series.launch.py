@@ -42,7 +42,8 @@ def load_parameters(context, args):
     if config_file_path:
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
-    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename'}
+    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
+                    'enhanced_depth_model_path'}
 
     result = {}
     for key, value in default_params.items():
@@ -108,6 +109,7 @@ def generate_launch_description():
         DeclareLaunchArgument('color_ae_roi_bottom', default_value='-1'),
         DeclareLaunchArgument('color_exposure', default_value='-1'),
         DeclareLaunchArgument('color_gain', default_value='-1'),
+        DeclareLaunchArgument('color_mjpeg_quality', default_value='-1'),
         DeclareLaunchArgument('enable_color_auto_white_balance', default_value='true'),
         DeclareLaunchArgument('color_white_balance', default_value='-1'),
         DeclareLaunchArgument('enable_color_auto_exposure', default_value='true'),
@@ -203,14 +205,17 @@ def generate_launch_description():
         DeclareLaunchArgument('disparity_to_depth_mode', default_value='HW'),
         DeclareLaunchArgument('enable_ldp', default_value='false'),
         DeclareLaunchArgument('ldp_power_level', default_value='-1'),
+        DeclareLaunchArgument('enable_lrm_obstacle_distance_publish', default_value='false'),
+        DeclareLaunchArgument('lrm_obstacle_distance_publish_rate', default_value='10.0'),
         DeclareLaunchArgument('sync_mode', default_value='standalone'),
         DeclareLaunchArgument('depth_delay_us', default_value='0'),
         DeclareLaunchArgument('color_delay_us', default_value='0'),
         DeclareLaunchArgument('trigger2image_delay_us', default_value='0'),
         DeclareLaunchArgument('trigger_out_delay_us', default_value='0'),
         DeclareLaunchArgument('trigger_out_enabled', default_value='true'),
+        DeclareLaunchArgument('enable_fps_boost', default_value='false'),
         DeclareLaunchArgument('software_trigger_enabled', default_value='true'),
-        DeclareLaunchArgument('frames_per_trigger', default_value='2'),
+        DeclareLaunchArgument('frames_per_trigger', default_value='1'),
         DeclareLaunchArgument('software_trigger_period', default_value='33'),  # ms
         DeclareLaunchArgument('enable_ptp_config', default_value='false'),#Only for Gemini 335Le
         DeclareLaunchArgument('enable_frame_sync', default_value='true'),
@@ -230,6 +235,9 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_spatial_fast_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_moderate_filter', default_value='false'),
         DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
+        DeclareLaunchArgument('enable_enhanced_depth', default_value='false'),
+        DeclareLaunchArgument('enhanced_depth_model_path', default_value=''),
+        DeclareLaunchArgument('enhanced_depth_confidence_threshold', default_value='51'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),

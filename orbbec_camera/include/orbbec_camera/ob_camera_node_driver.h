@@ -155,6 +155,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::atomic<bool> firmware_update_success_{false};
   std::atomic<bool> need_reupdate_{false};
   std::atomic<bool> is_reupdating_{false};  // Flag to track if we're in reupdate process
+  std::atomic<bool> delay_stream_start_after_reconnect_{false};
   rclcpp::TimerBase::SharedPtr device_status_timer_ = nullptr;
   int device_status_interval_hz = 2;  // 2Hz
   rclcpp::Publisher<orbbec_camera_msgs::msg::DeviceStatus>::SharedPtr device_status_pub_ = nullptr;
