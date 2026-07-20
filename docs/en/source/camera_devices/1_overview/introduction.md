@@ -165,7 +165,7 @@ Here is the device support list of main branch (v1.x) and v2-main branch (v2.x):
   </tbody>
 </table>
 
-**Note**: If you do not find your device, please contact our FAE or sales representative for help.
+**Note**: LiDAR devices are supported in v2.6.3 and later versions. For usage details, please refer to the [LiDAR documentation](../../lidar_devices/index.rst). If you do not find your device, please contact our FAE or sales representative for help.
 
 **Definition**:
 

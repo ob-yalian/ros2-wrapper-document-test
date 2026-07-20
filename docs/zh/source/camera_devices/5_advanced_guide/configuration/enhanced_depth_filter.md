@@ -1,4 +1,4 @@
-# EnhancedDepthFilter 使用说明
+# Gemini 330 系列 EnhancedDepthFilter 使用说明
 
 LingBot 增强深度滤波器（`EnhancedDepthFilter`）同时使用彩色和深度信息，通过降低噪声、填补深度空洞和优化物体边缘来改善深度图像质量。
 
