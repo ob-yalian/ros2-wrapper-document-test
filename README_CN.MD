@@ -207,7 +207,7 @@ OrbbecSDK ROS2 Wrapper 提供 Orbbec 相机与 ROS 2 环境的无缝集成，支
   </tbody>
 </table>
 
-**注意**: 雷达设备在v2.6.3及之后的版本中支持。使用详情请参考[文档](https://orbbec.github.io/OrbbecSDK_ROS2/zh/source/lidar_devices/index.html).如果您没有找到对应的设备，请联系 FAE 或销售代表获取帮助。
+**注意**: 雷达设备在 v2.6.3 及之后的版本中支持。使用详情请参考[雷达文档](https://orbbec.github.io/OrbbecSDK_ROS2/zh/source/lidar_devices/index.html)。如果您没有找到对应的设备，请联系 FAE 或销售代表获取帮助。
 
 **定义**:
 
@@ -375,7 +375,7 @@ ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString '{}'
       <td>gemini435_le.launch.py</td>
     </tr>
     <tr>
-      <td rowspan="3" style="text-align: center; font-weight: bold;">Gemini 301</td>
+      <td rowspan="2" style="text-align: center; font-weight: bold;">Gemini 301</td>
       <td>Gemini 305</td>
       <td><a href="https://doc.orbbec.com/documentation/Gemini%20305%20Documentation/Firmware%20Release%20of%20Gemini%20305">1.0.70</a></td>
       <td>gemini_301_series.launch.py</td>
@@ -388,16 +388,16 @@ ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString '{}'
     <tr>
       <td rowspan="8" style="text-align: center; font-weight: bold;">Gemini 330</td>
       <td>Gemini 335</td>
-      <td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td>
+      <td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td>
       <td>gemini_330_series.launch.py</td>
     </tr>
-    <tr><td>Gemini 336</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
-    <tr><td>Gemini 330</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
-    <tr><td>Gemini 335L</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
-    <tr><td>Gemini 336L</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
-    <tr><td>Gemini 330L</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
-    <tr><td>Gemini 335Lg</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
-    <tr><td>Gemini 335Le</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.6.00.zip">1.6.00</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 336</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 330</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 335L</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 336L</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 330L</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 335Lg</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
+    <tr><td>Gemini 335Le</td><td><a href="https://orbbec-debian-repos-aws.s3.amazonaws.com/product/Gemini330_Release_1.8.10.zip">1.8.10</a></td><td>gemini_330_series.launch.py</td></tr>
     <tr>
       <td style="text-align: center; font-weight: bold;">Gemini 340</td>
       <td>Gemini 345Lg</td>
