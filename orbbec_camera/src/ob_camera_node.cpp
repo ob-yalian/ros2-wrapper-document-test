@@ -1104,24 +1104,31 @@ void OBCameraNode::setupDevices() {
                                       << disparity_to_depth_mode_ << "', keeping default settings");
     }
   }
-  if (should_apply_launch_config("enable_ldp") &&
-      device_->isPropertySupported(OB_PROP_LDP_BOOL, OB_PERMISSION_READ_WRITE)) {
-    if (device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
-      auto laser_enable = device_->getIntProperty(OB_PROP_LASER_CONTROL_INT);
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_LDP_BOOL, enable_ldp_);
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_CONTROL_INT, laser_enable);
-    } else if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
-      if (!enable_ldp_) {
-        auto laser_enable = device_->getIntProperty(OB_PROP_LASER_BOOL);
-        TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_LDP_BOOL, enable_ldp_);
-        std::this_thread::sleep_for(std::chrono::milliseconds(3));
-        TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_BOOL, laser_enable);
-      } else {
-        TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_LDP_BOOL, enable_ldp_);
+  try {
+    if (should_apply_launch_config("enable_ldp") &&
+        device_->isPropertySupported(OB_PROP_LDP_BOOL, OB_PERMISSION_READ_WRITE)) {
+      if (device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
+        auto laser_enable = device_->getIntProperty(OB_PROP_LASER_CONTROL_INT);
+        device_->setBoolProperty(OB_PROP_LDP_BOOL, enable_ldp_);
+        device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_enable);
+      } else if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
+        if (!enable_ldp_) {
+          auto laser_enable = device_->getIntProperty(OB_PROP_LASER_BOOL);
+          device_->setBoolProperty(OB_PROP_LDP_BOOL, enable_ldp_);
+          std::this_thread::sleep_for(std::chrono::milliseconds(3));
+          device_->setIntProperty(OB_PROP_LASER_BOOL, laser_enable);
+        } else {
+          device_->setBoolProperty(OB_PROP_LDP_BOOL, enable_ldp_);
+        }
       }
+      RCLCPP_INFO_STREAM(
+          logger_, "Current LDP: " << (device_->getBoolProperty(OB_PROP_LDP_BOOL) ? "ON" : "OFF"));
     }
-    RCLCPP_INFO_STREAM(
-        logger_, "Current LDP: " << (device_->getBoolProperty(OB_PROP_LDP_BOOL) ? "ON" : "OFF"));
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_,
+                       "Skipping LDP configuration: " << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_, "Skipping LDP configuration: " << e.what());
   }
   if (ldp_power_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_LASER_POWER_LEVEL_CONTROL_INT, OB_PERMISSION_WRITE)) {
