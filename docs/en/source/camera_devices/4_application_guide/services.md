@@ -283,7 +283,7 @@
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: DispOutliersFilter, filter_enable: true, filter_config: [{name: search_mode, value: 'FULL'}]}"
     ```
 
-    Filter status is updated after service calls on `/camera/depth_filter_status` and `/camera/depth_filters/status`. `/camera/depth_filters/status` uses the structured `orbbec_camera_msgs/msg/DepthFiltersStatus` message and includes each filter's enabled state and parameters.
+    Filter status is updated after service calls on `/camera/depth_filters/status`. The topic uses the structured `orbbec_camera_msgs/msg/DepthFiltersStatus` message and includes each filter's enabled state and parameters.
 
 ### Disparity Configuration
 

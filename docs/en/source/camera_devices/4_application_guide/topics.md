@@ -68,9 +68,6 @@ The Inertial Measurement Unit (IMU) topics provide accelerometer and gyroscope d
 *   `/camera/device_status`
     *   Reports the current status of the camera device.
 
-*   `/camera/depth_filter_status`
-    *   Reports the status of the depth sensor's post-processing filters. The type is `std_msgs/msg/String`, and the content is a JSON string.
-
 *   `/camera/depth_filters/status`
     *   Reports the structured status of the depth sensor's post-processing filters. The type is `orbbec_camera_msgs/msg/DepthFiltersStatus`.
     *   The message contains `DepthFilterState[] filters`; each filter state contains `filter_name`, `enabled`, and `DepthFilterParam[] params`.

@@ -284,7 +284,7 @@
     ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter "{filter_name: DispOutliersFilter, filter_enable: true, filter_config: [{name: search_mode, value: 'FULL'}]}"
     ```
 
-    滤波状态会在服务调用后同步更新到 `/camera/depth_filter_status` 和 `/camera/depth_filters/status`。其中 `/camera/depth_filters/status` 使用结构化消息 `orbbec_camera_msgs/msg/DepthFiltersStatus`，包含每个滤波器的使能状态和参数。
+    滤波状态会在服务调用后更新到 `/camera/depth_filters/status`。该话题使用结构化消息 `orbbec_camera_msgs/msg/DepthFiltersStatus`，包含每个滤波器的使能状态和参数。
 
 ### 视差配置
 
