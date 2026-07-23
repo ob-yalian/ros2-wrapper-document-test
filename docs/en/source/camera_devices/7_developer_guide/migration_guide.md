@@ -34,9 +34,9 @@ With an open-source SDK, developers can directly submit issues and pull requests
 
 ### **Launch File Differences**
 
-1. In v2-main, new low-power launch file has been added for the Gemini 330 series:
+1. In v2-main, a new low-CPU launch file has been added for the Gemini 330 series:
    - `gemini_330_series_low_cpu.launch.py`
-2. v2-main introduces support for **Gemini 435Le**, **Gemini 345**, and **Gemini 345Lg** cameras.
+2. v2-main introduces support for **Gemini 210**, **Gemini 301 series**, **Gemini 435Le**, **Gemini 345**, and **Gemini 345Lg** cameras.
 3. Since **OrbbecSDK_v2 only supports UVC devices**, the range of camera models supported in v2-main is slightly narrower than in main. Detailed information is provided in the table below.
 
 | **camera**                         | **main**                             | **v2-main**                                        |
@@ -46,20 +46,21 @@ With an open-source SDK, developers can directly submit issues and pull requests
 | Gemini 345Lg                       | Not supported                        | gemini345_lg.launch.py                             |
 | Gemini 330 series                  | gemini_330_series.launch.py          | gemini_330_series.launch.py                        |
 | Gemini 330 low cpu                 | -                                    | gemini_330_series_low_cpu.launch.py                |
-| Gemini 210                         | gemini210.launch.py                  | gemini210.launch.py                                |
+| Gemini 301 series                  | Not supported                        | gemini_301_series.launch.py                        |
+| Gemini 210                         | Not supported                        | gemini210.launch.py                                |
 | Gemini 2                           | gemini2.launch.py                    | gemini2.launch.py                                  |
-| Gemini 2L                          | gemini2L.launch.py                   | gemini2.launch.py                                  |
+| Gemini 2L                          | gemini2L.launch.py                   | gemini2L.launch.py                                 |
 | Gemini 2XL                         | gemini2XL.launch.py                  | -                                                  |
 | Femto Bolt                         | femto_bolt.launch.py                 | femto_bolt.launch.py                               |
 | Femto Mega                         | femto_mega.launch.py                 | femto_mega.launch.py                               |
 | Femto                              | femto.launch.py                      | femto.launch.py                                    |
 | Astra 2                            | astra2.launch.py                     | astra2.launch.py                                   |
 | Astra                              | astra.launch.py                      | astra.launch.py                                    |
-| Astra Mini Pro / S Pro             | astra_mini_pro.launch.py ...         | astra.launch.py                                    |
 | Multi-Camera (Synchronized)        | multi_camera_synced.launch.py        | multi_camera_synced.launch.py                      |
-| Multi-Camera (Generic / Universal) | multi_camera.launch.py               | multi_camera.launch.pyorbbec_multicamera.launch.py |
-| Single-Camera Generic Launch       | ob_camera.launch.py                  | orbbec_camera.launch.py                            |
-| OpenNI devices (Dabai、Deeya)      | Corresponding model independent file | Not supported                                      |
+| Multi-Camera (Generic / Universal) | multi_camera.launch.py               | multi_camera.launch.py                             |
+| Single-Camera Generic Launch       | ob_camera.launch.py                  | Not provided                                       |
+| Dabai models                       | Model-specific launch files          | dabai_a.launch.py, dabai_al.launch.py, dabai_dcw2.launch.py, dabai_max_pro.launch.py |
+| Deeya                              | deeya.launch.py                      | Not supported                                      |
 
 ### **Parameter Differences**
 
@@ -136,24 +137,18 @@ With an open-source SDK, developers can directly submit issues and pull requests
 | right_ir.image_raw.enable_pub_plugins  | -        | Added       | Right IR transport plugins                        |
 | force_ip_enable                        | -        | Added       | Force IP feature                                  |
 | force_ip_mac                           | -        | Added       | Force IP MAC address                              |
-| force_ip_dhcp                          | -        | Added       | DHCP auto assignment                              |
 | force_ip_address                       | -        | Added       | Force IP static address                           |
 | force_ip_subnet_mask                   | -        | Added       | Force IP subnet mask                              |
 | force_ip_gateway                       | -        | Added       | Force IP gateway                                  |
 
-**Removed Parameters (main only, removed in v2-main)**
+**Removed or Renamed Parameters**
 
 | **Parameter**                        | **Description**                                              |
 | ------------------------------------ | ------------------------------------------------------------ |
-| enable_3d_reconstruction_mode        | 3D reconstruction mode deprecated                            |
-| enable_hardware_reset                | Hardware reset interface deprecated                          |
-| enable_hardware_noise_removal_filter | Hardware noise removal filter deprecated                     |
-| laser_on_off_mode                    | Old laser on/off interface, replaced by interleave / laser_index |
-| enable_3d_reconstruction_mode        | 3D reconstruction mode repeated; no longer used in v2-main   |
-| device_preset                        | Some logic migrated to new firmware / interleave parameters  |
-| enable_trigger_out                   | Old software trigger interface replaced by software_trigger_enabled |
-| retry_on_usb3_detection_failure      | Optional; logic adjusted or removed in v2-main               |
-| enable_color_undistortion            | Old interface logic integrated elsewhere; still exists in v2-main but usage may be adjusted |
+| enable_3d_reconstruction_mode        | Removed; no direct replacement                               |
+| enable_hardware_reset                | Removed                                                       |
+| laser_on_off_mode                    | Renamed to `enable_laser`                                     |
+| enable_trigger_out                   | Renamed to `trigger_out_enabled`                              |
 
 ### **Topic Differences**
 

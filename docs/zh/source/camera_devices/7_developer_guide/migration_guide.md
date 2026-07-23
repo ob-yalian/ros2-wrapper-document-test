@@ -34,9 +34,9 @@ v2-main 分支提供全功能支持，包括新功能开发、性能优化和错
 
 ### **启动文件差异**
 
-1. 在 v2-main 中，为 Gemini 330 系列添加了新的低功耗启动文件：
+1. 在 v2-main 中，为 Gemini 330 系列添加了新的低 CPU 启动文件：
    - `gemini_330_series_low_cpu.launch.py`
-2. v2-main 引入了对 **Gemini 435Le**、**Gemini 345** 和 **Gemini 345Lg** 相机的支持。
+2. v2-main 引入了对 **Gemini 210**、**Gemini 301 系列**、**Gemini 435Le**、**Gemini 345** 和 **Gemini 345Lg** 相机的支持。
 3. 由于 **OrbbecSDK_v2 仅支持 UVC 设备**，v2-main 中支持的相机型号范围比 main 略窄。详细信息见下表。
 
 | **相机**                           | **main**                             | **v2-main**                                        |
@@ -46,20 +46,21 @@ v2-main 分支提供全功能支持，包括新功能开发、性能优化和错
 | Gemini 345Lg                       | 不支持                               | gemini345_lg.launch.py                             |
 | Gemini 330 系列                    | gemini_330_series.launch.py          | gemini_330_series.launch.py                        |
 | Gemini 330 低CPU                   | -                                    | gemini_330_series_low_cpu.launch.py                |
-| Gemini 210                         | gemini210.launch.py                  | gemini210.launch.py                                |
+| Gemini 301 系列                    | 不支持                               | gemini_301_series.launch.py                        |
+| Gemini 210                         | 不支持                               | gemini210.launch.py                                |
 | Gemini 2                           | gemini2.launch.py                    | gemini2.launch.py                                  |
-| Gemini 2L                          | gemini2L.launch.py                   | gemini2.launch.py                                  |
+| Gemini 2L                          | gemini2L.launch.py                   | gemini2L.launch.py                                 |
 | Gemini 2XL                         | gemini2XL.launch.py                  | -                                                  |
 | Femto Bolt                         | femto_bolt.launch.py                 | femto_bolt.launch.py                               |
 | Femto Mega                         | femto_mega.launch.py                 | femto_mega.launch.py                               |
 | Femto                              | femto.launch.py                      | femto.launch.py                                    |
 | Astra 2                            | astra2.launch.py                     | astra2.launch.py                                   |
 | Astra                              | astra.launch.py                      | astra.launch.py                                    |
-| Astra Mini Pro / S Pro             | astra_mini_pro.launch.py ...         | astra.launch.py                                    |
 | 多相机（同步）                     | multi_camera_synced.launch.py        | multi_camera_synced.launch.py                      |
-| 多相机（通用/通用）                | multi_camera.launch.py               | multi_camera.launch.py 或 orbbec_multicamera.launch.py |
-| 单相机通用启动                     | ob_camera.launch.py                  | orbbec_camera.launch.py                            |
-| OpenNI 设备（大白、得雅）          | 对应型号独立文件                     | 不支持                                             |
+| 多相机（通用）                     | multi_camera.launch.py               | multi_camera.launch.py                             |
+| 单相机通用启动                     | ob_camera.launch.py                  | 未提供                                             |
+| 大白系列                           | 对应型号独立启动文件                 | dabai_a.launch.py、dabai_al.launch.py、dabai_dcw2.launch.py、dabai_max_pro.launch.py |
+| 得雅                               | deeya.launch.py                      | 不支持                                             |
 
 ### **参数差异**
 
@@ -136,24 +137,18 @@ v2-main 分支提供全功能支持，包括新功能开发、性能优化和错
 | right_ir.image_raw.enable_pub_plugins  | -        | 已添加      | 右红外传输插件                                 |
 | force_ip_enable                        | -        | 已添加      | 强制 IP 功能                                   |
 | force_ip_mac                           | -        | 已添加      | 强制 IP MAC 地址                               |
-| force_ip_dhcp                          | -        | 已添加      | DHCP 自动分配                                  |
 | force_ip_address                       | -        | 已添加      | 强制 IP 静态地址                               |
 | force_ip_subnet_mask                   | -        | 已添加      | 强制 IP 子网掩码                               |
 | force_ip_gateway                       | -        | 已添加      | 强制 IP 网关                                   |
 
-**已移除参数（仅 main 有，v2-main 中已移除）**
+**已移除或重命名的参数**
 
 | **参数**                             | **描述**                                                     |
 | ------------------------------------ | ------------------------------------------------------------ |
-| enable_3d_reconstruction_mode        | 3D 重建模式已弃用                                            |
-| enable_hardware_reset                | 硬件重置接口已弃用                                           |
-| enable_hardware_noise_removal_filter | 硬件噪声去除滤波器已弃用                                     |
-| laser_on_off_mode                    | 旧激光开关接口，由 interleave / laser_index 替换            |
-| enable_3d_reconstruction_mode        | 3D 重建模式重复；v2-main 中不再使用                         |
-| device_preset                        | 部分逻辑迁移到新固件 / 交错参数                              |
-| enable_trigger_out                   | 旧软件触发接口由 software_trigger_enabled 替换              |
-| retry_on_usb3_detection_failure      | 可选；v2-main 中逻辑已调整或移除                            |
-| enable_color_undistortion            | 旧接口逻辑集成到其他地方；v2-main 中仍存在但使用可能已调整  |
+| enable_3d_reconstruction_mode        | 已移除，无直接替代参数                                       |
+| enable_hardware_reset                | 已移除                                                       |
+| laser_on_off_mode                    | 重命名为 `enable_laser`                                      |
+| enable_trigger_out                   | 重命名为 `trigger_out_enabled`                              |
 
 ### **话题差异**
 
