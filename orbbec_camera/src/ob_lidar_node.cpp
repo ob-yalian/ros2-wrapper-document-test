@@ -18,6 +18,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <thread>
 #include <geometry_msgs/msg/transform_stamped.hpp>
+#include <magic_enum/magic_enum.hpp>
 
 #include "orbbec_camera/utils.h"
 #include <filesystem>

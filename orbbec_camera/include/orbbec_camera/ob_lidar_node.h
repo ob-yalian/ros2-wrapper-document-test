@@ -61,7 +61,6 @@
 #include "orbbec_camera/constants.h"
 #include "orbbec_camera/dynamic_params.h"
 #include "orbbec_camera/d2c_viewer.h"
-#include "magic_enum/magic_enum.hpp"
 #include "orbbec_camera/image_publisher.h"
 #include <std_msgs/msg/string.hpp>
 #include <fcntl.h>
