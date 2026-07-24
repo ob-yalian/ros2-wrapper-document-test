@@ -452,8 +452,7 @@ void OBCameraNode::publishDepthFiltersStatus() {
     depth_filters_snapshot = depth_filter_list_;
   }
 
-  auto find_depth_filter = [&depth_filters_snapshot,
-                            this](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
+  auto find_depth_filter = [&depth_filters_snapshot](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
     const auto normalized_name = normalizeDepthFilterName(filter_name);
     auto it = std::find_if(depth_filters_snapshot.begin(), depth_filters_snapshot.end(),
                            [&normalized_name](const auto &filter) {
