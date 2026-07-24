@@ -17,14 +17,13 @@
 #pragma once
 #include <ostream>
 #include <Eigen/Dense>
-#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Quaternion.hpp>
 #include <rclcpp/rclcpp.hpp>
 
 #include "libobsensor/ObSensor.hpp"
 #include "sensor_msgs/distortion_models.hpp"
 #include "sensor_msgs/msg/camera_info.hpp"
 #include "orbbec_camera_msgs/msg/extrinsics.hpp"
-#include "magic_enum/magic_enum.hpp"
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <opencv2/opencv.hpp>
 #include <openssl/evp.h>

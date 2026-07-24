@@ -12,9 +12,6 @@
 
 <!-- Labels: -->
   <!-- First row: -->
-  <a href="https://docs.ros.org/en/foxy/">
-    <img src="https://img.shields.io/badge/ROS-Foxy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Foxy">
-  </a>
   <a href="https://docs.ros.org/en/humble/">
     <img src="https://img.shields.io/badge/ROS-Humble-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Humble">
   </a>
@@ -40,7 +37,7 @@
 
 ## 简介
 
-OrbbecSDK ROS2 Wrapper 提供 Orbbec 相机与 ROS 2 环境的无缝集成，支持 **ROS2 Foxy、Humble 和 Jazzy** 发行版。
+OrbbecSDK ROS2 Wrapper 提供 Orbbec 相机与 ROS 2 环境的无缝集成，支持 **ROS2 Humble 和 Jazzy** 发行版。
 
 - 默认推荐使用 **v2-main** 分支。
 - 对于旧的 **OpenNI** 设备（v2-main 不支持），请使用 **main** 分支。

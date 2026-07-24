@@ -5,9 +5,9 @@
 #include <orbbec_camera/utils.h>
 #include "orbbec_camera/ob_camera_node.h"
 #include "orbbec_camera_msgs/msg/metadata.hpp"
-#include <message_filters/subscriber.h>
-#include <message_filters/sync_policies/approximate_time.h>
-#include <message_filters/synchronizer.h>
+#include <message_filters/subscriber.hpp>
+#include <message_filters/sync_policies/approximate_time.hpp>
+#include <message_filters/synchronizer.hpp>
 #include <std_msgs/msg/int32.hpp>
 #include <filesystem>
 #include <regex>

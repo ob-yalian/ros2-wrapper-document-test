@@ -12,9 +12,6 @@
 
 <!-- Labels: -->
   <!-- First row: -->
-  <a href="https://docs.ros.org/en/foxy/">
-    <img src="https://img.shields.io/badge/ROS-Foxy-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Foxy">
-  </a>
   <a href="https://docs.ros.org/en/humble/">
     <img src="https://img.shields.io/badge/ROS-Humble-f5792a?style=flat-square&amp;logo=ros&amp;logoColor=white" height="20" alt="ROS Humble">
   </a>
@@ -41,7 +38,7 @@
 ## Introduction
 
 The **OrbbecSDK ROS2 Wrapper** provides seamless integration of Orbbec cameras with the ROS 2 ecosystem.
- It supports ROS2 **Foxy**, **Humble**, and **Jazzy** distributions.
+ It supports ROS2 **Humble**, **Jazzy**, and **Lyrical** distributions.
 
 - Default branch: **v2-main**
 - For legacy **OpenNI** devices: use the **main** branch
