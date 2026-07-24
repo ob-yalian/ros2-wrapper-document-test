@@ -53,6 +53,10 @@ endforeach()
 find_package(PkgConfig REQUIRED)
 find_package(OpenSSL REQUIRED)
 
+if(message_filters_VERSION VERSION_GREATER_EQUAL 5.0)
+    add_compile_definitions(message_filters_QoS)
+endif()
+
 if(USE_RK_HW_DECODER)
     pkg_search_module(RK_MPP REQUIRED rockchip_mpp)
     if(NOT RK_MPP_FOUND)

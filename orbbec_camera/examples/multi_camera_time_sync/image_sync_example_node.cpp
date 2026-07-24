@@ -79,13 +79,19 @@ class ImageSyncNode : public rclcpp::Node {
     rclcpp::QoS qos{rclcpp::KeepLast(queue_size_)};
     qos.reliable();
 
+#ifdef message_filters_QoS
+    const rclcpp::QoS qos_prof = qos;
+#else
+    const rmw_qos_profile_t qos_prof = qos.get_rmw_qos_profile();
+#endif
+
     if (sync_topics_.size() == 1) {
       single_sub_ = this->create_subscription<Image>(
           sync_topics_.front(), qos,
           [this](const ImageConstPtr msg) { this->handle_synced_images({msg}); });
     } else {
       for (size_t i = 0; i < sync_topics_.size(); ++i) {
-        subscribers_[i].subscribe(this, sync_topics_[i], qos.get_rmw_qos_profile());
+        subscribers_[i].subscribe(this, sync_topics_[i], qos_prof);
       }
       create_synchronizer();
     }
