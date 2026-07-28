@@ -1,8 +1,17 @@
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/msg/image.hpp>
+
+#if __has_include(<message_filters/subscriber.hpp>)
 #include <message_filters/subscriber.hpp>
 #include <message_filters/sync_policies/approximate_time.hpp>
 #include <message_filters/synchronizer.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/image.hpp>
+#elif __has_include(<message_filters/subscriber.h>)
+#include <message_filters/subscriber.h>
+#include <message_filters/sync_policies/approximate_time.h>
+#include <message_filters/synchronizer.h>
+#else
+#error "No compatible message_filters headers found"
+#endif
 
 #if __has_include(<cv_bridge/cv_bridge.hpp>)
 #include <cv_bridge/cv_bridge.hpp>
@@ -79,7 +88,7 @@ class ImageSyncNode : public rclcpp::Node {
     rclcpp::QoS qos{rclcpp::KeepLast(queue_size_)};
     qos.reliable();
 
-#ifdef message_filters_QoS
+#ifdef ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS
     const rclcpp::QoS qos_prof = qos;
 #else
     const rmw_qos_profile_t qos_prof = qos.get_rmw_qos_profile();

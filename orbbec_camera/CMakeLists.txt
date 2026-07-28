@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.22)
+cmake_minimum_required(VERSION 3.10)
 project(orbbec_camera)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -26,13 +26,16 @@ set(dependencies
     cv_bridge
     backward_ros
     camera_info_manager
+    geometry_msgs
     image_transport
     image_publisher
     message_filters
     OpenCV
     orbbec_camera_msgs
+    rcl_interfaces
     rclcpp
     rclcpp_components
+    rmw
     sensor_msgs
     std_msgs
     std_srvs
@@ -55,17 +58,48 @@ endforeach()
 find_package(PkgConfig REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-if(message_filters_VERSION VERSION_GREATER_EQUAL 5.0)
-    add_compile_definitions(message_filters_QoS)
+set(ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS OFF)
+if(DEFINED message_filters_VERSION AND message_filters_VERSION VERSION_GREATER_EQUAL 5.0)
+    set(ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS ON)
 endif()
 
-if(image_transport_VERSION VERSION_GREATER_EQUAL 6.4)
-    add_compile_definitions(image_transport_NODE_INTERFACE)
+set(ORBBEC_IMAGE_TRANSPORT_USES_REQUIRED_INTERFACES OFF)
+if(DEFINED image_transport_VERSION AND image_transport_VERSION VERSION_GREATER_EQUAL 6.4)
+    set(ORBBEC_IMAGE_TRANSPORT_USES_REQUIRED_INTERFACES ON)
 endif()
 
-if(image_transport_VERSION VERSION_GREATER_EQUAL 6.4)
-    add_compile_definitions(image_transport_QoS)
+set(ORBBEC_CAMERA_INFO_MANAGER_USES_NODE_INTERFACES OFF)
+if(DEFINED camera_info_manager_VERSION AND
+   camera_info_manager_VERSION VERSION_GREATER_EQUAL 4.1.0)
+    set(ORBBEC_CAMERA_INFO_MANAGER_USES_NODE_INTERFACES ON)
 endif()
+
+set(ORBBEC_CAMERA_INFO_MANAGER_USES_RCLCPP_QOS OFF)
+if(DEFINED camera_info_manager_VERSION AND
+   camera_info_manager_VERSION VERSION_GREATER_EQUAL 7.0.0)
+    set(ORBBEC_CAMERA_INFO_MANAGER_USES_RCLCPP_QOS ON)
+endif()
+
+function(orbbec_target_dependencies target)
+    if(COMMAND ament_target_dependencies)
+        ament_target_dependencies(${target} ${ARGN})
+        return()
+    endif()
+
+    set(dependency_targets)
+    foreach(dependency IN LISTS ARGN)
+        if(dependency STREQUAL "rclcpp_components")
+            list(APPEND dependency_targets rclcpp_components::component)
+        elseif(dependency STREQUAL "sensor_msgs")
+            list(APPEND dependency_targets sensor_msgs::sensor_msgs_library)
+        elseif(TARGET "${dependency}::${dependency}")
+            list(APPEND dependency_targets "${dependency}::${dependency}")
+        else()
+            message(FATAL_ERROR "No CMake target exported by ${dependency}")
+        endif()
+    endforeach()
+    target_link_libraries(${target} ${dependency_targets})
+endfunction()
 
 if(USE_RK_HW_DECODER)
     pkg_search_module(RK_MPP REQUIRED rockchip_mpp)
@@ -112,7 +146,7 @@ endif()
 
 set(COMMON_INCLUDE_DIRS
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include> $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include> ${ORBBEC_INCLUDE_DIR} ${OpenCV_INCLUDED_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/tools
+    $<INSTALL_INTERFACE:include> ${ORBBEC_INCLUDE_DIR} ${OpenCV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/tools
 )
 
 set(EXTRA_TARGETS
@@ -182,28 +216,50 @@ endmacro()
 
 # Define library and nodes
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+if(ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS)
+endif()
+if(ORBBEC_IMAGE_TRANSPORT_USES_REQUIRED_INTERFACES)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ORBBEC_IMAGE_TRANSPORT_USES_REQUIRED_INTERFACES)
+endif()
+if(ORBBEC_CAMERA_INFO_MANAGER_USES_NODE_INTERFACES)
+    target_compile_definitions(${PROJECT_NAME}
+        PRIVATE ORBBEC_CAMERA_INFO_MANAGER_USES_NODE_INTERFACES)
+endif()
+if(ORBBEC_CAMERA_INFO_MANAGER_USES_RCLCPP_QOS)
+    target_compile_definitions(${PROJECT_NAME}
+        PRIVATE ORBBEC_CAMERA_INFO_MANAGER_USES_RCLCPP_QOS)
+endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${COMMON_INCLUDE_DIRS} ${image_publisher_INCLUDE_DIRS})
 target_link_directories(${PROJECT_NAME} PRIVATE ${ORBBEC_LIBS_DIR})
 target_link_libraries(${PROJECT_NAME}
     ${OpenCV_LIBS}
     ${orbbec_camera_msgs_TARGETS}
-    ${sensor_msgs_TARGETS}
     ${std_srvs_TARGETS}
     ament_index_cpp::ament_index_cpp
-    camera_info_manager::camera_info_manager
-    cv_bridge::cv_bridge
-    diagnostic_updater::diagnostic_updater
     Eigen3::Eigen
-    image_transport::image_transport
-    message_filters::message_filters
     OpenSSL::Crypto
     OrbbecSDK
+    Threads::Threads
+    ${BACKWARD_LIBRARIES}
     rclcpp::rclcpp
-    rclcpp_components::component
+    rt
     tf2::tf2
     tf2_ros::tf2_ros
     ${EXTRA_TARGETS}
+)
+orbbec_target_dependencies(${PROJECT_NAME}
+    camera_info_manager
+    cv_bridge
+    diagnostic_updater
+    geometry_msgs
+    image_transport
+    message_filters
+    rcl_interfaces
+    rclcpp_components
+    rmw
+    sensor_msgs
 )
 
 rclcpp_components_register_node(
@@ -221,6 +277,10 @@ add_orbbec_executable(ob_benchmark_node tools/ob_benchmark.cpp)
 add_orbbec_executable(435le_example_node examples/Gemini_435Le_example_node/camera_example_node.cpp)
 add_orbbec_executable(service_benchmark_node scripts/service_benchmark_node.cpp)
 add_orbbec_executable(image_sync_example_node examples/multi_camera_time_sync/image_sync_example_node.cpp)
+orbbec_target_dependencies(topic_statistics_node statistics_msgs)
+if(ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS)
+    target_compile_definitions(image_sync_example_node PRIVATE ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS)
+endif()
 
 install(
   PROGRAMS
@@ -233,11 +293,14 @@ add_library(frame_latency SHARED tools/frame_latency.cpp)
 target_include_directories(frame_latency PUBLIC ${COMMON_INCLUDE_DIRS})
 target_link_libraries(frame_latency
     ${orbbec_camera_msgs_TARGETS}
-    ${sensor_msgs_TARGETS}
     ${tf2_msgs_TARGETS}
-    diagnostic_updater::diagnostic_updater
     rclcpp::rclcpp
-    rclcpp_components::component
+)
+orbbec_target_dependencies(frame_latency
+    diagnostic_updater
+    geometry_msgs
+    rclcpp_components
+    sensor_msgs
 )
 
 rclcpp_components_register_node(frame_latency PLUGIN "orbbec_camera::FrameLatencyNode" EXECUTABLE frame_latency_node)
@@ -247,15 +310,17 @@ target_include_directories(start_benchmark PUBLIC ${COMMON_INCLUDE_DIRS} ${image
 target_link_libraries(start_benchmark
     ${OpenCV_LIBS}
     ${orbbec_camera_msgs_TARGETS}
-    ${sensor_msgs_TARGETS}
     ${std_srvs_TARGETS}
-    camera_info_manager::camera_info_manager
-    diagnostic_updater::diagnostic_updater
     Eigen3::Eigen
-    image_transport::image_transport
     rclcpp::rclcpp
-    rclcpp_components::component
     tf2_ros::tf2_ros
+)
+orbbec_target_dependencies(start_benchmark
+    camera_info_manager
+    diagnostic_updater
+    image_transport
+    rclcpp_components
+    sensor_msgs
 )
 
 rclcpp_components_register_node(
@@ -268,19 +333,21 @@ target_link_directories(multi_save_rgbir PRIVATE ${ORBBEC_LIBS_DIR})
 target_link_libraries(multi_save_rgbir
     ${OpenCV_LIBS}
     ${orbbec_camera_msgs_TARGETS}
-    ${sensor_msgs_TARGETS}
     ${std_srvs_TARGETS}
-    camera_info_manager::camera_info_manager
-    cv_bridge::cv_bridge
-    diagnostic_updater::diagnostic_updater
     Eigen3::Eigen
-    image_transport::image_transport
     OpenSSL::Crypto
     OrbbecSDK
     rclcpp::rclcpp
-    rclcpp_components::component
     tf2::tf2
     tf2_ros::tf2_ros
+)
+orbbec_target_dependencies(multi_save_rgbir
+    camera_info_manager
+    cv_bridge
+    diagnostic_updater
+    image_transport
+    rclcpp_components
+    sensor_msgs
 )
 
 rclcpp_components_register_node(

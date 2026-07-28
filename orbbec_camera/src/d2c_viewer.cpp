@@ -31,7 +31,7 @@ D2CViewer::D2CViewer(rclcpp::Node* const node, rmw_qos_profile_t rgb_qos,
     : node_(node), logger_(rclcpp::get_logger("d2c_viewer")), is_active_(true) {
   rgb_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
       node_, "color/image_raw",
-#ifdef message_filters_QoS
+#ifdef ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS
       rclcpp::QoS{rclcpp::QoSInitialization::from_rmw(rgb_qos), rgb_qos}
 #else
       rgb_qos
@@ -39,7 +39,7 @@ D2CViewer::D2CViewer(rclcpp::Node* const node, rmw_qos_profile_t rgb_qos,
   );
   depth_sub_ = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image>>(
       node_, "depth/image_raw",
-#ifdef message_filters_QoS
+#ifdef ORBBEC_MESSAGE_FILTERS_USES_RCLCPP_QOS
       rclcpp::QoS{rclcpp::QoSInitialization::from_rmw(depth_qos), depth_qos}
 #else
       depth_qos
