@@ -7,6 +7,7 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -31,16 +32,20 @@ rosidl_generate_interfaces(
     "srv/GetDeviceInfo.srv"
     "srv/GetCameraInfo.srv"
     "srv/GetInt32.srv"
+    "srv/GetAwbGain.srv"
     "srv/GetString.srv"
     "srv/SetFilter.srv"
     "srv/SetInt32.srv"
+    "srv/SetAwbGain.srv"
     "srv/SetString.srv"
     "srv/SetArrays.srv"
     "srv/GetUserCalibParams.srv"
     "srv/SetUserCalibParams.srv"
     "srv/SetBagRecording.srv"
     "srv/SetStreamProfile.srv"
+    "action/RunAeAwbLockTest.action"
     DEPENDENCIES
+    action_msgs
     sensor_msgs
     std_msgs
 )

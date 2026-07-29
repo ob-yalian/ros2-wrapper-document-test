@@ -57,12 +57,14 @@
 #include "orbbec_camera_msgs/msg/depth_filters_status.hpp"
 #include "orbbec_camera_msgs/srv/get_device_config.hpp"
 #include "orbbec_camera_msgs/srv/get_device_info.hpp"
+#include "orbbec_camera_msgs/srv/get_awb_gain.hpp"
 #include "orbbec_camera_msgs/msg/extrinsics.hpp"
 #include "orbbec_camera_msgs/msg/metadata.hpp"
 #include "orbbec_camera_msgs/msg/imu_info.hpp"
 #include "orbbec_camera_msgs/srv/get_int32.hpp"
 #include "orbbec_camera_msgs/srv/get_string.hpp"
 #include "orbbec_camera_msgs/srv/set_int32.hpp"
+#include "orbbec_camera_msgs/srv/set_awb_gain.hpp"
 #include "orbbec_camera_msgs/srv/get_bool.hpp"
 #include "orbbec_camera_msgs/srv/set_string.hpp"
 #include "orbbec_camera_msgs/srv/set_filter.hpp"
@@ -121,6 +123,8 @@ using GetDeviceInfo = orbbec_camera_msgs::srv::GetDeviceInfo;
 using Extrinsics = orbbec_camera_msgs::msg::Extrinsics;
 using SetInt32 = orbbec_camera_msgs::srv::SetInt32;
 using GetInt32 = orbbec_camera_msgs::srv::GetInt32;
+using GetAwbGain = orbbec_camera_msgs::srv::GetAwbGain;
+using SetAwbGain = orbbec_camera_msgs::srv::SetAwbGain;
 using GetString = orbbec_camera_msgs::srv::GetString;
 using SetString = orbbec_camera_msgs::srv::SetString;
 using SetBool = std_srvs::srv::SetBool;
@@ -413,6 +417,15 @@ class OBCameraNode {
 
   void setAutoWhiteBalanceCallback(const std::shared_ptr<SetBool::Request>& request,
                                    std::shared_ptr<SetBool::Response>& response);
+
+  void getAeAwbStatusCallback(const std::shared_ptr<GetInt32::Request>& request,
+                              std::shared_ptr<GetInt32::Response>& response);
+
+  void getAwbGainCallback(const std::shared_ptr<GetAwbGain::Request>& request,
+                          std::shared_ptr<GetAwbGain::Response>& response);
+
+  void setAwbGainCallback(const std::shared_ptr<SetAwbGain::Request>& request,
+                          std::shared_ptr<SetAwbGain::Response>& response);
 
   void setAutoExposureCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                                std::shared_ptr<std_srvs::srv::SetBool::Response>& response,
@@ -722,6 +735,9 @@ class OBCameraNode {
   rclcpp::Service<SetInt32>::SharedPtr set_white_balance_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_auto_white_balance_srv_;
   rclcpp::Service<SetBool>::SharedPtr set_auto_white_balance_srv_;
+  rclcpp::Service<GetInt32>::SharedPtr get_ae_awb_status_srv_;
+  rclcpp::Service<GetAwbGain>::SharedPtr get_awb_gain_srv_;
+  rclcpp::Service<SetAwbGain>::SharedPtr set_awb_gain_srv_;
   rclcpp::Service<GetString>::SharedPtr get_sdk_version_srv_;
   rclcpp::Service<SetString>::SharedPtr switch_ir_camera_srv_;
   rclcpp::Service<SetString>::SharedPtr export_config_json_srv_;
