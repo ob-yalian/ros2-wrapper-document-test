@@ -683,6 +683,11 @@ typedef enum {
     OB_PROP_MJPEG_QUALITY_INT = 277,
 
     /**
+     * @brief Color AE/AWB status
+     */
+    OB_PROP_COLOR_AE_AWB_STAT_INT = 287,
+
+    /**
      * @brief Baseline calibration parameters
      */
     OB_STRUCT_BASELINE_CALIBRATION_PARAM = 1002,
@@ -788,6 +793,11 @@ typedef enum {
      * @see OBNetIpConfigV2
      */
     OB_STRUCT_DEVICE_IP_ADDR_CONFIG_V2 = 1088,
+
+    /**
+     * @brief Color AWB gain parameters
+     */
+    OB_STRUCT_COLOR_AWB_GAIN = 1097,
 
     /**
      * @brief Color camera auto exposure
