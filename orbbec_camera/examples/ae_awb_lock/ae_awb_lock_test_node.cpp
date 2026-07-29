@@ -7,16 +7,19 @@
 
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <future>
 #include <memory>
 #include <mutex>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 #include <thread>
 
 #include "orbbec_camera_msgs/action/run_ae_awb_lock_test.hpp"
+#include "orbbec_camera_msgs/msg/metadata.hpp"
 #include "orbbec_camera_msgs/srv/get_awb_gain.hpp"
 #include "orbbec_camera_msgs/srv/get_int32.hpp"
 #include "orbbec_camera_msgs/srv/set_awb_gain.hpp"
@@ -31,6 +34,7 @@ constexpr uint32_t kDefaultTimeoutMs = 10000;
 constexpr auto kPollInterval = 100ms;
 constexpr auto kServiceWaitTimeout = 1s;
 constexpr auto kServiceCallTimeout = 2s;
+constexpr auto kMetadataWaitTimeout = 2s;
 
 class CanceledError : public std::runtime_error {
  public:
@@ -46,8 +50,13 @@ class AeAwbLockTestNode : public rclcpp::Node {
   using GetAwbGain = orbbec_camera_msgs::srv::GetAwbGain;
   using SetAwbGain = orbbec_camera_msgs::srv::SetAwbGain;
   using SetBool = std_srvs::srv::SetBool;
+  using Metadata = orbbec_camera_msgs::msg::Metadata;
 
   AeAwbLockTestNode() : Node("ae_awb_lock_test_node") {
+    color_metadata_subscription_ = create_subscription<Metadata>(
+        "color/metadata", rclcpp::SensorDataQoS(),
+        std::bind(&AeAwbLockTestNode::colorMetadataCallback, this, std::placeholders::_1));
+
     get_status_client_ = create_client<GetInt32>("get_color_ae_awb_status");
     get_awb_gain_client_ = create_client<GetAwbGain>("get_color_awb_gain");
     set_awb_gain_client_ = create_client<SetAwbGain>("set_color_awb_gain");
@@ -70,6 +79,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
 
   ~AeAwbLockTestNode() override {
     shutting_down_.store(true);
+    metadata_cv_.notify_all();
     std::lock_guard<std::mutex> lock(worker_mutex_);
     if (worker_.joinable()) {
       worker_.join();
@@ -77,6 +87,12 @@ class AeAwbLockTestNode : public rclcpp::Node {
   }
 
  private:
+  struct ColorFrameMetadata {
+    int32_t exposure;
+    int32_t gain;
+    int32_t white_balance;
+  };
+
   struct ActiveGoalGuard {
     explicit ActiveGoalGuard(std::atomic_bool& active) : active_(active) {}
     ~ActiveGoalGuard() { active_.store(false); }
@@ -151,6 +167,38 @@ class AeAwbLockTestNode : public rclcpp::Node {
   }
 
   int32_t getAeAwbStatus() { return getIntValue(get_status_client_, "get_color_ae_awb_status"); }
+
+  void colorMetadataCallback(const Metadata::ConstSharedPtr& metadata) {
+    {
+      std::lock_guard<std::mutex> lock(metadata_mutex_);
+      latest_color_metadata_ = metadata;
+    }
+    metadata_cv_.notify_all();
+  }
+
+  ColorFrameMetadata getLatestColorMetadata() {
+    Metadata::ConstSharedPtr metadata;
+    {
+      std::unique_lock<std::mutex> lock(metadata_mutex_);
+      if (!metadata_cv_.wait_for(lock, kMetadataWaitTimeout, [this] {
+            return latest_color_metadata_ != nullptr || shutting_down_.load();
+          })) {
+        throw std::runtime_error("timed out waiting for color frame metadata");
+      }
+      if (shutting_down_.load()) {
+        throw CanceledError();
+      }
+      metadata = latest_color_metadata_;
+    }
+
+    try {
+      const auto json = nlohmann::json::parse(metadata->json_data);
+      return {json.at("exposure").get<int32_t>(), json.at("gain").get<int32_t>(),
+              json.at("white_balance").get<int32_t>()};
+    } catch (const nlohmann::json::exception& e) {
+      throw std::runtime_error(std::string("invalid color frame metadata: ") + e.what());
+    }
+  }
 
   void setIntValue(const rclcpp::Client<SetInt32>::SharedPtr& client,
                    const std::string& service_name, int32_t value) {
@@ -252,14 +300,14 @@ class AeAwbLockTestNode : public rclcpp::Node {
 
       throwIfCanceled(goal_handle);
       publishFeedback(goal_handle, "capturing_parameters", getAeAwbStatus());
-      result->captured_exposure = getIntValue(get_exposure_client_, "get_color_exposure");
-      result->captured_color_gain = getIntValue(get_color_gain_client_, "get_color_gain");
+      const auto captured_metadata = getLatestColorMetadata();
+      result->captured_exposure = captured_metadata.exposure;
+      result->captured_color_gain = captured_metadata.gain;
+      result->captured_color_temperature = captured_metadata.white_balance;
       auto captured_awb_gain = getAwbGain();
       result->captured_awb_r_gain = captured_awb_gain->r_gain;
       result->captured_awb_b_gain = captured_awb_gain->b_gain;
       result->captured_awb_g_gain = captured_awb_gain->g_gain;
-      result->captured_color_temperature =
-          getIntValue(get_white_balance_client_, "get_white_balance");
 
       throwIfCanceled(goal_handle);
       publishFeedback(goal_handle, "disabling_auto", getAeAwbStatus());
@@ -329,6 +377,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
   }
 
   rclcpp_action::Server<RunAeAwbLockTest>::SharedPtr action_server_;
+  rclcpp::Subscription<Metadata>::SharedPtr color_metadata_subscription_;
 
   rclcpp::Client<GetInt32>::SharedPtr get_status_client_;
   rclcpp::Client<GetAwbGain>::SharedPtr get_awb_gain_client_;
@@ -344,6 +393,9 @@ class AeAwbLockTestNode : public rclcpp::Node {
 
   std::atomic_bool goal_active_{false};
   std::atomic_bool shutting_down_{false};
+  Metadata::ConstSharedPtr latest_color_metadata_;
+  std::mutex metadata_mutex_;
+  std::condition_variable metadata_cv_;
   std::mutex worker_mutex_;
   std::thread worker_;
 };

@@ -1,7 +1,7 @@
 # AE/AWB Lock Test
 
 This sample exposes a test-only ROS 2 action that verifies the AE/AWB capture and manual
-lock-in flow through the camera driver's services.
+lock-in flow through the camera driver's services and color-frame metadata.
 
 Run the camera driver and this sample in the same namespace:
 
@@ -19,9 +19,11 @@ ros2 action send_goal \
   --feedback
 ```
 
-The sample enables auto exposure and auto white balance, waits until the SDK status equals `1`,
-captures the current exposure, color gain, AWB gains, and color temperature, disables the auto
-controls, and writes the captured values back in this order:
+The sample subscribes to the relative `color/metadata` topic. It enables auto exposure and auto
+white balance, waits until the SDK status equals `1`, captures exposure, color gain, and color
+temperature from the latest color-frame metadata, and reads AWB R/B/G gains through the structured
+property service. It then disables the auto controls and writes the captured values back in this
+order:
 
 1. Color exposure
 2. Color gain
@@ -35,3 +37,7 @@ the sample restores auto exposure and auto white balance.
 Every feedback phase contains a fresh status value read from the camera service. The
 `waiting_for_services` feedback is published after all required services become available, because
 the status cannot be read before its service is ready.
+
+The color stream must be enabled, and `/camera/color/metadata` must be available when using the
+`/camera` namespace. The action fails instead of writing default values if no metadata arrives
+within two seconds or if `exposure`, `gain`, or `white_balance` is missing.
