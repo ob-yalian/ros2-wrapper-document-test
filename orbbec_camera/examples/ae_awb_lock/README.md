@@ -40,4 +40,7 @@ the status cannot be read before its service is ready.
 
 The color stream must be enabled, and `/camera/color/metadata` must be available when using the
 `/camera` namespace. The action fails instead of writing default values if no metadata arrives
-within two seconds or if `exposure`, `gain`, or `white_balance` is missing.
+before the goal timeout or if `exposure`, `gain`, or `white_balance` is missing. The goal timeout
+covers the main workflow, including service discovery, service calls, convergence, capture,
+writeback, and verification. Restoring auto exposure and auto white balance after a failure uses a
+separate best-effort timeout.

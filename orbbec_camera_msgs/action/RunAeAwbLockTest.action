@@ -1,4 +1,5 @@
-# A value of zero uses the sample's default timeout of 10 seconds.
+# Timeout budget for the main workflow. Recovery after failure uses a separate timeout.
+# A value of zero uses the 10-second default.
 uint32 timeout_ms
 ---
 bool success

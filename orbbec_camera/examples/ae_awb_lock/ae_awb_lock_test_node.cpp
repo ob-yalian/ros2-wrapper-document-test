@@ -32,9 +32,7 @@ using namespace std::chrono_literals;
 constexpr int32_t kAeAwbConverged = 1;
 constexpr uint32_t kDefaultTimeoutMs = 10000;
 constexpr auto kPollInterval = 100ms;
-constexpr auto kServiceWaitTimeout = 1s;
-constexpr auto kServiceCallTimeout = 2s;
-constexpr auto kMetadataWaitTimeout = 2s;
+constexpr auto kRestoreServiceTimeout = 5s;
 
 class CanceledError : public std::runtime_error {
  public:
@@ -51,6 +49,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
   using SetAwbGain = orbbec_camera_msgs::srv::SetAwbGain;
   using SetBool = std_srvs::srv::SetBool;
   using Metadata = orbbec_camera_msgs::msg::Metadata;
+  using Deadline = std::chrono::steady_clock::time_point;
 
   AeAwbLockTestNode() : Node("ae_awb_lock_test_node") {
     color_metadata_subscription_ = create_subscription<Metadata>(
@@ -126,8 +125,9 @@ class AeAwbLockTestNode : public rclcpp::Node {
 
   template <typename ServiceT>
   void waitForService(const typename rclcpp::Client<ServiceT>::SharedPtr& client,
-                      const std::string& service_name) {
-    if (!client->wait_for_service(kServiceWaitTimeout)) {
+                      const std::string& service_name, const Deadline& deadline) {
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= deadline || !client->wait_for_service(deadline - now)) {
       throw std::runtime_error(service_name + " is not available");
     }
   }
@@ -135,38 +135,44 @@ class AeAwbLockTestNode : public rclcpp::Node {
   template <typename ServiceT>
   typename ServiceT::Response::SharedPtr callService(
       const typename rclcpp::Client<ServiceT>::SharedPtr& client,
-      const typename ServiceT::Request::SharedPtr& request, const std::string& service_name) {
-    auto future = client->async_send_request(request);
-    if (future.wait_for(kServiceCallTimeout) != std::future_status::ready) {
+      const typename ServiceT::Request::SharedPtr& request, const std::string& service_name,
+      const Deadline& deadline) {
+    auto pending_request = client->async_send_request(request);
+    if (pending_request.wait_until(deadline) != std::future_status::ready) {
+      client->remove_pending_request(pending_request);
       throw std::runtime_error(service_name + " timed out");
     }
-    auto response = future.get();
+    auto response = pending_request.get();
     if (!response->success) {
       throw std::runtime_error(service_name + " failed: " + response->message);
     }
     return response;
   }
 
-  void waitForRequiredServices() {
-    waitForService<GetInt32>(get_status_client_, "get_color_ae_awb_status");
-    waitForService<GetAwbGain>(get_awb_gain_client_, "get_color_awb_gain");
-    waitForService<SetAwbGain>(set_awb_gain_client_, "set_color_awb_gain");
-    waitForService<GetInt32>(get_exposure_client_, "get_color_exposure");
-    waitForService<SetInt32>(set_exposure_client_, "set_color_exposure");
-    waitForService<GetInt32>(get_color_gain_client_, "get_color_gain");
-    waitForService<SetInt32>(set_color_gain_client_, "set_color_gain");
-    waitForService<GetInt32>(get_white_balance_client_, "get_white_balance");
-    waitForService<SetInt32>(set_white_balance_client_, "set_white_balance");
-    waitForService<SetBool>(set_auto_exposure_client_, "set_color_auto_exposure");
-    waitForService<SetBool>(set_auto_white_balance_client_, "set_auto_white_balance");
+  void waitForRequiredServices(const Deadline& deadline) {
+    waitForService<GetInt32>(get_status_client_, "get_color_ae_awb_status", deadline);
+    waitForService<GetAwbGain>(get_awb_gain_client_, "get_color_awb_gain", deadline);
+    waitForService<SetAwbGain>(set_awb_gain_client_, "set_color_awb_gain", deadline);
+    waitForService<GetInt32>(get_exposure_client_, "get_color_exposure", deadline);
+    waitForService<SetInt32>(set_exposure_client_, "set_color_exposure", deadline);
+    waitForService<GetInt32>(get_color_gain_client_, "get_color_gain", deadline);
+    waitForService<SetInt32>(set_color_gain_client_, "set_color_gain", deadline);
+    waitForService<GetInt32>(get_white_balance_client_, "get_white_balance", deadline);
+    waitForService<SetInt32>(set_white_balance_client_, "set_white_balance", deadline);
+    waitForService<SetBool>(set_auto_exposure_client_, "set_color_auto_exposure", deadline);
+    waitForService<SetBool>(set_auto_white_balance_client_, "set_auto_white_balance", deadline);
   }
 
   int32_t getIntValue(const rclcpp::Client<GetInt32>::SharedPtr& client,
-                      const std::string& service_name) {
-    return callService<GetInt32>(client, std::make_shared<GetInt32::Request>(), service_name)->data;
+                      const std::string& service_name, const Deadline& deadline) {
+    return callService<GetInt32>(client, std::make_shared<GetInt32::Request>(), service_name,
+                                 deadline)
+        ->data;
   }
 
-  int32_t getAeAwbStatus() { return getIntValue(get_status_client_, "get_color_ae_awb_status"); }
+  int32_t getAeAwbStatus(const Deadline& deadline) {
+    return getIntValue(get_status_client_, "get_color_ae_awb_status", deadline);
+  }
 
   void colorMetadataCallback(const Metadata::ConstSharedPtr& metadata) {
     {
@@ -176,11 +182,11 @@ class AeAwbLockTestNode : public rclcpp::Node {
     metadata_cv_.notify_all();
   }
 
-  ColorFrameMetadata getLatestColorMetadata() {
+  ColorFrameMetadata getLatestColorMetadata(const Deadline& deadline) {
     Metadata::ConstSharedPtr metadata;
     {
       std::unique_lock<std::mutex> lock(metadata_mutex_);
-      if (!metadata_cv_.wait_for(lock, kMetadataWaitTimeout, [this] {
+      if (!metadata_cv_.wait_until(lock, deadline, [this] {
             return latest_color_metadata_ != nullptr || shutting_down_.load();
           })) {
         throw std::runtime_error("timed out waiting for color frame metadata");
@@ -201,45 +207,47 @@ class AeAwbLockTestNode : public rclcpp::Node {
   }
 
   void setIntValue(const rclcpp::Client<SetInt32>::SharedPtr& client,
-                   const std::string& service_name, int32_t value) {
+                   const std::string& service_name, int32_t value, const Deadline& deadline) {
     auto request = std::make_shared<SetInt32::Request>();
     request->data = value;
-    callService<SetInt32>(client, request, service_name);
+    callService<SetInt32>(client, request, service_name, deadline);
   }
 
-  GetAwbGain::Response::SharedPtr getAwbGain() {
+  GetAwbGain::Response::SharedPtr getAwbGain(const Deadline& deadline) {
     return callService<GetAwbGain>(get_awb_gain_client_, std::make_shared<GetAwbGain::Request>(),
-                                   "get_color_awb_gain");
+                                   "get_color_awb_gain", deadline);
   }
 
-  void setAwbGain(uint16_t r_gain, uint16_t b_gain, uint16_t g_gain) {
+  void setAwbGain(uint16_t r_gain, uint16_t b_gain, uint16_t g_gain, const Deadline& deadline) {
     auto request = std::make_shared<SetAwbGain::Request>();
     request->r_gain = r_gain;
     request->b_gain = b_gain;
     request->g_gain = g_gain;
-    callService<SetAwbGain>(set_awb_gain_client_, request, "set_color_awb_gain");
+    callService<SetAwbGain>(set_awb_gain_client_, request, "set_color_awb_gain", deadline);
   }
 
   void setBoolValue(const rclcpp::Client<SetBool>::SharedPtr& client,
-                    const std::string& service_name, bool value) {
+                    const std::string& service_name, bool value, const Deadline& deadline) {
     auto request = std::make_shared<SetBool::Request>();
     request->data = value;
-    callService<SetBool>(client, request, service_name);
+    callService<SetBool>(client, request, service_name, deadline);
   }
 
-  void setAutoMode(bool enabled) {
-    setBoolValue(set_auto_exposure_client_, "set_color_auto_exposure", enabled);
-    setBoolValue(set_auto_white_balance_client_, "set_auto_white_balance", enabled);
+  void setAutoMode(bool enabled, const Deadline& deadline) {
+    setBoolValue(set_auto_exposure_client_, "set_color_auto_exposure", enabled, deadline);
+    setBoolValue(set_auto_white_balance_client_, "set_auto_white_balance", enabled, deadline);
   }
 
   void restoreAutoMode() noexcept {
     try {
-      setBoolValue(set_auto_exposure_client_, "set_color_auto_exposure", true);
+      const auto deadline = std::chrono::steady_clock::now() + kRestoreServiceTimeout;
+      setBoolValue(set_auto_exposure_client_, "set_color_auto_exposure", true, deadline);
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "Failed to restore auto exposure: %s", e.what());
     }
     try {
-      setBoolValue(set_auto_white_balance_client_, "set_auto_white_balance", true);
+      const auto deadline = std::chrono::steady_clock::now() + kRestoreServiceTimeout;
+      setBoolValue(set_auto_white_balance_client_, "set_auto_white_balance", true, deadline);
     } catch (const std::exception& e) {
       RCLCPP_ERROR(get_logger(), "Failed to restore auto white balance: %s", e.what());
     }
@@ -270,20 +278,18 @@ class AeAwbLockTestNode : public rclcpp::Node {
     ActiveGoalGuard active_guard(goal_active_);
     auto result = std::make_shared<RunAeAwbLockTest::Result>();
     bool workflow_started = false;
+    const uint32_t requested_timeout = goal_handle->get_goal()->timeout_ms;
+    const uint32_t timeout_ms = requested_timeout == 0 ? kDefaultTimeoutMs : requested_timeout;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
 
     try {
-      waitForRequiredServices();
-      publishFeedback(goal_handle, "waiting_for_services", getAeAwbStatus());
+      waitForRequiredServices(deadline);
+      publishFeedback(goal_handle, "waiting_for_services", getAeAwbStatus(deadline));
       throwIfCanceled(goal_handle);
 
       workflow_started = true;
-      setAutoMode(true);
-      publishFeedback(goal_handle, "enabling_auto", getAeAwbStatus());
-
-      const uint32_t requested_timeout = goal_handle->get_goal()->timeout_ms;
-      const uint32_t timeout_ms = requested_timeout == 0 ? kDefaultTimeoutMs : requested_timeout;
-      const auto deadline =
-          std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+      setAutoMode(true, deadline);
+      publishFeedback(goal_handle, "enabling_auto", getAeAwbStatus(deadline));
 
       int32_t status = 0;
       do {
@@ -291,7 +297,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
         if (std::chrono::steady_clock::now() >= deadline) {
           throw std::runtime_error("timed out waiting for AE/AWB convergence");
         }
-        status = getAeAwbStatus();
+        status = getAeAwbStatus(deadline);
         publishFeedback(goal_handle, "waiting_for_convergence", status);
         if (status != kAeAwbConverged) {
           std::this_thread::sleep_for(kPollInterval);
@@ -299,48 +305,48 @@ class AeAwbLockTestNode : public rclcpp::Node {
       } while (status != kAeAwbConverged);
 
       throwIfCanceled(goal_handle);
-      publishFeedback(goal_handle, "capturing_parameters", getAeAwbStatus());
-      const auto captured_metadata = getLatestColorMetadata();
+      publishFeedback(goal_handle, "capturing_parameters", getAeAwbStatus(deadline));
+      const auto captured_metadata = getLatestColorMetadata(deadline);
       result->captured_exposure = captured_metadata.exposure;
       result->captured_color_gain = captured_metadata.gain;
       result->captured_color_temperature = captured_metadata.white_balance;
-      auto captured_awb_gain = getAwbGain();
+      auto captured_awb_gain = getAwbGain(deadline);
       result->captured_awb_r_gain = captured_awb_gain->r_gain;
       result->captured_awb_b_gain = captured_awb_gain->b_gain;
       result->captured_awb_g_gain = captured_awb_gain->g_gain;
 
       throwIfCanceled(goal_handle);
-      publishFeedback(goal_handle, "disabling_auto", getAeAwbStatus());
-      setAutoMode(false);
+      publishFeedback(goal_handle, "disabling_auto", getAeAwbStatus(deadline));
+      setAutoMode(false, deadline);
       throwIfCanceled(goal_handle);
 
-      publishFeedback(goal_handle, "applying_exposure", getAeAwbStatus());
-      setIntValue(set_exposure_client_, "set_color_exposure", result->captured_exposure);
+      publishFeedback(goal_handle, "applying_exposure", getAeAwbStatus(deadline));
+      setIntValue(set_exposure_client_, "set_color_exposure", result->captured_exposure, deadline);
       throwIfCanceled(goal_handle);
 
-      publishFeedback(goal_handle, "applying_color_gain", getAeAwbStatus());
-      setIntValue(set_color_gain_client_, "set_color_gain", result->captured_color_gain);
+      publishFeedback(goal_handle, "applying_color_gain", getAeAwbStatus(deadline));
+      setIntValue(set_color_gain_client_, "set_color_gain", result->captured_color_gain, deadline);
       throwIfCanceled(goal_handle);
 
-      publishFeedback(goal_handle, "applying_awb_gain", getAeAwbStatus());
+      publishFeedback(goal_handle, "applying_awb_gain", getAeAwbStatus(deadline));
       setAwbGain(result->captured_awb_r_gain, result->captured_awb_b_gain,
-                 result->captured_awb_g_gain);
+                 result->captured_awb_g_gain, deadline);
       throwIfCanceled(goal_handle);
 
-      publishFeedback(goal_handle, "applying_color_temperature", getAeAwbStatus());
+      publishFeedback(goal_handle, "applying_color_temperature", getAeAwbStatus(deadline));
       setIntValue(set_white_balance_client_, "set_white_balance",
-                  result->captured_color_temperature);
+                  result->captured_color_temperature, deadline);
       throwIfCanceled(goal_handle);
 
-      publishFeedback(goal_handle, "verifying", getAeAwbStatus());
-      result->actual_exposure = getIntValue(get_exposure_client_, "get_color_exposure");
-      result->actual_color_gain = getIntValue(get_color_gain_client_, "get_color_gain");
-      auto actual_awb_gain = getAwbGain();
+      publishFeedback(goal_handle, "verifying", getAeAwbStatus(deadline));
+      result->actual_exposure = getIntValue(get_exposure_client_, "get_color_exposure", deadline);
+      result->actual_color_gain = getIntValue(get_color_gain_client_, "get_color_gain", deadline);
+      auto actual_awb_gain = getAwbGain(deadline);
       result->actual_awb_r_gain = actual_awb_gain->r_gain;
       result->actual_awb_b_gain = actual_awb_gain->b_gain;
       result->actual_awb_g_gain = actual_awb_gain->g_gain;
       result->actual_color_temperature =
-          getIntValue(get_white_balance_client_, "get_white_balance");
+          getIntValue(get_white_balance_client_, "get_white_balance", deadline);
       throwIfCanceled(goal_handle);
 
       if (result->captured_awb_r_gain != result->actual_awb_r_gain ||
@@ -356,7 +362,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
 
       result->success = true;
       result->message = "AE/AWB capture and lock-in completed";
-      publishFeedback(goal_handle, "completed", getAeAwbStatus());
+      publishFeedback(goal_handle, "completed", getAeAwbStatus(deadline));
       goal_handle->succeed(result);
     } catch (const CanceledError&) {
       if (workflow_started) {
