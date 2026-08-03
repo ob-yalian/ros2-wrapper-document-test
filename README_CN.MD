@@ -225,9 +225,17 @@ OrbbecSDK ROS2 Wrapper 提供 Orbbec 相机与 ROS 2 环境的无缝集成，支
 
 **环境配置**
 
-根据官方指南安装 ROS 2：
+根据相应的官方指南安装一个受支持的 ROS 2 发行版：
 
-* [ROS 2 安装指南（Ubuntu）](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html)
+* [Foxy](https://docs.ros.org/en/foxy/)
+* [Humble](https://docs.ros.org/en/humble/)
+* [Jazzy](https://docs.ros.org/en/jazzy/)
+
+执行后续命令前，请先加载 ROS 2 环境：
+
+```bash
+source /opt/ros/humble/setup.bash  # 根据需要将 humble 替换为 foxy 或 jazzy
+```
 
 安装依赖项：
 
@@ -255,10 +263,10 @@ sudo apt update
 apt list | grep orbbec
 ```
 
-安装 OrbbecSDK ROS2 包：
+如果当前 ROS 2 发行版提供二进制包，可使用以下命令安装 OrbbecSDK ROS2：
 
 ```bash
-sudo apt install ros-humble-orbbec-camera ros-humble-orbbec-description
+sudo apt install ros-${ROS_DISTRO}-orbbec-camera ros-${ROS_DISTRO}-orbbec-description
 ```
 
 安装完成后，直接使用即可，无需编译。
@@ -302,12 +310,11 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ```bash
 cd  ~/ros2_ws/src/OrbbecSDK_ROS2/orbbec_camera/scripts
 sudo bash install_udev_rules.sh
-sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
 此步骤对于 Linux 用户是**必需的**。
 
-`注意：` 如果不执行此脚本，由于权限问题，打开设备将会失败。您需要使用 sudo（管理员权限）运行示例程序。
+> **注意：** 如果未安装 udev 规则，可能因权限不足而无法打开设备。请正确安装规则并重新插拔相机，不建议使用 `sudo` 运行 ROS 2 节点。
 
 ## 快速开始
 
@@ -354,7 +361,7 @@ ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString '{}'
 
 ## 支持的设备
 
-目前 v2-main 分支支持以下设备。更多设备支持将陆续增加。如果没有找到您的设备，请尝试 [main](https://github.com/orbbec/OrbbecSDK_ROS2) 分支。
+目前 v2-main 分支支持以下设备。更多设备支持将陆续增加。如果没有找到您的设备，请尝试 [main](https://github.com/orbbec/OrbbecSDK_ROS2/tree/main) 分支。
 
 为获得最佳性能，强烈建议更新至最新固件版本，以确保您能获得最新的改进和 bug 修复。
 

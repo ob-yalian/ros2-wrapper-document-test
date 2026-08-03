@@ -226,9 +226,17 @@ If you need to migrate existing projects from the main (v1.x) branch to the v2-m
 
 **Environment configuration**
 
-Install ROS 2 according to the official guide:
+Install one of the supported ROS 2 distributions according to its official guide:
 
-* [ROS 2 installation (Ubuntu)](https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debians.html)
+* [Foxy](https://docs.ros.org/en/foxy/)
+* [Humble](https://docs.ros.org/en/humble/)
+* [Jazzy](https://docs.ros.org/en/jazzy/)
+
+Source the ROS 2 environment before running the commands below:
+
+```bash
+source /opt/ros/humble/setup.bash  # Replace humble with foxy or jazzy as needed
+```
 
 Install dependencies:
 
@@ -256,10 +264,10 @@ sudo apt update
 apt list | grep orbbec
 ```
 
-Install OrbbecSDK ROS2 package:
+If binary packages are available for your ROS 2 distribution, install the OrbbecSDK ROS2 packages with:
 
 ```bash
-sudo apt install ros-humble-orbbec-camera ros-humble-orbbec-description
+sudo apt install ros-${ROS_DISTRO}-orbbec-camera ros-${ROS_DISTRO}-orbbec-description
 ```
 
 After installation, you can use it directly without compilation.
@@ -304,12 +312,11 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ```bash
 cd  ~/ros2_ws/src/OrbbecSDK_ROS2/orbbec_camera/scripts
 sudo bash install_udev_rules.sh
-sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
 This step is **mandatory** for Linux users.
 
-`Notes:` If this script is not executed, open the device will fail due to permission issues. You need to run the sample with sudo (administrator privileges).
+> **Note:** Without the udev rules, the device may fail to open because of insufficient permissions. Install the rules and reconnect the camera instead of running ROS 2 nodes with `sudo`.
 
 ## Getting start
 
@@ -356,7 +363,7 @@ For more usage details, please refer to the official [OrbbecSDK ROS2 documentati
 
 ## Supported Devices
 
-Currently, the following devices are supported by the OrbbecSDK ROS2 Wrapper v2-main branch.  More devices support will be added in the near future. If you can not find your device in the table below, try the [main](https://github.com/orbbec/OrbbecSDK_ROS2)  branch.
+Currently, the following devices are supported by the OrbbecSDK ROS2 Wrapper v2-main branch.  More devices support will be added in the near future. If you can not find your device in the table below, try the [main](https://github.com/orbbec/OrbbecSDK_ROS2/tree/main) branch.
 
 For optimal performance, we strongly recommend updating to the latest firmware version. This ensures that you benefit from the most recent enhancements and bug fixes.
 
