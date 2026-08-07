@@ -6812,7 +6812,7 @@ void OBCameraNode::publishCompressedColorImage(const std::shared_ptr<ob::Frame> 
   sensor_msgs::msg::CompressedImage msg;
   msg.header.stamp = timestamp;
   msg.header.frame_id = frame_id;
-  msg.format = encoding_[stream_index] + "; jpeg compressed " + encoding_[stream_index];
+  msg.format = "jpeg";
   const auto *data = static_cast<const uint8_t *>(frame->getData());
   msg.data.assign(data, data + frame->getDataSize());
   it->second->publish(std::move(msg));
