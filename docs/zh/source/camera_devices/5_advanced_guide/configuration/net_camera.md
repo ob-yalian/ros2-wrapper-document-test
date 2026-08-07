@@ -1,10 +1,10 @@
 # 网络相机
 
-> 本节介绍如何在 OrbbecSDK_ROS2 中使用网络相机。目前仅支持 Femto_Mega、Gemini 335Le 和 Gemini 435Le 设备，其他网络设备将在不久的将来得到支持。
+> 本节介绍如何在 OrbbecSDK_ROS2 中使用网络相机。
 
 您可以在 [example](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples) 中找到示例使用代码。
 
-## Femto Mega & Gemini 435Le & Gemini 335Le
+## Femto Mega & Gemini 435Le & Gemini 335Le & Gemini 338Le
 
 **参数介绍**
 
@@ -18,7 +18,7 @@
 
 **单个网络相机**
 
-> 如果您需要运行 Gemini 435Le/Gemini 335Le，只需在运行命令中将 [femto_mega.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/femto_mega.launch.py) 替换为 [gemini435_le.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini435_le.launch.py)/[gemini_330_series.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini_330_series.launch.py)
+> 如果您需要运行 Gemini 435Le、Gemini 335Le 或 Gemini 338Le，只需在运行命令中将 [femto_mega.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/femto_mega.launch.py) 替换为 [gemini435_le.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini435_le.launch.py) 或 [gemini_330_series.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini_330_series.launch.py)。
 
 以 [femto_mega.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/femto_mega.launch.py) 为例：
 

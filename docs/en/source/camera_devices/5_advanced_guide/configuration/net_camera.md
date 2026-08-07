@@ -1,10 +1,10 @@
 # Net_camera
 
-> This section describes how to use Net camera in OrbbecSDK_ROS2.Currently, only Femto_Mega, Gemini 335Le and Gemini 435Le devices are supported, and other Net devices will be supported in the near future.
+> This section describes how to use Net cameras in OrbbecSDK_ROS2.
 
 You can find example usage code in the [example](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples).
 
-## Femto Mega & Gemini 435Le & Gemini 335Le
+## Femto Mega & Gemini 435Le & Gemini 335Le & Gemini 338Le
 
 **Parameter Introduction**
 
@@ -18,7 +18,7 @@ If you do not want to automatically enumerate network devices,you can set `enume
 
 **Single Net camera**
 
-> If you need to run Gemini 435Le/Gemini 335Le, you only need to replace [femto_mega.launch.py ](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/femto_mega.launch.py)in the run command with [gemini435_le.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini435_le.launch.py)/[gemini_330_series.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini_330_series.launch.py)
+> If you need to run Gemini 435Le, Gemini 335Le, or Gemini 338Le, replace [femto_mega.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/femto_mega.launch.py) in the run command with [gemini435_le.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini435_le.launch.py) or [gemini_330_series.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/gemini_330_series.launch.py).
 
 For [femto_mega.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/launch/femto_mega.launch.py) as an example:
 

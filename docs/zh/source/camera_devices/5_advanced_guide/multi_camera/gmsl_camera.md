@@ -1,6 +1,6 @@
 # GMSL 相机
 
-> 本节介绍如何在 OrbbecSDK_ROS2 中使用 GMSL 相机。目前仅支持 Gemini 335Lg 和 Gemini 345Lg 设备，其他 GMSL 设备将在不久的将来得到支持。
+> 本节介绍如何在 OrbbecSDK_ROS2 中使用 GMSL 相机。
 
 您可以在 [example](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples) 中找到示例使用代码。
 
