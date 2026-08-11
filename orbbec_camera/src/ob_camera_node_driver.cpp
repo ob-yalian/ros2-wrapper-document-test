@@ -27,6 +27,13 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #endif
 #include <rclcpp_components/register_node_macro.hpp>
+#if __has_include(<rclcpp/version.h>)
+#include <rclcpp/version.h>
+#define ORBBEC_RCLCPP_HANDLES_SIGTERM \
+  ((RCLCPP_VERSION_MAJOR > 13) || (RCLCPP_VERSION_MAJOR == 13 && RCLCPP_VERSION_MINOR >= 1))
+#else
+#define ORBBEC_RCLCPP_HANDLES_SIGTERM 0
+#endif
 #include <rcutils/logging.h>
 #include <csignal>
 #include <sys/mman.h>
@@ -94,64 +101,55 @@ std::string makeDefaultSdkLogFileName() {
 }
 }  // namespace
 
-void signalHandler(int sig) {
-  // Prevent recursive signal handling
+void crashSignalHandler(int sig) {
+  // Prevent recursive crash signal handling.
   static std::atomic<bool> in_signal_handler{false};
   if (in_signal_handler.exchange(true)) {
-    // Already in signal handler, force exit immediately
     _exit(sig);
   }
 
   std::cerr << "Received signal: " << sig << std::endl;
-  if (sig == SIGINT || sig == SIGTERM) {
-    static int signal_count = 0;
-    signal_count++;
+  std::filesystem::path log_dir = getLogDirectoryForCamera(g_camera_name);
 
-    if (signal_count <= 3) {
-      rclcpp::shutdown();
-      // Give some time for graceful shutdown
-      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    } else if (signal_count >= 5) {
-      // Force exit after second signal
-      std::cout << "Force exit due to multiple signals" << std::endl;
-      _exit(sig);
-    }
-    in_signal_handler.store(false);
-  } else {
-    std::filesystem::path log_dir = getLogDirectoryForCamera(g_camera_name);
+  // get current time
+  std::time_t now = std::time(nullptr);
+  std::tm *local_time = std::localtime(&now);
 
-    // get current time
-    std::time_t now = std::time(nullptr);
-    std::tm *local_time = std::localtime(&now);
+  // format date and time, format "2024_05_20_12_34_56"
+  std::ostringstream time_stream;
+  time_stream << std::put_time(local_time, "%Y_%m_%d_%H_%M_%S");
 
-    // format date and time to string, format as "2024_05_20_12_34_56"
-    std::ostringstream time_stream;
-    time_stream << std::put_time(local_time, "%Y_%m_%d_%H_%M_%S");
+  // generate log file name
+  std::string log_file_name = g_camera_name + "_crash_stack_trace_" + time_stream.str() + ".log";
+  std::filesystem::path log_file_path = log_dir / log_file_name;
 
-    // generate log file name
-    std::string log_file_name = g_camera_name + "_crash_stack_trace_" + time_stream.str() + ".log";
-    std::filesystem::path log_file_path = log_dir / log_file_name;
-
-    if (!std::filesystem::exists(log_dir)) {
-      std::filesystem::create_directories(log_dir);
-    }
-
-    std::cerr << "Log crash stack trace to " << log_file_path.string() << std::endl;
-    std::ofstream log_file(log_file_path, std::ios::app);
-
-    if (log_file.is_open()) {
-      log_file << "Received signal: " << sig << std::endl;
-
-      backward::StackTrace st;
-      st.load_here(32);  // Capture stack
-      backward::Printer p;
-      p.print(st, log_file);  // Print stack to log file
-    }
-
-    log_file.close();
-    _exit(sig);  // Use _exit instead of exit to avoid cleanup that may crash
+  if (!std::filesystem::exists(log_dir)) {
+    std::filesystem::create_directories(log_dir);
   }
+
+  std::cerr << "Log crash stack trace to " << log_file_path.string() << std::endl;
+  std::ofstream log_file(log_file_path, std::ios::app);
+
+  if (log_file.is_open()) {
+    log_file << "Received signal: " << sig << std::endl;
+
+    backward::StackTrace st;
+    st.load_here(32);  // Capture stack
+    backward::Printer p;
+    p.print(st, log_file);  // Print stack to log file
+  }
+
+  log_file.close();
+  _exit(sig);  // Use _exit instead of exit to avoid cleanup that may crash
 }
+
+#if !ORBBEC_RCLCPP_HANDLES_SIGTERM
+void forwardSigtermToRclcpp(int) {
+  // Older rclcpp versions such as Foxy's only handle SIGINT. Forward SIGTERM to that signal-safe
+  // shutdown path instead of calling rclcpp::shutdown() directly from this signal handler.
+  kill(getpid(), SIGINT);
+}
+#endif
 
 namespace orbbec_camera {
 backward::SignalHandling OBCameraNodeDriver::sh;
@@ -278,13 +276,18 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
 }
 
 void OBCameraNodeDriver::init() {
-  // Set signal handlers for crash reporting
-  signal(SIGSEGV, signalHandler);  // segment fault
-  signal(SIGABRT, signalHandler);  // abort
-  signal(SIGFPE, signalHandler);   // float point exception
-  signal(SIGILL, signalHandler);   // illegal instruction
-  signal(SIGINT, signalHandler);
-  signal(SIGTERM, signalHandler);
+  // Keep shutdown signals managed by rclcpp. Overriding them from a composable node bypasses its
+  // deferred signal handling and can leave SDK streaming threads running after the ROS context has
+  // already been shut down.
+#if !ORBBEC_RCLCPP_HANDLES_SIGTERM
+  // Older rclcpp versions such as Foxy's predate native SIGTERM handling, so translate it to the
+  // SIGINT path that rclcpp does manage. Newer distributions handle both signals themselves.
+  signal(SIGTERM, forwardSigtermToRclcpp);
+#endif
+  signal(SIGSEGV, crashSignalHandler);  // segment fault
+  signal(SIGABRT, crashSignalHandler);  // abort
+  signal(SIGFPE, crashSignalHandler);   // float point exception
+  signal(SIGILL, crashSignalHandler);   // illegal instruction
   ob::Context::setExtensionsDirectory(extension_path_.c_str());
   g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name);
   auto log_level_str = declare_parameter<std::string>("log_level", "info");
