@@ -154,4 +154,9 @@ inline bool isGemini305SeriesPID(uint32_t pid) {
          pid == GEMINI_309G_PID;
 }
 
+inline bool isGmslCameraPID(uint32_t pid) {
+  return pid == GEMINI_335LG_PID || pid == GEMINI_338LG_PID || pid == GEMINI_345LG_PID ||
+         pid == GEMINI_305G_PID || pid == GEMINI_309G_PID;
+}
+
 }  // namespace orbbec_camera

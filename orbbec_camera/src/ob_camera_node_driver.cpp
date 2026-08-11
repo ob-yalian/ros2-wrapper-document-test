@@ -1589,7 +1589,7 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     }
 
     auto pid = device->getDeviceInfo()->getPid();
-    if (GEMINI_335LG_PID == pid || GEMINI_338LG_PID == pid) {
+    if (isGmslCameraPID(pid)) {
       ob_camera_node_->startGmslTrigger();
     }
     // if (isGemini305SeriesPID(pid)) {
