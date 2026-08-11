@@ -22,6 +22,13 @@
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <ament_index_cpp/get_package_prefix.hpp>
 #include <rclcpp_components/register_node_macro.hpp>
+#if __has_include(<rclcpp/version.h>)
+#include <rclcpp/version.h>
+#define ORBBEC_RCLCPP_HANDLES_SIGTERM \
+  ((RCLCPP_VERSION_MAJOR > 13) || (RCLCPP_VERSION_MAJOR == 13 && RCLCPP_VERSION_MINOR >= 1))
+#else
+#define ORBBEC_RCLCPP_HANDLES_SIGTERM 0
+#endif
 #include <rcutils/logging.h>
 #include <csignal>
 #include <sys/mman.h>
@@ -112,6 +119,14 @@ void crashSignalHandler(int sig) {
   log_file.close();
   _exit(sig);  // Use _exit instead of exit to avoid cleanup that may crash
 }
+
+#if !ORBBEC_RCLCPP_HANDLES_SIGTERM
+void forwardSigtermToRclcpp(int) {
+  // Older rclcpp versions such as Foxy's only handle SIGINT. Forward SIGTERM to that signal-safe
+  // shutdown path instead of calling rclcpp::shutdown() directly from this signal handler.
+  kill(getpid(), SIGINT);
+}
+#endif
 
 namespace orbbec_camera {
 backward::SignalHandling OBCameraNodeDriver::sh;
@@ -238,9 +253,14 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
 }
 
 void OBCameraNodeDriver::init() {
-  // Keep SIGINT/SIGTERM managed by rclcpp. Overriding them from a composable node bypasses
-  // rclcpp's deferred signal handling and can leave SDK streaming threads running after the ROS
-  // context has already been shut down.
+  // Keep shutdown signals managed by rclcpp. Overriding them from a composable node bypasses its
+  // deferred signal handling and can leave SDK streaming threads running after the ROS context has
+  // already been shut down.
+#if !ORBBEC_RCLCPP_HANDLES_SIGTERM
+  // Older rclcpp versions such as Foxy's predate native SIGTERM handling, so translate it to the
+  // SIGINT path that rclcpp does manage. Newer distributions handle both signals themselves.
+  signal(SIGTERM, forwardSigtermToRclcpp);
+#endif
   signal(SIGSEGV, crashSignalHandler);  // segment fault
   signal(SIGABRT, crashSignalHandler);  // abort
   signal(SIGFPE, crashSignalHandler);   // float point exception
