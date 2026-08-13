@@ -5350,13 +5350,14 @@ void OBCameraNode::setupCameraInfo() {
 }
 
 void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
+  const std::string topic = stream_name_[stream_index] + "/image_raw";
   if (!enable_stream_[stream_index]) {
+    releaseGlobalImageTransportPublisher(*node_, topic);
     image_publishers_.erase(stream_index);
     compressed_image_publishers_.erase(stream_index);
     return;
   }
 
-  const std::string topic = stream_name_[stream_index] + "/image_raw";
   auto image_qos_profile = getRMWQosProfileFromString(image_qos_[stream_index]);
   if (use_intra_process_) {
     image_qos_profile = rmw_qos_profile_default;
@@ -5366,11 +5367,12 @@ void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
       (stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       format_[stream_index] == OB_FORMAT_MJPG;
   if (use_intra_process_ || is_mjpg_color_stream) {
+    releaseGlobalImageTransportPublisher(*node_, topic);
     image_publishers_[stream_index] =
         std::make_shared<image_rcl_publisher>(*node_, topic, image_qos_profile);
   } else {
     image_publishers_[stream_index] =
-        std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
+        getGlobalImageTransportPublisher(*node_, topic, image_qos_profile);
   }
 
   if (is_mjpg_color_stream) {
@@ -5535,7 +5537,7 @@ void OBCameraNode::syncSoftwareAlignment() {
         depth_unaligned_publisher_ = std::make_shared<image_rcl_publisher>(
             *node_, "depth/image_unaligned", depth_image_qos_profile);
       } else {
-        depth_unaligned_publisher_ = std::make_shared<image_transport_publisher>(
+        depth_unaligned_publisher_ = getGlobalImageTransportPublisher(
             *node_, "depth/image_unaligned", depth_image_qos_profile);
       }
     }
@@ -5543,6 +5545,7 @@ void OBCameraNode::syncSoftwareAlignment() {
   }
 
   align_filter_.reset();
+  releaseGlobalImageTransportPublisher(*node_, "depth/image_unaligned");
   depth_unaligned_publisher_.reset();
 }
 
