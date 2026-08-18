@@ -113,6 +113,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
+        DeclareLaunchArgument('enable_depth_colorizer', default_value='false'),
         DeclareLaunchArgument('show_fps_enable', default_value='false'),
 
         DeclareLaunchArgument('enumerate_net_device', default_value='true'),

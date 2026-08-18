@@ -1,6 +1,7 @@
 # common params
 depth_registration: false
 enable_d2c_viewer: false
+enable_depth_colorizer: false
 enable_point_cloud: false
 enable_colored_point_cloud: false
 enable_ldp: false
@@ -61,5 +62,3 @@ right_ir_format: "ANY"
 # ir_height: 0
 # ir_fps: 0
 # ir_format: "ANY"
-
-

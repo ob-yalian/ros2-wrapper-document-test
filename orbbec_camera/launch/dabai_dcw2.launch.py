@@ -77,6 +77,7 @@ def generate_launch_description():
         DeclareLaunchArgument('log_level', default_value='info'),
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
+        DeclareLaunchArgument('enable_depth_colorizer', default_value='false'),
         DeclareLaunchArgument('enable_soft_filter', default_value='true'),
         DeclareLaunchArgument('enable_ldp', default_value='true'),
         DeclareLaunchArgument('soft_filter_max_diff', default_value='-1'),

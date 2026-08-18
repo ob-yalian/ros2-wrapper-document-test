@@ -66,6 +66,7 @@ namespace {
 
 constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
 constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
+constexpr double kColorizerMaxDistanceMm = 10000.0;
 
 std::string getDepthFilterStatusName(const std::string &filter_name) {
   if (filter_name == "SpatialAdvancedFilter") {
@@ -4466,6 +4467,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(point_cloud_decimation_filter_factor_,
                               "point_cloud_decimation_filter_factor", 1);
   setAndGetNodeParameter<std::string>(point_cloud_qos_, "point_cloud_qos", "default");
+  setAndGetNodeParameter<bool>(colorizer_enabled_, "enable_depth_colorizer", false);
   setAndGetNodeParameter<bool>(enable_d2c_viewer_, "enable_d2c_viewer", false);
   setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
   disparity_to_depth_mode_ =
@@ -5428,6 +5430,11 @@ void OBCameraNode::setupPublishers() {
     }
   }
 
+  if (colorizer_enabled_ && enable_stream_[DEPTH]) {
+    RCLCPP_INFO(logger_,
+                "Depth colorizer enabled, publishing Jet RGB images on depth/image_raw (0-10 m)");
+  }
+
   syncSoftwareAlignment();
 
   if (enable_sync_output_accel_gyro_) {
@@ -5599,6 +5606,34 @@ void OBCameraNode::publishRawDepthImage(const std::shared_ptr<ob::Frame> &depth_
   image_msg->header.frame_id = frame_id;
 
   depth_unaligned_publisher_->publish(std::move(image_msg));
+}
+
+cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image) {
+  if (depth_image.empty() || depth_image.channels() != 1) {
+    return {};
+  }
+
+  cv::Mat depth_8u;
+  if (depth_image.type() == CV_16UC1 || depth_image.type() == CV_32FC1) {
+    depth_image.convertTo(depth_8u, CV_8UC1, 255.0 / kColorizerMaxDistanceMm);
+  } else if (depth_image.type() == CV_8UC1) {
+    depth_image.convertTo(depth_8u, CV_8UC1);
+  } else {
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
+                         "Unsupported depth image type for colorizer: %d", depth_image.type());
+    return {};
+  }
+
+  cv::Mat colorized_bgr;
+  cv::applyColorMap(depth_8u, colorized_bgr, cv::COLORMAP_JET);
+
+  cv::Mat invalid_depth_mask;
+  cv::compare(depth_image, cv::Scalar(0), invalid_depth_mask, cv::CMP_EQ);
+  colorized_bgr.setTo(cv::Scalar::all(0), invalid_depth_mask);
+
+  cv::Mat colorized_rgb;
+  cv::cvtColor(colorized_bgr, colorized_rgb, cv::COLOR_BGR2RGB);
+  return colorized_rgb;
 }
 
 void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {
@@ -6785,22 +6820,34 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   camera_info_publishers_[stream_index]->publish(camera_info);
   publishMetadata(frame, stream_index, camera_info.header);
 
-  if (!has_raw_image_subscriber && !save_images_[stream_index]) {
-    return;
-  }
+  cv::Mat image_to_publish = image;
+  std::string image_encoding = encoding_[stream_index];
+  uint32_t image_step = width * unit_step_size_[stream_index];
   if (stream_index == DEPTH) {
     auto depth_scale = video_frame->as<ob::DepthFrame>()->getValueScale();
     image = image * depth_scale;
+    image_to_publish = image;
+    if (colorizer_enabled_ && has_raw_image_subscriber) {
+      auto colorized_image = colorizeDepthImage(image);
+      if (!colorized_image.empty()) {
+        image_to_publish = std::move(colorized_image);
+        image_encoding = sensor_msgs::image_encodings::RGB8;
+        image_step = static_cast<uint32_t>(image_to_publish.cols * 3 * sizeof(uint8_t));
+      }
+    }
+  }
+  if (!has_raw_image_subscriber && !save_images_[stream_index]) {
+    return;
   }
   CHECK(image_publishers_.count(stream_index) > 0);
   if (has_raw_image_subscriber || save_images_[stream_index]) {
     sensor_msgs::msg::Image::UniquePtr image_msg(new sensor_msgs::msg::Image());
-    cv_bridge::CvImage(std_msgs::msg::Header(), encoding_[stream_index], image)
+    cv_bridge::CvImage(std_msgs::msg::Header(), image_encoding, image_to_publish)
         .toImageMsg(*image_msg);
     CHECK_NOTNULL(image_msg.get());
     image_msg->header.stamp = timestamp;
     image_msg->is_bigendian = false;
-    image_msg->step = width * unit_step_size_[stream_index];
+    image_msg->step = image_step;
     image_msg->header.frame_id = frame_id;
     saveImageToFile(stream_index, image, *image_msg);
     if (!has_raw_image_subscriber) {

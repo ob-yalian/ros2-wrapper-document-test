@@ -558,6 +558,8 @@ class OBCameraNode {
 
   void publishRawDepthImage(const std::shared_ptr<ob::Frame>& depth_frame);
 
+  cv::Mat colorizeDepthImage(const cv::Mat& depth_image);
+
   std::shared_ptr<ob::Frame> processDepthFrameFilter(std::shared_ptr<ob::Frame>& frame);
 
   std::shared_ptr<ob::Frame> processColorFrameFilter(std::shared_ptr<ob::Frame>& frame);
@@ -799,6 +801,7 @@ class OBCameraNode {
   std::string color_info_url_;
   std::string ir_info_url_;
   std::optional<OBCameraParam> camera_param_;
+  bool colorizer_enabled_ = false;
   bool enable_d2c_viewer_ = false;
   std::unique_ptr<D2CViewer> d2c_viewer_ = nullptr;
   std::map<stream_index_pair, std::atomic_bool> save_images_;

@@ -206,6 +206,7 @@ def generate_launch_description():
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
+        DeclareLaunchArgument('enable_depth_colorizer', default_value='false'),
         DeclareLaunchArgument('disparity_to_depth_mode', default_value='HW'),
         DeclareLaunchArgument('sync_mode', default_value='standalone'),
         DeclareLaunchArgument('depth_delay_us', default_value='0'),
