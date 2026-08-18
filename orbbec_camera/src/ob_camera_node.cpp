@@ -16,6 +16,7 @@
 
 #include "orbbec_camera/ob_camera_node.h"
 #include <rclcpp/rclcpp.hpp>
+#include <rmw/qos_string_conversions.h>
 #include <thread>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sstream>
@@ -4415,6 +4416,20 @@ void OBCameraNode::getParameters() {
     updateImageConfig(stream_index);
     param_name = stream_name_[stream_index] + "_qos";
     setAndGetNodeParameter<std::string>(image_qos_[stream_index], param_name, "default");
+    param_name = stream_name_[stream_index] + "_qos_history";
+    setAndGetNodeParameter<std::string>(image_qos_history_[stream_index], param_name, "default");
+    std::transform(image_qos_history_[stream_index].begin(), image_qos_history_[stream_index].end(),
+                   image_qos_history_[stream_index].begin(), ::toupper);
+    if (image_qos_history_[stream_index] != "DEFAULT" &&
+        image_qos_history_[stream_index] != "KEEP_LAST" &&
+        image_qos_history_[stream_index] != "KEEP_ALL") {
+      throw std::invalid_argument(param_name + " must be DEFAULT, KEEP_LAST, or KEEP_ALL");
+    }
+    param_name = stream_name_[stream_index] + "_qos_depth";
+    setAndGetNodeParameter<int>(image_qos_depth_[stream_index], param_name, -1);
+    if (image_qos_depth_[stream_index] == 0 || image_qos_depth_[stream_index] < -1) {
+      throw std::invalid_argument(param_name + " must be -1 or greater than zero");
+    }
     param_name = stream_name_[stream_index] + "_camera_info_qos";
     setAndGetNodeParameter<std::string>(camera_info_qos_[stream_index], param_name, "default");
     param_name = "enable_" + stream_name_[stream_index] + "_undistortion";
@@ -5267,10 +5282,7 @@ void OBCameraNode::setupConfidencePublishers() {
   if (confidence_image_publisher_) {
     return;
   }
-  auto image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
-  if (use_intra_process_) {
-    image_qos_profile = rmw_qos_profile_default;
-  }
+  const auto image_qos_profile = getImageQosProfile(DEPTH);
   confidence_image_publisher_ = node_->create_publisher<sensor_msgs::msg::Image>(
       "confidence/image_raw",
       rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(image_qos_profile), image_qos_profile));
@@ -5359,11 +5371,7 @@ void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
   }
 
   const std::string topic = stream_name_[stream_index] + "/image_raw";
-  auto image_qos_profile = getRMWQosProfileFromString(image_qos_[stream_index]);
-  if (use_intra_process_) {
-    image_qos_profile = rmw_qos_profile_default;
-  }
-
+  const auto image_qos_profile = getImageQosProfile(stream_index);
   const bool is_mjpg_color_stream =
       (stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       format_[stream_index] == OB_FORMAT_MJPG;
@@ -5374,6 +5382,14 @@ void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
     image_publishers_[stream_index] =
         std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
   }
+  std::string history = rmw_qos_history_policy_to_str(image_qos_profile.history);
+  if (image_qos_profile.history == RMW_QOS_POLICY_HISTORY_KEEP_LAST) {
+    history += "(" + std::to_string(image_qos_profile.depth) + ")";
+  }
+  RCLCPP_INFO_STREAM(
+      logger_, topic << " QoS: " << rmw_qos_reliability_policy_to_str(image_qos_profile.reliability)
+                     << ", " << rmw_qos_durability_policy_to_str(image_qos_profile.durability)
+                     << ", " << history);
 
   if (is_mjpg_color_stream) {
     compressed_image_publishers_[stream_index] =
@@ -5383,6 +5399,24 @@ void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
   } else {
     compressed_image_publishers_.erase(stream_index);
   }
+}
+
+rmw_qos_profile_t OBCameraNode::getImageQosProfile(const stream_index_pair &stream_index) const {
+  auto image_qos_profile = getRMWQosProfileFromString(image_qos_.at(stream_index));
+  if (use_intra_process_) {
+    image_qos_profile = rmw_qos_profile_default;
+  }
+  const auto &history = image_qos_history_.at(stream_index);
+  if (history == "KEEP_LAST") {
+    image_qos_profile.history = RMW_QOS_POLICY_HISTORY_KEEP_LAST;
+  } else if (history == "KEEP_ALL") {
+    image_qos_profile.history = RMW_QOS_POLICY_HISTORY_KEEP_ALL;
+  }
+  const auto depth = image_qos_depth_.at(stream_index);
+  if (depth > 0) {
+    image_qos_profile.depth = static_cast<size_t>(depth);
+  }
+  return image_qos_profile;
 }
 
 void OBCameraNode::setupPublishers() {
@@ -5529,10 +5563,7 @@ void OBCameraNode::syncSoftwareAlignment() {
       RCLCPP_INFO_STREAM(logger_, "set align mode to " << align_mode_);
     }
     if (!depth_unaligned_publisher_) {
-      auto depth_image_qos_profile = getRMWQosProfileFromString(image_qos_[DEPTH]);
-      if (use_intra_process_) {
-        depth_image_qos_profile = rmw_qos_profile_default;
-      }
+      const auto depth_image_qos_profile = getImageQosProfile(DEPTH);
       if (use_intra_process_) {
         depth_unaligned_publisher_ = std::make_shared<image_rcl_publisher>(
             *node_, "depth/image_unaligned", depth_image_qos_profile);

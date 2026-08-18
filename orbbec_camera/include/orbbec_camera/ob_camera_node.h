@@ -324,6 +324,8 @@ class OBCameraNode {
 
   void setupImagePublisher(const stream_index_pair& stream_index);
 
+  rmw_qos_profile_t getImageQosProfile(const stream_index_pair& stream_index) const;
+
   void setupPipelineConfig();
 
   void setupDiagnosticUpdater();
@@ -692,6 +694,8 @@ class OBCameraNode {
   std::string camera_link_frame_id_;
   bool depth_registration_ = false;
   std::map<stream_index_pair, std::string> image_qos_;
+  std::map<stream_index_pair, std::string> image_qos_history_;
+  std::map<stream_index_pair, int> image_qos_depth_;
   std::map<stream_index_pair, std::string> camera_info_qos_;
   std::map<stream_index_pair, ob_format> format_;
   std::map<stream_index_pair, std::string> format_str_;

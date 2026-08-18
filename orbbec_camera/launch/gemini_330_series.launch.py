@@ -108,6 +108,8 @@ def generate_launch_description():
         DeclareLaunchArgument('color_format', default_value='ANY'),
         DeclareLaunchArgument('enable_color', default_value='true'),
         DeclareLaunchArgument('color_qos', default_value='default'),
+        DeclareLaunchArgument('color_qos_history', default_value='default'),
+        DeclareLaunchArgument('color_qos_depth', default_value='-1'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('color_rotation', default_value='-1'),#color rotation degree : 0, 90, 180, 270
@@ -144,6 +146,8 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_format', default_value='ANY'),
         DeclareLaunchArgument('enable_depth', default_value='true'),
         DeclareLaunchArgument('depth_qos', default_value='default'),
+        DeclareLaunchArgument('depth_qos_history', default_value='default'),
+        DeclareLaunchArgument('depth_qos_depth', default_value='-1'),
         DeclareLaunchArgument('depth_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_depth_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('depth_precision', default_value=''),
@@ -161,6 +165,8 @@ def generate_launch_description():
         DeclareLaunchArgument('left_ir_format', default_value='ANY'),
         DeclareLaunchArgument('enable_left_ir', default_value='false'),
         DeclareLaunchArgument('left_ir_qos', default_value='default'),
+        DeclareLaunchArgument('left_ir_qos_history', default_value='default'),
+        DeclareLaunchArgument('left_ir_qos_depth', default_value='-1'),
         DeclareLaunchArgument('left_ir_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('left_ir_rotation', default_value='-1'),#left_ir rotation degree : 0, 90, 180, 270
         DeclareLaunchArgument('left_ir_flip', default_value='false'),
@@ -173,6 +179,8 @@ def generate_launch_description():
         DeclareLaunchArgument('right_ir_format', default_value='ANY'),
         DeclareLaunchArgument('enable_right_ir', default_value='false'),
         DeclareLaunchArgument('right_ir_qos', default_value='default'),
+        DeclareLaunchArgument('right_ir_qos_history', default_value='default'),
+        DeclareLaunchArgument('right_ir_qos_depth', default_value='-1'),
         DeclareLaunchArgument('right_ir_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('right_ir_rotation', default_value='-1'),#right_ir rotation degree : 0, 90, 180, 270
         DeclareLaunchArgument('right_ir_flip', default_value='false'),
