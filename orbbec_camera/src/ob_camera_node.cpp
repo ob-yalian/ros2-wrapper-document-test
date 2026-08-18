@@ -19,6 +19,7 @@
 #include <thread>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sstream>
+#include <array>
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -66,7 +67,10 @@ namespace {
 
 constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
 constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
-constexpr double kColorizerMaxDistanceMm = 10000.0;
+constexpr double kViewerColorizerGamma = 0.65;
+constexpr uint16_t kViewerColorizerMaxDistanceMm = 10000;
+constexpr uint16_t kViewerColorizerDefaultMinDistanceMm = 100;
+constexpr uint16_t kViewerColorizerG305MinDistanceMm = 40;
 
 std::string getDepthFilterStatusName(const std::string &filter_name) {
   if (filter_name == "SpatialAdvancedFilter") {
@@ -4467,7 +4471,10 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(point_cloud_decimation_filter_factor_,
                               "point_cloud_decimation_filter_factor", 1);
   setAndGetNodeParameter<std::string>(point_cloud_qos_, "point_cloud_qos", "default");
-  setAndGetNodeParameter<bool>(colorizer_enabled_, "enable_depth_colorizer", false);
+  setAndGetNodeParameter<std::string>(colorizer_mode_, "depth_colorizer_mode", "none");
+  colorizer_mode_ = lowerParameterValue(colorizer_mode_);
+  colorizer_mode_ = normalizeClosedSetParameterValue(
+      logger_, "depth_colorizer_mode", colorizer_mode_, {"none", "jet", "jet_inv", "gray"}, "none");
   setAndGetNodeParameter<bool>(enable_d2c_viewer_, "enable_d2c_viewer", false);
   setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
   disparity_to_depth_mode_ =
@@ -5430,9 +5437,10 @@ void OBCameraNode::setupPublishers() {
     }
   }
 
-  if (colorizer_enabled_ && enable_stream_[DEPTH]) {
-    RCLCPP_INFO(logger_,
-                "Depth colorizer enabled, publishing Jet RGB images on depth/image_raw (0-10 m)");
+  if (colorizer_mode_ != "none" && enable_stream_[DEPTH]) {
+    RCLCPP_INFO_STREAM(logger_, "Depth colorizer mode '"
+                                    << colorizer_mode_
+                                    << "' enabled, publishing colorized images on depth/image_raw");
   }
 
   syncSoftwareAlignment();
@@ -5613,22 +5621,78 @@ cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image) {
     return {};
   }
 
-  cv::Mat depth_8u;
-  if (depth_image.type() == CV_16UC1 || depth_image.type() == CV_32FC1) {
-    depth_image.convertTo(depth_8u, CV_8UC1, 255.0 / kColorizerMaxDistanceMm);
-  } else if (depth_image.type() == CV_8UC1) {
-    depth_image.convertTo(depth_8u, CV_8UC1);
-  } else {
+  if (colorizer_mode_ == "none") {
+    return {};
+  }
+
+  if (depth_image.type() != CV_16UC1 && depth_image.type() != CV_32FC1 &&
+      depth_image.type() != CV_8UC1) {
     RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
                          "Unsupported depth image type for colorizer: %d", depth_image.type());
     return {};
   }
 
-  cv::Mat colorized_bgr;
-  cv::applyColorMap(depth_8u, colorized_bgr, cv::COLORMAP_JET);
+  cv::Mat depth_16u;
+  depth_image.convertTo(depth_16u, CV_16UC1);
+
+  const uint16_t min_depth = isGemini305SeriesPID(pid_) ? kViewerColorizerG305MinDistanceMm
+                                                        : kViewerColorizerDefaultMinDistanceMm;
+  const uint16_t max_depth = kViewerColorizerMaxDistanceMm;
+  const uint32_t value_range = static_cast<uint32_t>(max_depth) - min_depth + 1;
+  std::array<uint32_t, static_cast<size_t>(kViewerColorizerMaxDistanceMm) + 1> histogram{};
+  uint32_t valid_pixel_count = 0;
+
+  for (int row = 0; row < depth_16u.rows; ++row) {
+    const auto *depth_row = depth_16u.ptr<uint16_t>(row);
+    for (int col = 0; col < depth_16u.cols; ++col) {
+      const uint16_t depth_value = depth_row[col];
+      if (depth_value >= min_depth && depth_value <= max_depth) {
+        ++histogram[depth_value];
+        ++valid_pixel_count;
+      }
+    }
+  }
+  for (uint32_t depth_value = 1; depth_value <= max_depth; ++depth_value) {
+    histogram[depth_value] += histogram[depth_value - 1];
+  }
+
+  cv::Mat depth_8u(depth_16u.size(), CV_8UC1);
+  for (int row = 0; row < depth_16u.rows; ++row) {
+    const auto *depth_row = depth_16u.ptr<uint16_t>(row);
+    auto *mapped_row = depth_8u.ptr<uint8_t>(row);
+    for (int col = 0; col < depth_16u.cols; ++col) {
+      uint16_t depth_value = depth_row[col];
+      if (depth_value > max_depth) {
+        depth_value = max_depth;
+      }
+      if (valid_pixel_count != 0 && depth_value >= min_depth) {
+        depth_value = static_cast<uint16_t>(static_cast<float>(value_range) *
+                                                histogram[depth_value] / valid_pixel_count +
+                                            min_depth);
+      }
+      const double normalized_depth = std::max(
+          0.0,
+          std::min(1.0, (static_cast<double>(depth_value) - min_depth) / (max_depth - min_depth)));
+      const double scale_value = 255.0 * std::pow(normalized_depth, kViewerColorizerGamma);
+      mapped_row[col] = static_cast<uint8_t>(std::max(0.0, std::min(255.0, scale_value)));
+    }
+  }
 
   cv::Mat invalid_depth_mask;
   cv::compare(depth_image, cv::Scalar(0), invalid_depth_mask, cv::CMP_EQ);
+  depth_8u.setTo(cv::Scalar::all(0), invalid_depth_mask);
+
+  if (colorizer_mode_ == "gray") {
+    return depth_8u;
+  }
+  if (colorizer_mode_ == "jet_inv") {
+    depth_8u = 255 - depth_8u;
+    depth_8u.setTo(cv::Scalar::all(0), invalid_depth_mask);
+  }
+
+  cv::Mat colorized_bgr;
+  cv::applyColorMap(depth_8u, colorized_bgr, cv::COLORMAP_JET);
+
   colorized_bgr.setTo(cv::Scalar::all(0), invalid_depth_mask);
 
   cv::Mat colorized_rgb;
@@ -6827,12 +6891,13 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     auto depth_scale = video_frame->as<ob::DepthFrame>()->getValueScale();
     image = image * depth_scale;
     image_to_publish = image;
-    if (colorizer_enabled_ && has_raw_image_subscriber) {
+    if (colorizer_mode_ != "none" && has_raw_image_subscriber) {
       auto colorized_image = colorizeDepthImage(image);
       if (!colorized_image.empty()) {
         image_to_publish = std::move(colorized_image);
-        image_encoding = sensor_msgs::image_encodings::RGB8;
-        image_step = static_cast<uint32_t>(image_to_publish.cols * 3 * sizeof(uint8_t));
+        image_encoding = colorizer_mode_ == "gray" ? sensor_msgs::image_encodings::MONO8
+                                                   : sensor_msgs::image_encodings::RGB8;
+        image_step = static_cast<uint32_t>(image_to_publish.cols * image_to_publish.elemSize());
       }
     }
   }

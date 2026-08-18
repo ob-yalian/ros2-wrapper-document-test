@@ -333,8 +333,8 @@ sudo bash install_udev_rules.sh
 source ~/ros2_ws/install/setup.bash
 ros2 run orbbec_camera list_devices_node #检查相机是否已连接
 ros2 launch orbbec_camera gemini_330_series.launch.py # 或其他启动文件，见下表
-# 可选：开启 Jet 伪彩色深度图，直接发布到 /camera/depth/image_raw
-ros2 launch orbbec_camera gemini_330_series.launch.py enable_depth_colorizer:=true
+# 可选：使用 OrbbecViewer 风格发布伪彩色深度图到 /camera/depth/image_raw
+ros2 launch orbbec_camera gemini_330_series.launch.py depth_colorizer_mode:=jet
 ```
 
 - 终端 2
@@ -368,8 +368,14 @@ ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString '{}'
 
 更多使用详情，请参考官方 [OrbbecSDK ROS2 文档](https://orbbec.github.io/OrbbecSDK_ROS2/zh/source/camera_devices/4_application_guide/application_guide.html)
 
-开启 `enable_depth_colorizer` 后，`depth/image_raw` 直接发布 `rgb8` 彩色图（OpenCV Jet）。
-关闭时该话题仍发布原始 `16UC1` 深度图，彩色图使用 0--10 m 深度范围进行映射。
+`depth_colorizer_mode` 是字符串渲染模式：
+
+- `none`：关闭彩色化，`depth/image_raw` 发布原始 `16UC1` 深度图；
+- `jet`：使用 OrbbecViewer 的动态直方图、伽马和 Jet 映射；
+- `jet_inv`：使用 OrbbecViewer 风格的反向 Jet 映射；
+- `gray`：使用 OrbbecViewer 风格的灰度映射；
+
+`jet` 和 `jet_inv` 模式发布 `rgb8`，`gray` 模式发布 `mono8` 到 `depth/image_raw`。
 
 ## 支持的设备
 

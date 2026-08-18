@@ -100,7 +100,7 @@ def generate_launch_description():
         DeclareLaunchArgument('temporal_filter_weight', default_value='-1.0'),
         DeclareLaunchArgument('hole_filling_filter_mode', default_value=''),
         DeclareLaunchArgument("enable_d2c_viewer", default_value="false"),
-        DeclareLaunchArgument("enable_depth_colorizer", default_value="false"),
+        DeclareLaunchArgument("depth_colorizer_mode", default_value="none"),
         DeclareLaunchArgument("enable_ldp", default_value="true"),
         DeclareLaunchArgument("ordered_pc", default_value="false"),
         DeclareLaunchArgument("enable_depth_scale", default_value="true"),

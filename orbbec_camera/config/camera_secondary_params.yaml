@@ -1,7 +1,7 @@
 # common params
 depth_registration: false
 enable_d2c_viewer: false
-enable_depth_colorizer: false
+depth_colorizer_mode: "none"
 enable_point_cloud: false
 enable_colored_point_cloud: false
 enable_ldp: false

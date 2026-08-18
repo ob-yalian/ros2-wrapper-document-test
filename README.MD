@@ -334,8 +334,8 @@ Launch camera node
 source ~/ros2_ws/install/setup.bash
 ros2 run orbbec_camera list_devices_node # Check if the camera is connected
 ros2 launch orbbec_camera gemini_330_series.launch.py # Or other launch file, see below table
-# Optional: enable Jet colorized depth on /camera/depth/image_raw
-ros2 launch orbbec_camera gemini_330_series.launch.py enable_depth_colorizer:=true
+# Optional: publish OrbbecViewer-style colorized depth on /camera/depth/image_raw
+ros2 launch orbbec_camera gemini_330_series.launch.py depth_colorizer_mode:=jet
 ```
 
 - On terminal 2
@@ -369,9 +369,14 @@ ros2 service call /camera/get_sdk_version orbbec_camera_msgs/srv/GetString '{}'
 
 For more usage details, please refer to the official [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/4_application_guide/application_guide.html)
 
-When `enable_depth_colorizer` is enabled, `depth/image_raw` directly publishes an `rgb8` image
-(OpenCV Jet). When disabled, the topic continues to publish the raw `16UC1` depth image; the
-colorized image uses a 0--10 m depth range for mapping.
+`depth_colorizer_mode` is a string render mode:
+
+- `none`: disable colorization and publish the raw `16UC1` depth image;
+- `jet`: use the OrbbecViewer-style dynamic histogram, gamma, and Jet mapping;
+- `jet_inv`: use the OrbbecViewer-style inverse Jet mapping;
+- `gray`: use the OrbbecViewer-style grayscale mapping;
+
+The `jet` and `jet_inv` modes publish `rgb8`; `gray` publishes `mono8` on `depth/image_raw`.
 
 ## Supported Devices
 

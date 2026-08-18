@@ -86,7 +86,7 @@ def generate_launch_description():
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
-        DeclareLaunchArgument('enable_depth_colorizer', default_value='false'),
+        DeclareLaunchArgument('depth_colorizer_mode', default_value='none'),
         DeclareLaunchArgument('enable_noise_removal_filter', default_value='true'),
         DeclareLaunchArgument('noise_removal_filter_min_diff', default_value='256'),
         DeclareLaunchArgument('noise_removal_filter_max_size', default_value='80'),
