@@ -124,6 +124,10 @@ def generate_launch_description():
         DeclareLaunchArgument('color_qos', default_value='default'),
         DeclareLaunchArgument('color_qos_history', default_value='default'),
         DeclareLaunchArgument('color_qos_depth', default_value='-1'),
+        DeclareLaunchArgument('left_color_qos_history', default_value='default'),
+        DeclareLaunchArgument('left_color_qos_depth', default_value='-1'),
+        DeclareLaunchArgument('right_color_qos_history', default_value='default'),
+        DeclareLaunchArgument('right_color_qos_depth', default_value='-1'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('color_rotation', default_value='-1'),#color rotation degree : 0, 90, 180, 270

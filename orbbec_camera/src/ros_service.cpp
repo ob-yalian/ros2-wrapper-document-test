@@ -480,33 +480,40 @@ void OBCameraNode::getColorQueueStatsCallback(
 
     nlohmann::json queues;
     uint64_t overflow_count = 0;
-    if (enable_stream_[COLOR]) {
+    const bool reset = request->data;
+    if (enable_stream_[COLOR] || reset) {
       const auto stats =
           getColorQueueStats(color_frame_queue_, color_frame_queue_lock_, color_frame_queue_stats_,
-                             color_frame_queue_max_frames_, request->data);
-      queues["color"] = to_json(stats);
-      overflow_count += stats.overflow_count;
+                             color_frame_queue_max_frames_, reset);
+      if (enable_stream_[COLOR]) {
+        queues["color"] = to_json(stats);
+        overflow_count += stats.overflow_count;
+      }
     }
-    if (enable_stream_[COLOR_LEFT]) {
+    if (enable_stream_[COLOR_LEFT] || reset) {
       const auto stats = getColorQueueStats(left_color_frame_queue_, left_color_frame_queue_lock_,
                                             left_color_frame_queue_stats_,
-                                            left_color_frame_queue_max_frames_, request->data);
-      queues["left_color"] = to_json(stats);
-      overflow_count += stats.overflow_count;
+                                            left_color_frame_queue_max_frames_, reset);
+      if (enable_stream_[COLOR_LEFT]) {
+        queues["left_color"] = to_json(stats);
+        overflow_count += stats.overflow_count;
+      }
     }
-    if (enable_stream_[COLOR_RIGHT]) {
+    if (enable_stream_[COLOR_RIGHT] || reset) {
       const auto stats = getColorQueueStats(right_color_frame_queue_, right_color_frame_queue_lock_,
                                             right_color_frame_queue_stats_,
-                                            right_color_frame_queue_max_frames_, request->data);
-      queues["right_color"] = to_json(stats);
-      overflow_count += stats.overflow_count;
+                                            right_color_frame_queue_max_frames_, reset);
+      if (enable_stream_[COLOR_RIGHT]) {
+        queues["right_color"] = to_json(stats);
+        overflow_count += stats.overflow_count;
+      }
     }
     response->success = true;
     response->message =
         nlohmann::json{
             {"namespace", node_->get_namespace()},
             {"overflow_count", overflow_count},
-            {"statistics_reset", request->data},
+            {"statistics_reset", reset},
             {"queues", queues},
         }
             .dump();

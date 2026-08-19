@@ -16,7 +16,6 @@
 
 #include "orbbec_camera/ob_camera_node.h"
 #include <rclcpp/rclcpp.hpp>
-#include <rmw/qos_string_conversions.h>
 #include <thread>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sstream>
@@ -453,7 +452,8 @@ void OBCameraNode::publishDepthFiltersStatus() {
     depth_filters_snapshot = depth_filter_list_;
   }
 
-  auto find_depth_filter = [&depth_filters_snapshot](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
+  auto find_depth_filter =
+      [&depth_filters_snapshot](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
     const auto normalized_name = normalizeDepthFilterName(filter_name);
     auto it = std::find_if(depth_filters_snapshot.begin(), depth_filters_snapshot.end(),
                            [&normalized_name](const auto &filter) {
@@ -5446,14 +5446,14 @@ void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
     image_publishers_[stream_index] =
         std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
   }
-  std::string history = rmw_qos_history_policy_to_str(image_qos_profile.history);
+  std::string depth;
   if (image_qos_profile.history == RMW_QOS_POLICY_HISTORY_KEEP_LAST) {
-    history += "(" + std::to_string(image_qos_profile.depth) + ")";
+    depth = ", depth=" + std::to_string(image_qos_profile.depth);
   }
   RCLCPP_INFO_STREAM(
-      logger_, topic << " QoS: " << rmw_qos_reliability_policy_to_str(image_qos_profile.reliability)
-                     << ", " << rmw_qos_durability_policy_to_str(image_qos_profile.durability)
-                     << ", " << history);
+      logger_, topic << " QoS: reliability=" << magic_enum::enum_name(image_qos_profile.reliability)
+                     << ", durability=" << magic_enum::enum_name(image_qos_profile.durability)
+                     << ", history=" << magic_enum::enum_name(image_qos_profile.history) << depth);
 
   if (is_mjpg_color_stream) {
     compressed_image_publishers_[stream_index] =
