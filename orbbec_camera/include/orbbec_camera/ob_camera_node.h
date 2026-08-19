@@ -558,7 +558,7 @@ class OBCameraNode {
 
   void publishRawDepthImage(const std::shared_ptr<ob::Frame>& depth_frame);
 
-  cv::Mat colorizeDepthImage(const cv::Mat& depth_image);
+  cv::Mat colorizeDepthImage(const cv::Mat& depth_image, const std::string& colorizer_mode);
 
   std::shared_ptr<ob::Frame> processDepthFrameFilter(std::shared_ptr<ob::Frame>& frame);
 

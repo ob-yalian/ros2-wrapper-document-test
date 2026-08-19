@@ -5616,12 +5616,13 @@ void OBCameraNode::publishRawDepthImage(const std::shared_ptr<ob::Frame> &depth_
   depth_unaligned_publisher_->publish(std::move(image_msg));
 }
 
-cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image) {
+cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image,
+                                         const std::string &colorizer_mode) {
   if (depth_image.empty() || depth_image.channels() != 1) {
     return {};
   }
 
-  if (colorizer_mode_ == "none") {
+  if (colorizer_mode == "none") {
     return {};
   }
 
@@ -5682,10 +5683,10 @@ cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image) {
   cv::compare(depth_image, cv::Scalar(0), invalid_depth_mask, cv::CMP_EQ);
   depth_8u.setTo(cv::Scalar::all(0), invalid_depth_mask);
 
-  if (colorizer_mode_ == "gray") {
+  if (colorizer_mode == "gray") {
     return depth_8u;
   }
-  if (colorizer_mode_ == "jet_inv") {
+  if (colorizer_mode == "jet_inv") {
     depth_8u = 255 - depth_8u;
     depth_8u.setTo(cv::Scalar::all(0), invalid_depth_mask);
   }
@@ -6893,7 +6894,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     image = image * depth_scale;
     image_to_publish = image;
     if (colorizer_mode_ != "none" && (has_raw_image_subscriber || save_images_[stream_index])) {
-      auto colorized_image = colorizeDepthImage(image);
+      auto colorized_image = colorizeDepthImage(image, colorizer_mode_);
       if (!colorized_image.empty()) {
         image_to_publish = std::move(colorized_image);
         image_encoding = colorizer_mode_ == "gray" ? sensor_msgs::image_encodings::MONO8
@@ -7051,6 +7052,13 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
     }
 
     cv::Mat png_image = image_to_save.empty() ? raw_image : image_to_save;
+    if (stream_index == DEPTH && colorizer_mode_ == "none") {
+      // Keep the ROS topic raw in none mode, but save a viewable depth preview.
+      auto depth_preview = colorizeDepthImage(png_image, "gray");
+      if (!depth_preview.empty()) {
+        png_image = std::move(depth_preview);
+      }
+    }
     if (png_image.empty()) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to save PNG image: image is empty");
     } else {
