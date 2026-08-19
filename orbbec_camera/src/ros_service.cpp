@@ -121,6 +121,11 @@ std::string OBSyncModeToString(const OBMultiDeviceSyncMode& mode) {
 
 void OBCameraNode::setupCameraCtrlServices() {
   using std_srvs::srv::SetBool;
+  get_color_queue_stats_srv_ = node_->create_service<SetBool>(
+      "get_color_queue_stats", [this](const std::shared_ptr<SetBool::Request> request,
+                                      std::shared_ptr<SetBool::Response> response) {
+        getColorQueueStatsCallback(request, response);
+      });
   for (auto stream_index : IMAGE_STREAMS) {
     if (!enable_stream_[stream_index]) {
       continue;
@@ -455,6 +460,48 @@ void OBCameraNode::setupCameraCtrlServices() {
                                             std::shared_ptr<SetInt32::Response> response) {
           setSyncIoVoltageLevelCallback(request, response);
         });
+  }
+}
+
+void OBCameraNode::getColorQueueStatsCallback(
+    const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
+    std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
+  try {
+    const auto to_json = [](const ColorQueueStatsSnapshot& stats) {
+      return nlohmann::json{
+          {"capacity_frames", stats.capacity_frames},
+          {"queue_size", stats.queue_size},
+          {"max_queue_size", stats.max_queue_size},
+          {"overflow_count", stats.overflow_count},
+          {"oldest_queue_wait_ms", stats.oldest_queue_wait_ms},
+          {"max_queue_wait_ms", stats.max_queue_wait_ms},
+      };
+    };
+    nlohmann::json queues;
+    queues["color"] = to_json(getColorQueueStats(color_frame_queue_, color_frame_queue_lock_,
+                                                 color_frame_queue_stats_,
+                                                 color_frame_queue_max_frames_, request->data));
+    queues["left_color"] = to_json(getColorQueueStats(
+        left_color_frame_queue_, left_color_frame_queue_lock_, left_color_frame_queue_stats_,
+        left_color_frame_queue_max_frames_, request->data));
+    queues["right_color"] = to_json(getColorQueueStats(
+        right_color_frame_queue_, right_color_frame_queue_lock_, right_color_frame_queue_stats_,
+        right_color_frame_queue_max_frames_, request->data));
+    const uint64_t overflow_count = queues["color"]["overflow_count"].get<uint64_t>() +
+                                    queues["left_color"]["overflow_count"].get<uint64_t>() +
+                                    queues["right_color"]["overflow_count"].get<uint64_t>();
+    response->success = true;
+    response->message =
+        nlohmann::json{
+            {"namespace", node_->get_namespace()},
+            {"overflow_count", overflow_count},
+            {"statistics_reset", request->data},
+            {"queues", queues},
+        }
+            .dump();
+  } catch (const std::exception& error) {
+    response->success = false;
+    response->message = error.what();
   }
 }
 
