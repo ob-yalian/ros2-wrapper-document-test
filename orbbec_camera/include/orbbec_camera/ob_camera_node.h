@@ -592,14 +592,17 @@ class OBCameraNode {
   void publishMetadata(const std::shared_ptr<ob::Frame>& frame,
                        const stream_index_pair& stream_index, const std_msgs::msg::Header& header);
 
+  std::string createFrameMetadataJson(const std::shared_ptr<ob::Frame>& frame) const;
+
   void onNewColorFrameCallback();
 
   void onNewLeftColorFrameCallback();
 
   void onNewRightColorFrameCallback();
 
-  void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& image,
-                       const sensor_msgs::msg::Image& image_msg);
+  void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& raw_image,
+                       const cv::Mat& image_to_save, const sensor_msgs::msg::Image& image_msg,
+                       const std::shared_ptr<ob::Frame>& frame);
 
   void onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Frame>& accelframe,
                                        const std::shared_ptr<ob::Frame>& gryoframe);

@@ -6884,6 +6884,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   camera_info_publishers_[stream_index]->publish(camera_info);
   publishMetadata(frame, stream_index, camera_info.header);
 
+  cv::Mat raw_image = image;
   cv::Mat image_to_publish = image;
   std::string image_encoding = encoding_[stream_index];
   uint32_t image_step = width * unit_step_size_[stream_index];
@@ -6891,7 +6892,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     auto depth_scale = video_frame->as<ob::DepthFrame>()->getValueScale();
     image = image * depth_scale;
     image_to_publish = image;
-    if (colorizer_mode_ != "none" && has_raw_image_subscriber) {
+    if (colorizer_mode_ != "none" && (has_raw_image_subscriber || save_images_[stream_index])) {
       auto colorized_image = colorizeDepthImage(image);
       if (!colorized_image.empty()) {
         image_to_publish = std::move(colorized_image);
@@ -6914,7 +6915,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     image_msg->is_bigendian = false;
     image_msg->step = image_step;
     image_msg->header.frame_id = frame_id;
-    saveImageToFile(stream_index, image, *image_msg);
+    saveImageToFile(stream_index, raw_image, image_to_publish, *image_msg, frame);
     if (!has_raw_image_subscriber) {
       record_image_publish_skipped();
       return;
@@ -6968,8 +6969,15 @@ void OBCameraNode::publishMetadata(const std::shared_ptr<ob::Frame> &frame,
   }
   orbbec_camera_msgs::msg::Metadata metadata_msg;
   metadata_msg.header = header;
-  nlohmann::json json_data;
+  metadata_msg.json_data = createFrameMetadataJson(frame);
+  metadata_publisher->publish(metadata_msg);
+}
 
+std::string OBCameraNode::createFrameMetadataJson(const std::shared_ptr<ob::Frame> &frame) const {
+  nlohmann::json json_data;
+  if (frame == nullptr) {
+    return json_data.dump(2);
+  }
   for (int i = 0; i < OB_FRAME_METADATA_TYPE_COUNT; i++) {
     auto meta_data_type = static_cast<OBFrameMetadataType>(i);
     std::string field_name = metaDataTypeToString(meta_data_type);
@@ -6979,12 +6987,13 @@ void OBCameraNode::publishMetadata(const std::shared_ptr<ob::Frame> &frame,
     int64_t value = frame->getMetadataValue(meta_data_type);
     json_data[field_name] = value;
   }
-  metadata_msg.json_data = json_data.dump(2);
-  metadata_publisher->publish(metadata_msg);
+  return json_data.dump(2);
 }
 
-void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const cv::Mat &image,
-                                   const sensor_msgs::msg::Image &image_msg) {
+void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const cv::Mat &raw_image,
+                                   const cv::Mat &image_to_save,
+                                   const sensor_msgs::msg::Image &image_msg,
+                                   const std::shared_ptr<ob::Frame> &frame) {
   if (save_images_[stream_index]) {
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
@@ -6994,42 +7003,87 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
     std::stringstream ss;
     ss << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S");
     ss << "_" << std::setw(6) << std::setfill('0') << us.count();
-    auto current_path = std::filesystem::current_path().string();
+    const auto output_directory = std::filesystem::current_path() / "image";
     auto fps = fps_[stream_index];
-    int index = save_images_count_[stream_index];
-    std::string file_suffix = stream_index == COLOR ? ".png" : ".raw";
-    std::string filename = current_path + "/image/" + stream_name_[stream_index] + "_" +
-                           std::to_string(image_msg.width) + "x" +
-                           std::to_string(image_msg.height) + "_" + std::to_string(fps) + "hz_" +
-                           ss.str() + "_" + std::to_string(index) + file_suffix;
-    if (!std::filesystem::exists(current_path + "/image")) {
-      std::filesystem::create_directory(current_path + "/image");
+    const int index = save_images_count_[stream_index];
+    const std::string file_name = stream_name_[stream_index] + "_" +
+                                  std::to_string(image_msg.width) + "x" +
+                                  std::to_string(image_msg.height) + "_" + std::to_string(fps) +
+                                  "hz_" + ss.str() + "_" + std::to_string(index);
+    if (!std::filesystem::exists(output_directory)) {
+      std::filesystem::create_directories(output_directory);
     }
-    RCLCPP_INFO_STREAM(logger_, "Saving image to " << filename);
-    if (stream_index.first == OB_STREAM_COLOR) {
-      auto image_to_save =
-          cv_bridge::toCvCopy(image_msg, sensor_msgs::image_encodings::BGR8)->image;
-      cv::imwrite(filename, image_to_save);
-    } else if (stream_index.first == OB_STREAM_IR || stream_index.first == OB_STREAM_IR_LEFT ||
-               stream_index.first == OB_STREAM_IR_RIGHT || stream_index.first == OB_STREAM_DEPTH) {
-      std::ofstream ofs(filename, std::ios::out | std::ios::binary);
-      if (!ofs.is_open()) {
-        RCLCPP_ERROR_STREAM(logger_, "Failed to open file: " << filename);
-        return;
+    const auto file_stem = (output_directory / file_name).string();
+    const auto raw_filename = file_stem + ".raw";
+    const auto png_filename = file_stem + ".png";
+    const auto metadata_filename = file_stem + ".json";
+    RCLCPP_INFO_STREAM(logger_, "Saving frame files to " << file_stem << " (.raw, .png, .json)");
+
+    const auto *frame_data = frame ? frame->getData() : nullptr;
+    const auto frame_data_size = frame ? frame->getDataSize() : 0;
+    std::ofstream ofs(raw_filename, std::ios::out | std::ios::binary);
+    if (!ofs.is_open()) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to open raw file: " << raw_filename);
+    } else if (frame_data != nullptr && frame_data_size > 0) {
+      ofs.write(reinterpret_cast<const char *>(frame_data),
+                static_cast<std::streamsize>(frame_data_size));
+      if (!ofs.good()) {
+        RCLCPP_ERROR_STREAM(logger_, "Failed to write raw file: " << raw_filename);
       }
-      if (image.isContinuous()) {
-        ofs.write(reinterpret_cast<const char *>(image.data), image.total() * image.elemSize());
+    } else if (!raw_image.empty()) {
+      if (raw_image.isContinuous()) {
+        ofs.write(reinterpret_cast<const char *>(raw_image.data),
+                  static_cast<std::streamsize>(raw_image.total() * raw_image.elemSize()));
       } else {
-        int rows = image.rows;
-        int cols = image.cols * image.channels();
-        for (int r = 0; r < rows; ++r) {
-          ofs.write(reinterpret_cast<const char *>(image.ptr<uchar>(r)), cols);
+        const auto row_size = static_cast<std::streamsize>(raw_image.cols * raw_image.elemSize());
+        for (int row = 0; row < raw_image.rows; ++row) {
+          ofs.write(reinterpret_cast<const char *>(raw_image.ptr<uchar>(row)), row_size);
         }
       }
-      ofs.close();
+      if (!ofs.good()) {
+        RCLCPP_ERROR_STREAM(logger_, "Failed to write raw file: " << raw_filename);
+      }
     } else {
-      RCLCPP_ERROR_STREAM(logger_, "Unsupported stream type: " << stream_index.first);
+      RCLCPP_ERROR_STREAM(logger_, "Failed to save raw image: frame data and image are empty");
     }
+    if (ofs.is_open()) {
+      ofs.close();
+    }
+
+    cv::Mat png_image = image_to_save.empty() ? raw_image : image_to_save;
+    if (png_image.empty()) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to save PNG image: image is empty");
+    } else {
+      cv::Mat converted_png_image;
+      if (image_msg.encoding == sensor_msgs::image_encodings::RGB8 && png_image.channels() == 3) {
+        cv::cvtColor(png_image, converted_png_image, cv::COLOR_RGB2BGR);
+        png_image = converted_png_image;
+      } else if (image_msg.encoding == sensor_msgs::image_encodings::RGBA8 &&
+                 png_image.channels() == 4) {
+        cv::cvtColor(png_image, converted_png_image, cv::COLOR_RGBA2BGRA);
+        png_image = converted_png_image;
+      }
+      try {
+        if (!cv::imwrite(png_filename, png_image)) {
+          RCLCPP_ERROR_STREAM(logger_, "Failed to write PNG file: " << png_filename);
+        }
+      } catch (const cv::Exception &exception) {
+        RCLCPP_ERROR_STREAM(
+            logger_, "Failed to write PNG file " << png_filename << ": " << exception.what());
+      }
+    }
+
+    std::ofstream metadata_ofs(metadata_filename);
+    if (!metadata_ofs.is_open()) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to open metadata file: " << metadata_filename);
+    } else {
+      metadata_ofs << createFrameMetadataJson(frame) << '\n';
+      if (!metadata_ofs.good()) {
+        RCLCPP_ERROR_STREAM(logger_, "Failed to write metadata file: " << metadata_filename);
+      }
+      metadata_ofs.close();
+    }
+
     if (++save_images_count_[stream_index] >= max_save_images_count_) {
       save_images_[stream_index] = false;
     }
