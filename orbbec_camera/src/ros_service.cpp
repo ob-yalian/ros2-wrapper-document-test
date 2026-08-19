@@ -477,19 +477,30 @@ void OBCameraNode::getColorQueueStatsCallback(
           {"max_queue_wait_ms", stats.max_queue_wait_ms},
       };
     };
+
     nlohmann::json queues;
-    queues["color"] = to_json(getColorQueueStats(color_frame_queue_, color_frame_queue_lock_,
-                                                 color_frame_queue_stats_,
-                                                 color_frame_queue_max_frames_, request->data));
-    queues["left_color"] = to_json(getColorQueueStats(
-        left_color_frame_queue_, left_color_frame_queue_lock_, left_color_frame_queue_stats_,
-        left_color_frame_queue_max_frames_, request->data));
-    queues["right_color"] = to_json(getColorQueueStats(
-        right_color_frame_queue_, right_color_frame_queue_lock_, right_color_frame_queue_stats_,
-        right_color_frame_queue_max_frames_, request->data));
-    const uint64_t overflow_count = queues["color"]["overflow_count"].get<uint64_t>() +
-                                    queues["left_color"]["overflow_count"].get<uint64_t>() +
-                                    queues["right_color"]["overflow_count"].get<uint64_t>();
+    uint64_t overflow_count = 0;
+    if (enable_stream_[COLOR]) {
+      const auto stats =
+          getColorQueueStats(color_frame_queue_, color_frame_queue_lock_, color_frame_queue_stats_,
+                             color_frame_queue_max_frames_, request->data);
+      queues["color"] = to_json(stats);
+      overflow_count += stats.overflow_count;
+    }
+    if (enable_stream_[COLOR_LEFT]) {
+      const auto stats = getColorQueueStats(left_color_frame_queue_, left_color_frame_queue_lock_,
+                                            left_color_frame_queue_stats_,
+                                            left_color_frame_queue_max_frames_, request->data);
+      queues["left_color"] = to_json(stats);
+      overflow_count += stats.overflow_count;
+    }
+    if (enable_stream_[COLOR_RIGHT]) {
+      const auto stats = getColorQueueStats(right_color_frame_queue_, right_color_frame_queue_lock_,
+                                            right_color_frame_queue_stats_,
+                                            right_color_frame_queue_max_frames_, request->data);
+      queues["right_color"] = to_json(stats);
+      overflow_count += stats.overflow_count;
+    }
     response->success = true;
     response->message =
         nlohmann::json{
@@ -499,6 +510,9 @@ void OBCameraNode::getColorQueueStatsCallback(
             {"queues", queues},
         }
             .dump();
+    if (queues.empty()) {
+      RCLCPP_WARN(logger_, "No enabled color streams; color queue statistics are empty");
+    }
   } catch (const std::exception& error) {
     response->success = false;
     response->message = error.what();
