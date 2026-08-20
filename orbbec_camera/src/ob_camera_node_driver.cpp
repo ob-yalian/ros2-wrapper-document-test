@@ -273,6 +273,7 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
     orb_device_lock_shm_fd_ = -1;
   }
   shm_unlink(ORB_DEFAULT_LOCK_NAME.c_str());
+  clearGlobalImageTransportPublishers(*this);
 }
 
 void OBCameraNodeDriver::init() {
