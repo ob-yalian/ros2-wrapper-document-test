@@ -1941,6 +1941,8 @@ bool OBCameraNode::toggleSensor(const stream_index_pair& stream_index, bool enab
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
   try {
     pipeline_->stop();
+    RCLCPP_DEBUG_STREAM(logger_, "Wait 1 second for streams to stop before toggling sensor");
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     enable_stream_[stream_index] = enabled;
     setupProfiles();
     startStreams();

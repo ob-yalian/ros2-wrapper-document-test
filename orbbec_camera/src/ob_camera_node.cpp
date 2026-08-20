@@ -3746,6 +3746,8 @@ bool OBCameraNode::applyStreamProfiles(const std::vector<PendingStreamProfile> &
     const bool interleave_frame_enable = interleave_frame_enable_;
     if (restart_pipeline) {
       stopStreams();
+      RCLCPP_DEBUG_STREAM(logger_, "Wait 1 second for streams to stop before applying profiles");
+      std::this_thread::sleep_for(std::chrono::seconds(1));
       interleave_frame_enable_ = interleave_frame_enable;
     }
     stopColorFrameThreads();
