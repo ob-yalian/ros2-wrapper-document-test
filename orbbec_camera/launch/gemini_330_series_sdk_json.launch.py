@@ -83,16 +83,34 @@ def generate_launch_description():
         DeclareLaunchArgument('load_config_json_file_path', default_value=''),
         DeclareLaunchArgument('export_config_json_file_path', default_value=''),
 
+        DeclareLaunchArgument('color_frame_queue_max_frames', default_value='10'),
+
         DeclareLaunchArgument('color_qos', default_value='default'),
+
+        DeclareLaunchArgument('color_qos_history', default_value='default'),
+
+        DeclareLaunchArgument('color_qos_depth', default_value='-1'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
 
         DeclareLaunchArgument('depth_qos', default_value='default'),
+
+        DeclareLaunchArgument('depth_qos_history', default_value='default'),
+
+        DeclareLaunchArgument('depth_qos_depth', default_value='-1'),
         DeclareLaunchArgument('depth_camera_info_qos', default_value='default'),
 
         DeclareLaunchArgument('left_ir_qos', default_value='default'),
+
+        DeclareLaunchArgument('left_ir_qos_history', default_value='default'),
+
+        DeclareLaunchArgument('left_ir_qos_depth', default_value='-1'),
         DeclareLaunchArgument('left_ir_camera_info_qos', default_value='default'),
 
         DeclareLaunchArgument('right_ir_qos', default_value='default'),
+
+        DeclareLaunchArgument('right_ir_qos_history', default_value='default'),
+
+        DeclareLaunchArgument('right_ir_qos_depth', default_value='-1'),
         DeclareLaunchArgument('right_ir_camera_info_qos', default_value='default'),
 
         DeclareLaunchArgument('enable_sync_output_accel_gyro', default_value='false'),

@@ -23,6 +23,7 @@
 #include <regex>
 #include <sstream>
 #include <vector>
+#include <magic_enum/magic_enum.hpp>
 #include "orbbec_camera/utils.h"
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include "orbbec_camera/constants.h"
@@ -564,6 +565,29 @@ rmw_qos_profile_t getRMWQosProfileFromString(const std::string &str_qos) {
                         "Invalid QoS profile: " << upper_str_qos << ". Using default QoS profile.");
     return rmw_qos_profile_default;
   }
+}
+
+std::string getRMWQosProfileDescription(const rmw_qos_profile_t &qos_profile) {
+  const auto short_qos_name = [](auto policy) {
+    auto name = magic_enum::enum_name(policy);
+    constexpr size_t prefix_size = sizeof("RMW_QOS_POLICY_") - 1;
+    if (name.size() <= prefix_size) {
+      return name;
+    }
+    name.remove_prefix(prefix_size);
+    const auto separator = name.find('_');
+    if (separator < name.size()) {
+      name.remove_prefix(separator + 1);
+    }
+    return name;
+  };
+
+  std::string history(short_qos_name(qos_profile.history));
+  if (qos_profile.history == RMW_QOS_POLICY_HISTORY_KEEP_LAST) {
+    history += "(" + std::to_string(qos_profile.depth) + ")";
+  }
+  return std::string(short_qos_name(qos_profile.reliability)) + "/" +
+         std::string(short_qos_name(qos_profile.durability)) + "/" + history;
 }
 
 bool isOpenNIDevice(int pid) {
