@@ -742,6 +742,31 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     if (!frame_timestamp_csv_logger_->enabled()) {
       frame_timestamp_csv_logger_.reset();
     }
+    if (!frame_timestamp_csv_file_.empty() &&
+        (enable_stream_[ACCEL] || enable_stream_[GYRO])) {
+      if (enable_sync_output_accel_gyro_) {
+        imu_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
+            frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::SYNCED, logger_);
+        if (!imu_timestamp_csv_logger_->enabled()) {
+          imu_timestamp_csv_logger_.reset();
+        }
+      } else {
+        if (enable_stream_[ACCEL]) {
+          accel_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
+              frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::ACCEL, logger_);
+          if (!accel_timestamp_csv_logger_->enabled()) {
+            accel_timestamp_csv_logger_.reset();
+          }
+        }
+        if (enable_stream_[GYRO]) {
+          gyro_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
+              frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::GYRO, logger_);
+          if (!gyro_timestamp_csv_logger_->enabled()) {
+            gyro_timestamp_csv_logger_.reset();
+          }
+        }
+      }
+    }
   }
 
   if (enable_d2c_viewer_) {
@@ -817,6 +842,30 @@ void OBCameraNode::clean() noexcept {
     }
   } catch (...) {
     RCLCPP_WARN_STREAM(logger_, "Exception while shutting down frame timestamp CSV logger");
+  }
+  try {
+    if (imu_timestamp_csv_logger_) {
+      imu_timestamp_csv_logger_->shutdown();
+      imu_timestamp_csv_logger_.reset();
+    }
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down IMU timestamp CSV logger");
+  }
+  try {
+    if (accel_timestamp_csv_logger_) {
+      accel_timestamp_csv_logger_->shutdown();
+      accel_timestamp_csv_logger_.reset();
+    }
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down accel timestamp CSV logger");
+  }
+  try {
+    if (gyro_timestamp_csv_logger_) {
+      gyro_timestamp_csv_logger_->shutdown();
+      gyro_timestamp_csv_logger_.reset();
+    }
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down gyro timestamp CSV logger");
   }
 
   // Stop diagnostic timer and updater first BEFORE acquiring device_lock to prevent deadlock
@@ -4128,8 +4177,14 @@ void OBCameraNode::startIMUSyncStream() {
       auto frameSet = frame->as<ob::FrameSet>();
       auto aFrame = frameSet->getFrame(OB_FRAME_ACCEL);
       auto gFrame = frameSet->getFrame(OB_FRAME_GYRO);
+      const bool log_imu_timestamps = is_camera_node_initialized_.load() && rclcpp::ok() &&
+                                      imu_timestamp_csv_logger_ &&
+                                      imu_timestamp_csv_logger_->enabled();
+      const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
       if (aFrame && gFrame) {
-        onNewIMUFrameSyncOutputCallback(aFrame, gFrame);
+        onNewIMUFrameSyncOutputCallback(aFrame, gFrame, arrival_system_us);
+      } else if (log_imu_timestamps && (aFrame || gFrame)) {
+        imu_timestamp_csv_logger_->recordFrameSet(aFrame, gFrame, arrival_system_us, std::nullopt);
       }
     });
 
@@ -6921,11 +6976,20 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
 }
 
 void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Frame> &accelframe,
-                                                   const std::shared_ptr<ob::Frame> &gryoframe) {
+                                                   const std::shared_ptr<ob::Frame> &gryoframe,
+                                                   int64_t arrival_system_us) {
   if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
+  const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
+    if (arrival_system_us != 0 && imu_timestamp_csv_logger_ &&
+        imu_timestamp_csv_logger_->enabled()) {
+      imu_timestamp_csv_logger_->recordFrameSet(accelframe, gryoframe, arrival_system_us,
+                                                publish_system_us);
+    }
+  };
   if (!imu_gyro_accel_publisher_) {
+    record_timestamps(std::nullopt);
     RCLCPP_ERROR_STREAM(logger_, "stream Accel Gryo publisher not initialized");
     return;
   }
@@ -6933,6 +6997,7 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
   has_subscriber = has_subscriber || imu_info_publishers_[GYRO]->get_subscription_count() > 0;
   has_subscriber = has_subscriber || imu_info_publishers_[ACCEL]->get_subscription_count() > 0;
   if (!has_subscriber) {
+    record_timestamps(std::nullopt);
     return;
   }
   auto imu_msg = sensor_msgs::msg::Imu();
@@ -6966,7 +7031,9 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
   imu_msg.linear_acceleration.y = accelData.y - accel_info.bias[1];
   imu_msg.linear_acceleration.z = accelData.z - accel_info.bias[2];
 
+  const auto publish_system_us = getSystemNowUs();
   imu_gyro_accel_publisher_->publish(imu_msg);
+  record_timestamps(publish_system_us);
 }
 
 void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame,
@@ -6974,7 +7041,18 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
+  auto *timestamp_csv_logger = stream_index == ACCEL ? accel_timestamp_csv_logger_.get()
+                                                     : gyro_timestamp_csv_logger_.get();
+  const bool log_imu_timestamps = timestamp_csv_logger && timestamp_csv_logger->enabled();
+  const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
+  const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
+    if (log_imu_timestamps) {
+      timestamp_csv_logger->recordStandaloneFrame(stream_index.first, frame, arrival_system_us,
+                                                  publish_system_us);
+    }
+  };
   if (!imu_publishers_.count(stream_index)) {
+    record_timestamps(std::nullopt);
     RCLCPP_ERROR_STREAM(logger_,
                         "stream " << stream_name_[stream_index] << " publisher not initialized");
     return;
@@ -6983,6 +7061,7 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   has_subscriber =
       has_subscriber || imu_info_publishers_[stream_index]->get_subscription_count() > 0;
   if (!has_subscriber) {
+    record_timestamps(std::nullopt);
     return;
   }
   auto imu_msg = sensor_msgs::msg::Imu();
@@ -7009,10 +7088,13 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
     imu_msg.linear_acceleration.y = data.y - imu_info.bias[1];
     imu_msg.linear_acceleration.z = data.z - imu_info.bias[2];
   } else {
+    record_timestamps(std::nullopt);
     RCLCPP_ERROR(logger_, "Unsupported IMU frame type");
     return;
   }
+  const auto publish_system_us = getSystemNowUs();
   imu_publishers_[stream_index]->publish(imu_msg);
+  record_timestamps(publish_system_us);
 }
 
 void OBCameraNode::setDefaultIMUMessage(sensor_msgs::msg::Imu &imu_msg) {
