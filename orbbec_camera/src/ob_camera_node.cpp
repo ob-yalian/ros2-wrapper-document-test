@@ -5446,14 +5446,8 @@ void OBCameraNode::setupImagePublisher(const stream_index_pair &stream_index) {
     image_publishers_[stream_index] =
         std::make_shared<image_transport_publisher>(*node_, topic, image_qos_profile);
   }
-  std::string depth;
-  if (image_qos_profile.history == RMW_QOS_POLICY_HISTORY_KEEP_LAST) {
-    depth = ", depth=" + std::to_string(image_qos_profile.depth);
-  }
-  RCLCPP_INFO_STREAM(
-      logger_, topic << " QoS: reliability=" << magic_enum::enum_name(image_qos_profile.reliability)
-                     << ", durability=" << magic_enum::enum_name(image_qos_profile.durability)
-                     << ", history=" << magic_enum::enum_name(image_qos_profile.history) << depth);
+  RCLCPP_INFO_STREAM(logger_,
+                     topic << " QoS: " << getRMWQosProfileDescription(image_qos_profile));
 
   if (is_mjpg_color_stream) {
     compressed_image_publishers_[stream_index] =

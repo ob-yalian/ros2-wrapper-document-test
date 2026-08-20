@@ -478,7 +478,7 @@ void OBCameraNode::getColorQueueStatsCallback(
       };
     };
 
-    nlohmann::json queues;
+    nlohmann::json queues = nlohmann::json::object();
     uint64_t overflow_count = 0;
     const bool reset = request->data;
     if (enable_stream_[COLOR] || reset) {
