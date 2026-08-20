@@ -53,6 +53,27 @@ The **OrbbecSDK ROS2 Wrapper** provides seamless integration of Orbbec cameras w
 - For legacy **OpenNI** devices: use the **main** branch
 - For users in China: use the [Gitee repository](https://gitee.com/orbbecdeveloper/OrbbecSDK_ROS2)
 
+## Start Here
+
+Detailed usage, parameters, and troubleshooting are maintained on the official
+[OrbbecSDK ROS2 documentation site](https://orbbec.github.io/OrbbecSDK_ROS2/en/index.html).
+Use the links below to go directly to the guide for your task.
+
+| I want to... | Go to... |
+| --- | --- |
+| Install the wrapper and configure device permissions | [Installation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/2_installation/installation.html) |
+| Launch a camera and view images in RViz2 | [ROS Package QuickStarts](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/3_quickstarts/quickstart.html) |
+| Check device support, firmware, and the correct launch file | [Supported hardware](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/1_overview/introduction.html) |
+| Configure launch parameters, topics, services, TF, or point clouds | [Application Guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/4_application_guide/application_guide.html) |
+| Find maintenance, diagnostic, benchmark, or multi-camera tools | [Tool Index](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/6_benchmark/tools.html) |
+| Use network cameras, GMSL, multi-camera, or advanced modes | [Advanced Guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/5_advanced_guide/advanced_guide.html) |
+| Diagnose a failure or collect logs for support | [Frequently Asked Questions](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/8_FAQ/FAQ.html) |
+| Migrate an existing project from main (v1.x) | [Migration Guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/7_developer_guide/migration_guide.html) |
+| Use an Orbbec LiDAR | [LiDAR documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/lidar_devices/index.html) |
+
+Source files for practical launch examples are listed in the
+[Examples index](./orbbec_camera/examples/).
+
 ## branch selection
 
 Here is the device support list of main branch (v1.x) and v2-main branch (v2.x):
@@ -490,17 +511,10 @@ For optimal performance, we strongly recommend updating to the latest firmware v
 All launch files are essentially similar, with the primary difference being the default values of the parameters set
 for different models within the same series. Differences in USB standards, such as USB 2.0 versus USB 3.0, may require adjustments to these parameters. If you encounter a startup failure, please carefully review the specification manual. Pay special attention to the resolution settings in the launch file, as well as other parameters, to ensure compatibility and optimal performance.
 
-## Tutorial
-
-please refer to the official [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/5_advanced_guide/advanced_guide.html)
-
-## Examples
-
-To explore practical examples and gain insight into how to use the camera in ROS, please navigate to the [Examples](./orbbec_camera/examples/) section for more information.
-
-## Other useful links
+## Related Links
 
 - [OrbbecSDK ROS2 documentation](https://orbbec.github.io/OrbbecSDK_ROS2/en/index.html)
+- [Examples index](./orbbec_camera/examples/)
 - [OrbbecSDK_v2](https://github.com/orbbec/OrbbecSDK_v2/releases)
 - [Gemini 330 depth presets](https://www.orbbec.com/docs/g330-use-depth-presets/)
 

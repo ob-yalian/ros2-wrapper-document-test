@@ -1,12 +1,17 @@
-# Sample launch for OrbbecSDK_ROS2
+# OrbbecSDK ROS2 Examples
 
-These simple examples demonstrate how to easily use the camera with OrbbecSDK_ROS2
+This directory contains practical launch and tool examples. Full usage,
+configuration, and troubleshooting are maintained on the official documentation
+site so that instructions have a single source of truth.
 
-## List of Examples:
+For command-line maintenance and diagnostic utilities, see the official
+[Tool Index](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/6_benchmark/tools.html).
 
-|                                     Name                                     | Description                                                                                                                                                          | Experience Level | Document |
-| :---------------------------------------------------------------------------: | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------------------------------------------------------------------------- |
-|                            [Net_camera](./net_camera)                            | How to use Net camera in OrbbecSDK_ROS2(Only Femto Mega nad Gemini 335Le)                                                                                            | ⭐️             | [Net_camera](https://orbbec.github.io/OrbbecSDK_ROS2/source/5_advanced_guide/configuration/net_camera.html) |
-|                           [Gmsl_camera](./gmsl_camera)                           | How to use GMSL cameras (Gemini 335Lg, 338Lg, 345Lg, and 305g).                                                                                                      | ⭐️             | [Gmsl_camera](https://orbbec.github.io/OrbbecSDK_ROS2/source/5_advanced_guide/multi_camera/gmsl_camera.html) |
-|                             [Benchmark](./benchmark)                             | The goal of this tool is to benchmark the performance of various OrbbecSDK_ROS2 camera configurations.                                                               | ⭐️⭐️         | [Benchmark](https://orbbec.github.io/OrbbecSDK_ROS2/source/5_advanced_guide/performance/benchmark.html) |
-| [Multi_camera_synced_verification_tool](./multi_camera_synced_verification_tool) | How to verify the synchronization accuracy of multi-camera synchronization.                                                                                          | ⭐️⭐️⭐️     | [Multi_camera_synced_verification_tool](https://orbbec.github.io/OrbbecSDK_ROS2/source/5_advanced_guide/multi_camera/multi_camera_synced_verification_tool.html) |
+## Example Index
+
+| Source | Purpose | Experience Level | Official Guide |
+| :---: | --- | :---: | --- |
+| [Net camera](./net_camera) | Launch supported Orbbec network cameras. | ⭐️ | [Network camera guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/5_advanced_guide/configuration/net_camera.html) |
+| [GMSL camera](./gmsl_camera) | Launch single, multiple, or synchronized GMSL cameras. | ⭐️ | [GMSL camera guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/5_advanced_guide/multi_camera/gmsl_camera.html) |
+| [Benchmark](./benchmark) | Benchmark the performance of different camera configurations. | ⭐️⭐️ | [Performance benchmark tools](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/6_benchmark/benchmark_tools.html) |
+| [Multi-camera synchronization verification](./multi_camera_synced_verification_tool) | Verify synchronization accuracy across multiple cameras. | ⭐️⭐️⭐️ | [Synchronization verification guide](https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/5_advanced_guide/multi_camera/multi_camera_synced_verification_tool.html) |
