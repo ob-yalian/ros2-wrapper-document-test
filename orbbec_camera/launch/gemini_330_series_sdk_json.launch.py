@@ -41,7 +41,8 @@ def load_parameters(context, args):
     config_file_path = LaunchConfiguration('config_file_path').perform(context)
     if config_file_path:
         default_params = merge_params(default_params, load_yaml(config_file_path))
-    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename'}
+    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
+                    'depth_colorizer_mode'}
 
     result = {}
     for key, value in default_params.items():
@@ -113,6 +114,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
+        DeclareLaunchArgument('depth_colorizer_mode', default_value='none'),
         DeclareLaunchArgument('show_fps_enable', default_value='false'),
 
         DeclareLaunchArgument('enumerate_net_device', default_value='true'),

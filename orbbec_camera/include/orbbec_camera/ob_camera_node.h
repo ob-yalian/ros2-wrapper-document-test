@@ -558,6 +558,8 @@ class OBCameraNode {
 
   void publishRawDepthImage(const std::shared_ptr<ob::Frame>& depth_frame);
 
+  cv::Mat colorizeDepthImage(const cv::Mat& depth_image, const std::string& colorizer_mode);
+
   std::shared_ptr<ob::Frame> processDepthFrameFilter(std::shared_ptr<ob::Frame>& frame);
 
   std::shared_ptr<ob::Frame> processColorFrameFilter(std::shared_ptr<ob::Frame>& frame);
@@ -590,14 +592,17 @@ class OBCameraNode {
   void publishMetadata(const std::shared_ptr<ob::Frame>& frame,
                        const stream_index_pair& stream_index, const std_msgs::msg::Header& header);
 
+  std::string createFrameMetadataJson(const std::shared_ptr<ob::Frame>& frame) const;
+
   void onNewColorFrameCallback();
 
   void onNewLeftColorFrameCallback();
 
   void onNewRightColorFrameCallback();
 
-  void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& image,
-                       const sensor_msgs::msg::Image& image_msg);
+  void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& raw_image,
+                       const cv::Mat& image_to_save, const sensor_msgs::msg::Image& image_msg,
+                       const std::shared_ptr<ob::Frame>& frame);
 
   void onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Frame>& accelframe,
                                        const std::shared_ptr<ob::Frame>& gryoframe);
@@ -799,10 +804,12 @@ class OBCameraNode {
   std::string color_info_url_;
   std::string ir_info_url_;
   std::optional<OBCameraParam> camera_param_;
+  std::string colorizer_mode_ = "none";
   bool enable_d2c_viewer_ = false;
   std::unique_ptr<D2CViewer> d2c_viewer_ = nullptr;
   std::map<stream_index_pair, std::atomic_bool> save_images_;
   std::map<stream_index_pair, int> save_images_count_;
+  std::mutex save_images_mutex_;
   int max_save_images_count_ = 10;
   std::atomic_bool save_point_cloud_{false};
   std::atomic_bool save_colored_point_cloud_{false};

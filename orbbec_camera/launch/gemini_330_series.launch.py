@@ -49,7 +49,7 @@ def load_parameters(context, args):
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
     skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
-                    'enhanced_depth_model_path'}
+                    'enhanced_depth_model_path', 'depth_colorizer_mode'}
 
     result = {}
     for key, value in default_params.items():
@@ -212,6 +212,7 @@ def generate_launch_description():
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
+        DeclareLaunchArgument('depth_colorizer_mode', default_value='none'),
         DeclareLaunchArgument('disparity_to_depth_mode', default_value='HW'),
         DeclareLaunchArgument('enable_ldp', default_value='false'),
         DeclareLaunchArgument('ldp_power_level', default_value='-1'),
