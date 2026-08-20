@@ -1961,10 +1961,11 @@ void OBCameraNode::saveImageCallback(const std::shared_ptr<std_srvs::srv::Empty:
                                      std::shared_ptr<std_srvs::srv::Empty::Response>& response) {
   (void)request;
   (void)response;
+  std::lock_guard<std::mutex> lock(save_images_mutex_);
   for (const auto& stream_index : IMAGE_STREAMS) {
     if (enable_stream_[stream_index]) {
-      save_images_[stream_index] = true;
       save_images_count_[stream_index] = 0;
+      save_images_[stream_index].store(true, std::memory_order_release);
     }
   }
 }

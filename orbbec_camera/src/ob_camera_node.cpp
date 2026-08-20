@@ -6995,18 +6995,34 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
                                    const cv::Mat &image_to_save,
                                    const sensor_msgs::msg::Image &image_msg,
                                    const std::shared_ptr<ob::Frame> &frame) {
-  if (save_images_[stream_index]) {
+  if (save_images_[stream_index].load(std::memory_order_acquire)) {
+    int index = 0;
+    {
+      std::lock_guard<std::mutex> lock(save_images_mutex_);
+      if (!save_images_[stream_index].load(std::memory_order_relaxed)) {
+        return;
+      }
+      index = save_images_count_[stream_index]++;
+      if (save_images_count_[stream_index] >= max_save_images_count_) {
+        save_images_[stream_index].store(false, std::memory_order_release);
+      }
+    }
+
     auto now = std::chrono::system_clock::now();
     auto in_time_t = std::chrono::system_clock::to_time_t(now);
     auto us =
         std::chrono::duration_cast<std::chrono::microseconds>(now.time_since_epoch()) % 1000000;
 
+    std::tm local_time{};
+    if (localtime_r(&in_time_t, &local_time) == nullptr) {
+      RCLCPP_ERROR_STREAM(logger_, "Failed to convert image save timestamp to local time");
+      return;
+    }
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S");
+    ss << std::put_time(&local_time, "%Y%m%d_%H%M%S");
     ss << "_" << std::setw(6) << std::setfill('0') << us.count();
     const auto output_directory = std::filesystem::current_path() / "image";
     auto fps = fps_[stream_index];
-    const int index = save_images_count_[stream_index];
     const std::string file_name = stream_name_[stream_index] + "_" +
                                   std::to_string(image_msg.width) + "x" +
                                   std::to_string(image_msg.height) + "_" + std::to_string(fps) +
@@ -7090,10 +7106,6 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
         RCLCPP_ERROR_STREAM(logger_, "Failed to write metadata file: " << metadata_filename);
       }
       metadata_ofs.close();
-    }
-
-    if (++save_images_count_[stream_index] >= max_save_images_count_) {
-      save_images_[stream_index] = false;
     }
   }
 }
