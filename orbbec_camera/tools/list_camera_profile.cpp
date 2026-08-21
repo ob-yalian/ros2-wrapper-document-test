@@ -15,6 +15,9 @@ using namespace orbbec_camera;
 namespace {
 
 constexpr int kFirmwareLogDrainDelaySec = 5;
+constexpr char kDocumentationUrl[] =
+    "https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/6_benchmark/"
+    "device_query_tools.html";
 
 struct CliArgs {
   bool help = false;
@@ -33,7 +36,9 @@ void printUsage() {
                "(default: off).\n"
             << "  -h, --help          Show this help message.\n"
             << "Examples:\n"
-            << "  ros2 run orbbec_camera list_camera_profile_mode_node -- --sdk_log_level debug\n";
+            << "  ros2 run orbbec_camera list_camera_profile_mode_node -- --sdk_log_level debug\n\n"
+            << "Documentation:\n"
+            << "  " << kDocumentationUrl << "\n";
 }
 
 bool parseArgs(int argc, char** argv, CliArgs& args, std::string& error) {
@@ -116,7 +121,8 @@ std::shared_ptr<ob::Device> initializeDevice(const std::string& serial_number) {
   auto context = std::make_shared<ob::Context>();
   auto device_list = context->queryDeviceList();
   if (!device_list || device_list->getCount() == 0) {
-    std::cout << "No device found" << std::endl;
+    std::cout << "No device found\nFor usage and troubleshooting, see: " << kDocumentationUrl
+              << std::endl;
     return nullptr;
   }
 

@@ -23,6 +23,7 @@
 #include <regex>
 #include <sstream>
 #include <vector>
+#include <magic_enum/magic_enum.hpp>
 #include "orbbec_camera/utils.h"
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include "orbbec_camera/constants.h"
@@ -566,6 +567,29 @@ rmw_qos_profile_t getRMWQosProfileFromString(const std::string &str_qos) {
   }
 }
 
+std::string getRMWQosProfileDescription(const rmw_qos_profile_t &qos_profile) {
+  const auto short_qos_name = [](auto policy) {
+    auto name = magic_enum::enum_name(policy);
+    constexpr size_t prefix_size = sizeof("RMW_QOS_POLICY_") - 1;
+    if (name.size() <= prefix_size) {
+      return name;
+    }
+    name.remove_prefix(prefix_size);
+    const auto separator = name.find('_');
+    if (separator < name.size()) {
+      name.remove_prefix(separator + 1);
+    }
+    return name;
+  };
+
+  std::string history(short_qos_name(qos_profile.history));
+  if (qos_profile.history == RMW_QOS_POLICY_HISTORY_KEEP_LAST) {
+    history += "(" + std::to_string(qos_profile.depth) + ")";
+  }
+  return std::string(short_qos_name(qos_profile.reliability)) + "/" +
+         std::string(short_qos_name(qos_profile.durability)) + "/" + history;
+}
+
 bool isOpenNIDevice(int pid) {
   static const std::vector<int> OPENNI_DEVICE_PIDS = {
       0x0300, 0x0301, 0x0400, 0x0401, 0x0402, 0x0403, 0x0404, 0x0407, 0x0601, 0x060b, 0x060e,
@@ -718,17 +742,17 @@ OB_SAMPLE_RATE sampleRateFromString(std::string &sample_rate) {
     return OB_SAMPLE_RATE_200_HZ;
   } else if (sample_rate == "500hz") {
     return OB_SAMPLE_RATE_500_HZ;
-  } else if (sample_rate == "1khz") {
+  } else if (sample_rate == "1khz" || sample_rate == "1000hz") {
     return OB_SAMPLE_RATE_1_KHZ;
-  } else if (sample_rate == "2khz") {
+  } else if (sample_rate == "2khz" || sample_rate == "2000hz") {
     return OB_SAMPLE_RATE_2_KHZ;
-  } else if (sample_rate == "4khz") {
+  } else if (sample_rate == "4khz" || sample_rate == "4000hz") {
     return OB_SAMPLE_RATE_4_KHZ;
-  } else if (sample_rate == "8khz") {
+  } else if (sample_rate == "8khz" || sample_rate == "8000hz") {
     return OB_SAMPLE_RATE_8_KHZ;
-  } else if (sample_rate == "16khz") {
+  } else if (sample_rate == "16khz" || sample_rate == "16000hz") {
     return OB_SAMPLE_RATE_16_KHZ;
-  } else if (sample_rate == "32khz") {
+  } else if (sample_rate == "32khz" || sample_rate == "32000hz") {
     return OB_SAMPLE_RATE_32_KHZ;
   } else {
     RCLCPP_ERROR_STREAM(rclcpp::get_logger("utils"), "Unknown OB_SAMPLE_RATE: " << sample_rate);

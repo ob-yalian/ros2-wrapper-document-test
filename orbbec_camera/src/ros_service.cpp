@@ -121,6 +121,11 @@ std::string OBSyncModeToString(const OBMultiDeviceSyncMode& mode) {
 
 void OBCameraNode::setupCameraCtrlServices() {
   using std_srvs::srv::SetBool;
+  get_color_queue_stats_srv_ = node_->create_service<SetBool>(
+      "get_color_queue_stats", [this](const std::shared_ptr<SetBool::Request> request,
+                                      std::shared_ptr<SetBool::Response> response) {
+        getColorQueueStatsCallback(request, response);
+      });
   for (auto stream_index : IMAGE_STREAMS) {
     if (!enable_stream_[stream_index]) {
       continue;
@@ -455,6 +460,69 @@ void OBCameraNode::setupCameraCtrlServices() {
                                             std::shared_ptr<SetInt32::Response> response) {
           setSyncIoVoltageLevelCallback(request, response);
         });
+  }
+}
+
+void OBCameraNode::getColorQueueStatsCallback(
+    const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
+    std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
+  try {
+    const auto to_json = [](const ColorQueueStatsSnapshot& stats) {
+      return nlohmann::json{
+          {"capacity_frames", stats.capacity_frames},
+          {"queue_size", stats.queue_size},
+          {"max_queue_size", stats.max_queue_size},
+          {"overflow_count", stats.overflow_count},
+          {"oldest_queue_wait_ms", stats.oldest_queue_wait_ms},
+          {"max_queue_wait_ms", stats.max_queue_wait_ms},
+      };
+    };
+
+    nlohmann::json queues = nlohmann::json::object();
+    uint64_t overflow_count = 0;
+    const bool reset = request->data;
+    if (enable_stream_[COLOR] || reset) {
+      const auto stats =
+          getColorQueueStats(color_frame_queue_, color_frame_queue_lock_, color_frame_queue_stats_,
+                             color_frame_queue_max_frames_, reset);
+      if (enable_stream_[COLOR]) {
+        queues["color"] = to_json(stats);
+        overflow_count += stats.overflow_count;
+      }
+    }
+    if (enable_stream_[COLOR_LEFT] || reset) {
+      const auto stats = getColorQueueStats(left_color_frame_queue_, left_color_frame_queue_lock_,
+                                            left_color_frame_queue_stats_,
+                                            left_color_frame_queue_max_frames_, reset);
+      if (enable_stream_[COLOR_LEFT]) {
+        queues["left_color"] = to_json(stats);
+        overflow_count += stats.overflow_count;
+      }
+    }
+    if (enable_stream_[COLOR_RIGHT] || reset) {
+      const auto stats = getColorQueueStats(right_color_frame_queue_, right_color_frame_queue_lock_,
+                                            right_color_frame_queue_stats_,
+                                            right_color_frame_queue_max_frames_, reset);
+      if (enable_stream_[COLOR_RIGHT]) {
+        queues["right_color"] = to_json(stats);
+        overflow_count += stats.overflow_count;
+      }
+    }
+    response->success = true;
+    response->message =
+        nlohmann::json{
+            {"namespace", node_->get_namespace()},
+            {"overflow_count", overflow_count},
+            {"statistics_reset", reset},
+            {"queues", queues},
+        }
+            .dump();
+    if (queues.empty()) {
+      RCLCPP_WARN(logger_, "No enabled color streams; color queue statistics are empty");
+    }
+  } catch (const std::exception& error) {
+    response->success = false;
+    response->message = error.what();
   }
 }
 
@@ -1942,6 +2010,8 @@ bool OBCameraNode::toggleSensor(const stream_index_pair& stream_index, bool enab
   try {
     const bool interleave_frame_enable = interleave_frame_enable_;
     stopStreams();
+    RCLCPP_DEBUG_STREAM(logger_, "Wait 1 second for streams to stop before toggling sensor");
+    std::this_thread::sleep_for(std::chrono::seconds(1));
     interleave_frame_enable_ = interleave_frame_enable;
     stopColorFrameThreads();
     clearColorFrameQueues();
@@ -1965,10 +2035,11 @@ void OBCameraNode::saveImageCallback(const std::shared_ptr<std_srvs::srv::Empty:
                                      std::shared_ptr<std_srvs::srv::Empty::Response>& response) {
   (void)request;
   (void)response;
+  std::lock_guard<std::mutex> lock(save_images_mutex_);
   for (const auto& stream_index : IMAGE_STREAMS) {
     if (enable_stream_[stream_index]) {
-      save_images_[stream_index] = true;
       save_images_count_[stream_index] = 0;
+      save_images_[stream_index].store(true, std::memory_order_release);
     }
   }
 }

@@ -18,7 +18,9 @@
 
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <queue>
@@ -32,11 +34,6 @@
 #include <opencv2/opencv.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
-#include <tf2_ros/static_transform_broadcaster.h>
-#include <tf2_ros/transform_broadcaster.h>
-#include <tf2/LinearMath/Quaternion.h>
-#include <tf2/LinearMath/Vector3.h>
-#include <tf2/LinearMath/Transform.h>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/empty.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
@@ -53,7 +50,6 @@
 #include "libobsensor/ObSensor.hpp"
 
 #include "orbbec_camera_msgs/msg/device_info.hpp"
-#include "orbbec_camera_msgs/msg/depth_filter_param.hpp"
 #include "orbbec_camera_msgs/msg/depth_filter_state.hpp"
 #include "orbbec_camera_msgs/msg/depth_filters_status.hpp"
 #include "orbbec_camera_msgs/srv/get_device_config.hpp"
@@ -74,7 +70,6 @@
 #include "orbbec_camera/constants.h"
 #include "orbbec_camera/dynamic_params.h"
 #include "orbbec_camera/d2c_viewer.h"
-#include "magic_enum/magic_enum.hpp"
 #include "orbbec_camera/image_publisher.h"
 #include "orbbec_camera/fps_counter.hpp"
 #include "orbbec_camera/fps_delay_status.hpp"
@@ -83,6 +78,26 @@
 #include <std_msgs/msg/header.hpp>
 #include <fcntl.h>
 #include <unistd.h>
+
+#if __has_include(<tf2/LinearMath/Quaternion.hpp>)
+#include <tf2/LinearMath/Quaternion.hpp>
+#include <tf2/LinearMath/Vector3.hpp>
+#elif __has_include(<tf2/LinearMath/Quaternion.h>)
+#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Vector3.h>
+#else
+#error "No compatible tf2 LinearMath headers found"
+#endif
+
+#if __has_include(<tf2_ros/static_transform_broadcaster.hpp>)
+#include <tf2_ros/static_transform_broadcaster.hpp>
+#include <tf2_ros/transform_broadcaster.hpp>
+#elif __has_include(<tf2_ros/static_transform_broadcaster.h>)
+#include <tf2_ros/static_transform_broadcaster.h>
+#include <tf2_ros/transform_broadcaster.h>
+#else
+#error "No compatible tf2_ros broadcaster headers found"
+#endif
 
 #if __has_include(<cv_bridge/cv_bridge.hpp>)
 #include <cv_bridge/cv_bridge.hpp>
@@ -312,6 +327,8 @@ class OBCameraNode {
 
   void setupImagePublisher(const stream_index_pair& stream_index);
 
+  rmw_qos_profile_t getImageQosProfile(const stream_index_pair& stream_index) const;
+
   void setupPipelineConfig();
 
   void setupDiagnosticUpdater();
@@ -319,6 +336,9 @@ class OBCameraNode {
   void onTemperatureUpdate(diagnostic_updater::DiagnosticStatusWrapper& status);
 
   void setupCameraCtrlServices();
+
+  void getColorQueueStatsCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
+                                  std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
   void stopStreams();
 
@@ -546,6 +566,8 @@ class OBCameraNode {
 
   void publishRawDepthImage(const std::shared_ptr<ob::Frame>& depth_frame);
 
+  cv::Mat colorizeDepthImage(const cv::Mat& depth_image, const std::string& colorizer_mode);
+
   std::shared_ptr<ob::Frame> processDepthFrameFilter(std::shared_ptr<ob::Frame>& frame);
 
   std::shared_ptr<ob::Frame> processColorFrameFilter(std::shared_ptr<ob::Frame>& frame);
@@ -578,14 +600,17 @@ class OBCameraNode {
   void publishMetadata(const std::shared_ptr<ob::Frame>& frame,
                        const stream_index_pair& stream_index, const std_msgs::msg::Header& header);
 
+  std::string createFrameMetadataJson(const std::shared_ptr<ob::Frame>& frame) const;
+
   void onNewColorFrameCallback();
 
   void onNewLeftColorFrameCallback();
 
   void onNewRightColorFrameCallback();
 
-  void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& image,
-                       const sensor_msgs::msg::Image& image_msg);
+  void saveImageToFile(const stream_index_pair& stream_index, const cv::Mat& raw_image,
+                       const cv::Mat& image_to_save, const sensor_msgs::msg::Image& image_msg,
+                       const std::shared_ptr<ob::Frame>& frame);
 
   void onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Frame>& accelframe,
                                        const std::shared_ptr<ob::Frame>& gryoframe);
@@ -680,6 +705,8 @@ class OBCameraNode {
   std::string camera_link_frame_id_;
   bool depth_registration_ = false;
   std::map<stream_index_pair, std::string> image_qos_;
+  std::map<stream_index_pair, std::string> image_qos_history_;
+  std::map<stream_index_pair, int> image_qos_depth_;
   std::map<stream_index_pair, std::string> camera_info_qos_;
   std::map<stream_index_pair, ob_format> format_;
   std::map<stream_index_pair, std::string> format_str_;
@@ -756,6 +783,7 @@ class OBCameraNode {
   rclcpp::Service<SetInt32>::SharedPtr set_sync_io_voltage_level_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_streams_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_streams_enable_srv_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr get_color_queue_stats_srv_;
   rclcpp::Service<SetString>::SharedPtr set_image_registration_mode_srv_;
   rclcpp::Service<SetStreamProfile>::SharedPtr set_stream_profile_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
@@ -787,10 +815,12 @@ class OBCameraNode {
   std::string color_info_url_;
   std::string ir_info_url_;
   std::optional<OBCameraParam> camera_param_;
+  std::string colorizer_mode_ = "none";
   bool enable_d2c_viewer_ = false;
   std::unique_ptr<D2CViewer> d2c_viewer_ = nullptr;
   std::map<stream_index_pair, std::atomic_bool> save_images_;
   std::map<stream_index_pair, int> save_images_count_;
+  std::mutex save_images_mutex_;
   int max_save_images_count_ = 10;
   std::atomic_bool save_point_cloud_{false};
   std::atomic_bool save_colored_point_cloud_{false};
@@ -899,21 +929,52 @@ class OBCameraNode {
   bool is_right_color_frame_decoded_ = false;
   bool is_color_frame_decoded_ = false;
   std::recursive_mutex device_lock_;
+  struct QueuedColorFrame {
+    std::shared_ptr<ob::FrameSet> frame_set;
+    std::chrono::steady_clock::time_point enqueue_time;
+  };
+  struct ColorQueueStats {
+    size_t max_queue_size = 0;
+    uint64_t overflow_count = 0;
+    double max_queue_wait_ms = 0.0;
+  };
+  struct ColorQueueStatsSnapshot {
+    int capacity_frames = 0;
+    size_t queue_size = 0;
+    size_t max_queue_size = 0;
+    uint64_t overflow_count = 0;
+    double oldest_queue_wait_ms = 0.0;
+    double max_queue_wait_ms = 0.0;
+  };
+  using ColorFrameQueue = std::queue<QueuedColorFrame>;
+  void enqueueColorFrame(ColorFrameQueue& queue, std::mutex& mutex,
+                         std::condition_variable& condition_variable, ColorQueueStats& stats,
+                         int capacity_frames, const std::shared_ptr<ob::FrameSet>& frame_set,
+                         const char* queue_name);
+  ColorQueueStatsSnapshot getColorQueueStats(ColorFrameQueue& queue, std::mutex& mutex,
+                                             ColorQueueStats& stats, int capacity_frames,
+                                             bool reset);
   // For color
-  std::queue<std::shared_ptr<ob::FrameSet>> color_frame_queue_;
+  ColorFrameQueue color_frame_queue_;
+  ColorQueueStats color_frame_queue_stats_;
+  int color_frame_queue_max_frames_ = 10;
   std::shared_ptr<std::thread> colorFrameThread_ = nullptr;
   std::atomic_bool stop_color_frame_threads_{false};
   std::mutex color_frame_queue_lock_;
   std::condition_variable color_frame_queue_cv_;
 
   // For left color
-  std::queue<std::shared_ptr<ob::FrameSet>> left_color_frame_queue_;
+  ColorFrameQueue left_color_frame_queue_;
+  ColorQueueStats left_color_frame_queue_stats_;
+  int left_color_frame_queue_max_frames_ = 10;
   std::shared_ptr<std::thread> leftColorFrameThread_ = nullptr;
   std::mutex left_color_frame_queue_lock_;
   std::condition_variable left_color_frame_queue_cv_;
 
   // For right color
-  std::queue<std::shared_ptr<ob::FrameSet>> right_color_frame_queue_;
+  ColorFrameQueue right_color_frame_queue_;
+  ColorQueueStats right_color_frame_queue_stats_;
+  int right_color_frame_queue_max_frames_ = 10;
   std::shared_ptr<std::thread> rightColorFrameThread_ = nullptr;
   std::mutex right_color_frame_queue_lock_;
   std::condition_variable right_color_frame_queue_cv_;

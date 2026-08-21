@@ -11,6 +11,19 @@ from launch.substitutions import TextSubstitution
 from launch_ros.descriptions import ComposableNode
 
 
+GMSL_CAMERA_LAUNCH_DIRS = {
+    "gemini_330_gmsl.launch.py": ("examples", "gmsl_camera"),  # Gemini 335Lg / 338Lg
+    "gemini_301_series.launch.py": ("launch",),  # Gemini 305G / 309G
+    "gemini345_lg.launch.py": ("launch",),  # Gemini 345Lg
+}
+
+
+def get_camera_launch_file(package_dir, launch_file_name):
+    return os.path.join(
+        package_dir, *GMSL_CAMERA_LAUNCH_DIRS[launch_file_name], launch_file_name
+    )
+
+
 def load_yaml(file_path):
     with open(file_path, "r") as f:
         return yaml.safe_load(f)
@@ -43,9 +56,6 @@ def convert_value(value):
 def generate_launch_description():
     # Include launch files
     package_dir = get_package_share_directory("orbbec_camera")
-    launch_file_dir = os.path.join(
-        package_dir, "examples/gmsl_camera"
-    )
     config_file_dir = os.path.join(package_dir, "config")
     secondary_config_file_path = os.path.join(config_file_dir, "camera_secondary_params.yaml")
 
@@ -67,8 +77,10 @@ def generate_launch_description():
     attach_to_shared_component_container_arg = TextSubstitution(text="true")
 
     launch1_include = IncludeLaunchDescription(
+        # Supported launch files: gemini_330_gmsl.launch.py, gemini_301_series.launch.py,
+        # and gemini345_lg.launch.py.
         PythonLaunchDescriptionSource(
-            os.path.join(launch_file_dir, "gemini_330_gmsl.launch.py")
+            get_camera_launch_file(package_dir, "gemini_330_gmsl.launch.py")
         ),
         launch_arguments={
             "camera_name": "camera_01",
@@ -84,8 +96,10 @@ def generate_launch_description():
     )
 
     launch2_include = IncludeLaunchDescription(
+        # Supported launch files: gemini_330_gmsl.launch.py, gemini_301_series.launch.py,
+        # and gemini345_lg.launch.py.
         PythonLaunchDescriptionSource(
-            os.path.join(launch_file_dir, "gemini_330_gmsl.launch.py")
+            get_camera_launch_file(package_dir, "gemini_330_gmsl.launch.py")
         ),
         launch_arguments={
             "camera_name": "camera_02",

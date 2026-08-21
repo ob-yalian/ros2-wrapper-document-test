@@ -33,6 +33,9 @@
 #include "orbbec_camera/utils.h"
 
 namespace {
+constexpr char kDocumentationUrl[] =
+    "https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/6_benchmark/"
+    "firmware_update_tool.html";
 
 constexpr int kProgressLogBucketPercent = 25;
 constexpr int kFirmwareLogDrainDelaySec = 5;
@@ -131,7 +134,9 @@ void printUsage() {
       << "  2) If multiple devices are connected, specify target by serial/usb/ip to avoid wrong "
          "updates.\n"
       << "  3) Repeating --serial_number or passing comma-separated values enables sequential "
-         "batch update.\n";
+         "batch update.\n\n"
+      << "Documentation:\n"
+      << "  " << kDocumentationUrl << "\n";
 }
 
 bool parseArgs(int argc, char **argv, CliArgs &args, std::string &error) {
@@ -862,6 +867,7 @@ int main(int argc, char **argv) {
     RCLCPP_ERROR(logger, "Unknown error");
   }
 
+  RCLCPP_ERROR(logger, "For usage and troubleshooting, see: %s", kDocumentationUrl);
   rclcpp::shutdown();
   return 1;
 }

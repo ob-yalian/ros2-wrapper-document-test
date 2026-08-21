@@ -12,6 +12,7 @@ usage:
 """
 
 import argparse
+import sys
 import rclpy
 from rclpy.node import Node
 import psutil
@@ -21,11 +22,24 @@ import os
 from collections import defaultdict
 from orbbec_camera_msgs.msg import DeviceStatus
 from sensor_msgs.msg import Image
-import sys
 
 from tabulate import tabulate
 
 CAMERA_NODE_NAMES = ["component_container", "orbbec_camera_node", "nodelet"]
+DOCUMENTATION_URL = (
+    "https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/"
+    "6_benchmark/benchmark_tools.html"
+)
+
+
+class DocumentationArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(
+            2,
+            f"{self.prog}: error: {message}\n"
+            f"For usage and troubleshooting, see: {DOCUMENTATION_URL}\n",
+        )
 
 # ----------------tool functions----------------
 def parse_duration(s):
@@ -471,7 +485,10 @@ class CameraMonitorNode(Node):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser()
+    parser = DocumentationArgumentParser(
+        epilog=f"Documentation: {DOCUMENTATION_URL}",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("--run_time", type=str, default="10s", help="Total run time for monitoring, e.g., 10s, 5m, 1h.")
     parser.add_argument("--csv_file", type=str, default="camera_monitor_log.csv")
     parser.add_argument("--ideal_fps", type=float, default=0.0, help="Optional ideal frame rate to use for drop detection (overrides reported avg).")
@@ -494,4 +511,8 @@ def main(argv=None):
         node.destroy_node()
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        print(f"For usage and troubleshooting, see: {DOCUMENTATION_URL}", file=sys.stderr)
+        raise
