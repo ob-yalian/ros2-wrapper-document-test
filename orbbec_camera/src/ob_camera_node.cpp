@@ -4366,14 +4366,14 @@ int OBCameraNode::openSocSyncPwmTrigger(uint16_t fps) {
   ret = write(gmsl_trigger_fd_, &param, sizeof(param));
   if (ret < 0) {
     perror("write device failed\n");
-    close(gmsl_trigger_fd_);
+    closeSocSyncPwmTrigger();
     return ret;
   }
 
   ret = read(gmsl_trigger_fd_, &rd_par, sizeof(rd_par));
   if (ret < 0) {
     perror("read device failed\n");
-    close(gmsl_trigger_fd_);
+    closeSocSyncPwmTrigger();
     return ret;
   }
   std::cout << "Read param mode=" << rd_par.mode << ", fps=" << rd_par.fps << std::endl;
@@ -4563,6 +4563,14 @@ void OBCameraNode::getParameters() {
   colorizer_mode_ = normalizeClosedSetParameterValue(
       logger_, "depth_colorizer_mode", colorizer_mode_, {"none", "jet", "jet_inv", "gray"}, "none");
   setAndGetNodeParameter<bool>(enable_d2c_viewer_, "enable_d2c_viewer", false);
+  if (enable_d2c_viewer_ && colorizer_mode_ != "none") {
+    RCLCPP_WARN_STREAM(
+        logger_,
+        "enable_d2c_viewer requires a raw 16UC1 depth image and is incompatible with "
+        "depth_colorizer_mode='"
+            << colorizer_mode_ << "'. Disabling enable_d2c_viewer.");
+    enable_d2c_viewer_ = false;
+  }
   setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
   disparity_to_depth_mode_ =
       normalizeClosedSetParameterValue(logger_, "disparity_to_depth_mode", disparity_to_depth_mode_,
