@@ -142,6 +142,7 @@ def generate_launch_description():
         DeclareLaunchArgument('log_level', default_value='info'),
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('config_file_path', default_value=''),
+        DeclareLaunchArgument('monitor_poll_interval_sec', default_value='-1'),
 
         DeclareLaunchArgument('force_ip_enable', default_value='false'),
         DeclareLaunchArgument('force_ip_mac', default_value=''),

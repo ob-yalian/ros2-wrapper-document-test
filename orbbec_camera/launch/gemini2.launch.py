@@ -143,6 +143,7 @@ def generate_launch_description():
         DeclareLaunchArgument("laser_energy_level", default_value="-1"),
         DeclareLaunchArgument("enable_heartbeat", default_value="false"),
         DeclareLaunchArgument("enable_firmware_log", default_value="false"),
+        DeclareLaunchArgument("monitor_poll_interval_sec", default_value="-1"),
         DeclareLaunchArgument("time_domain", default_value="global"),
         DeclareLaunchArgument("timestamp_clock_type", default_value=""),  # realtime or monotonic, default is realtime.
         DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
