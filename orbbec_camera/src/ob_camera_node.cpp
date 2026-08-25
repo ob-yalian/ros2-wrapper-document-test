@@ -65,13 +65,6 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
 
 namespace {
 
-constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
-constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
-constexpr double kViewerColorizerGamma = 0.65;
-constexpr uint16_t kViewerColorizerMaxDistanceMm = 10000;
-constexpr uint16_t kViewerColorizerDefaultMinDistanceMm = 100;
-constexpr uint16_t kViewerColorizerG305MinDistanceMm = 40;
-
 std::string getDepthFilterStatusName(const std::string &filter_name) {
   if (filter_name == "SpatialAdvancedFilter") {
     return "SpatialFilter";
@@ -5153,6 +5146,9 @@ void OBCameraNode::setupPipelineConfig() {
 }
 
 bool OBCameraNode::validateEnhancedDepthFilterConfig(std::string &message) const {
+  constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
+  constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
+
   if (!enable_stream_.count(COLOR) || !enable_stream_.at(COLOR) || !enable_stream_.count(DEPTH) ||
       !enable_stream_.at(DEPTH)) {
     message = "Enhanced depth filter requires color and depth streams";
@@ -5760,6 +5756,11 @@ cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image,
                          "Unsupported depth image type for colorizer: %d", depth_image.type());
     return {};
   }
+
+  constexpr double kViewerColorizerGamma = 0.65;
+  constexpr uint16_t kViewerColorizerMaxDistanceMm = 10000;
+  constexpr uint16_t kViewerColorizerDefaultMinDistanceMm = 100;
+  constexpr uint16_t kViewerColorizerG305MinDistanceMm = 40;
 
   cv::Mat depth_16u;
   depth_image.convertTo(depth_16u, CV_16UC1);
