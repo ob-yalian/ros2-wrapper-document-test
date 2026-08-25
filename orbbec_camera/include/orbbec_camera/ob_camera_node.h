@@ -1087,6 +1087,7 @@ class OBCameraNode {
   double lrm_obstacle_distance_publish_rate_ = 10.0;
   bool enable_heartbeat_ = false;
   bool enable_firmware_log_ = false;
+  int monitor_poll_interval_sec_ = -1;
   bool enable_fps_boost_ = false;
   std::map<stream_index_pair, bool> enable_undistortion_;
   std::shared_ptr<ob::UnDistortionFilter> hw_d2c_color_undistortion_filter_;

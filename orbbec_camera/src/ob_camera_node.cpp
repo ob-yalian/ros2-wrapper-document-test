@@ -1042,6 +1042,17 @@ void OBCameraNode::setupDevices() {
                                       OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT));
     }
   }
+  if (monitor_poll_interval_sec_ != -1) {
+    try {
+      const auto interval_ms = static_cast<uint32_t>(monitor_poll_interval_sec_) * 1000U;
+      device_->setMonitorPollInterval(interval_ms);
+      RCLCPP_INFO_STREAM(
+          logger_, "Current monitor poll interval: " << device_->getMonitorPollInterval() << " ms");
+    } catch (const ob::Error &e) {
+      RCLCPP_WARN_STREAM(logger_, "Skipping monitor poll interval configuration: "
+                                      << orbbec_camera::formatObErrorWithStatus(e));
+    }
+  }
   if (should_apply_launch_config("enable_heartbeat") &&
       device_->isPropertySupported(OB_PROP_HEARTBEAT_BOOL, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
@@ -4763,6 +4774,16 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(max_depth_limit_, "max_depth_limit", 0);
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
+  setAndGetNodeParameter<int>(monitor_poll_interval_sec_, "monitor_poll_interval_sec", -1);
+  if (monitor_poll_interval_sec_ != -1 &&
+      (monitor_poll_interval_sec_ < 1 || monitor_poll_interval_sec_ > 10)) {
+    const auto requested_monitor_poll_interval_sec = monitor_poll_interval_sec_;
+    monitor_poll_interval_sec_ = std::clamp(monitor_poll_interval_sec_, 1, 10);
+    RCLCPP_WARN_STREAM(logger_, "monitor_poll_interval_sec value "
+                                    << requested_monitor_poll_interval_sec
+                                    << " is out of range [1, 10], clamped to "
+                                    << monitor_poll_interval_sec_);
+  }
   setAndGetNodeParameter<bool>(enable_fps_boost_, "enable_fps_boost", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
   time_domain_ = normalizeClosedSetParameterValue(logger_, "time_domain", time_domain_,
