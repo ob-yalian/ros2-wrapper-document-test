@@ -23,6 +23,7 @@
   <depend version_gte="2.9.3">orbbec_camera_msgs</depend>
   <depend>builtin_interfaces</depend>
   <depend>rclcpp</depend>
+  <depend>rclcpp_action</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>

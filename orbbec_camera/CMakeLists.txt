@@ -34,6 +34,7 @@ set(dependencies
     orbbec_camera_msgs
     rcl_interfaces
     rclcpp
+    rclcpp_action
     rclcpp_components
     rmw
     sensor_msgs
@@ -276,6 +277,7 @@ add_orbbec_executable(set_device_ip tools/ip_config_tool.cpp)
 add_orbbec_executable(topic_statistics_node tools/topic_statistics.cpp)
 add_orbbec_executable(ob_benchmark_node tools/ob_benchmark.cpp)
 add_orbbec_executable(435le_example_node examples/Gemini_435Le_example_node/camera_example_node.cpp)
+add_orbbec_executable(ae_awb_lock_test_node examples/ae_awb_lock/ae_awb_lock_test_node.cpp)
 add_orbbec_executable(service_benchmark_node scripts/service_benchmark_node.cpp)
 add_orbbec_executable(image_sync_example_node examples/multi_camera_time_sync/image_sync_example_node.cpp)
 orbbec_target_dependencies(topic_statistics_node statistics_msgs)
@@ -382,7 +384,7 @@ if(DEFINED ENV{BUILDING_PACKAGE})
     install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/scripts/99-obsensor-libusb.rules DESTINATION /etc/udev/rules.d)
 endif()
 
-install(TARGETS list_devices_node list_depth_work_mode_node list_camera_profile_mode_node firmware_update_tool topic_statistics_node  service_benchmark_node ob_benchmark_node 435le_example_node ip_config_tool set_device_ip image_sync_example_node DESTINATION lib/${PROJECT_NAME}/
+install(TARGETS list_devices_node list_depth_work_mode_node list_camera_profile_mode_node firmware_update_tool topic_statistics_node  service_benchmark_node ob_benchmark_node 435le_example_node ae_awb_lock_test_node ip_config_tool set_device_ip image_sync_example_node DESTINATION lib/${PROJECT_NAME}/
 )
 
 if(BUILD_TESTING)
