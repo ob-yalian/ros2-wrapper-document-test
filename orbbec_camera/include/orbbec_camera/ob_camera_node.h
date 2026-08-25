@@ -1024,6 +1024,8 @@ class OBCameraNode {
   bool enable_frame_drop_log_ = false;
   std::string frame_timestamp_csv_file_;
   std::unique_ptr<FrameTimestampCsvLogger> frame_timestamp_csv_logger_;
+  std::unique_ptr<FrameTimestampCsvLogger> color_timestamp_csv_logger_;
+  std::unique_ptr<FrameTimestampCsvLogger> depth_timestamp_csv_logger_;
   std::unique_ptr<ImuTimestampCsvLogger> imu_timestamp_csv_logger_;
   std::unique_ptr<ImuTimestampCsvLogger> accel_timestamp_csv_logger_;
   std::unique_ptr<ImuTimestampCsvLogger> gyro_timestamp_csv_logger_;

@@ -452,7 +452,8 @@ void OBCameraNode::publishDepthFiltersStatus() {
     depth_filters_snapshot = depth_filter_list_;
   }
 
-  auto find_depth_filter = [&depth_filters_snapshot](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
+  auto find_depth_filter =
+      [&depth_filters_snapshot](const std::string &filter_name) -> std::shared_ptr<ob::Filter> {
     const auto normalized_name = normalizeDepthFilterName(filter_name);
     auto it = std::find_if(depth_filters_snapshot.begin(), depth_filters_snapshot.end(),
                            [&normalized_name](const auto &filter) {
@@ -737,13 +738,32 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   setupTopics();
 
   if (enable_frame_drop_log_ || !frame_timestamp_csv_file_.empty()) {
-    frame_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
-        enable_frame_drop_log_, frame_timestamp_csv_file_, logger_);
-    if (!frame_timestamp_csv_logger_->enabled()) {
-      frame_timestamp_csv_logger_.reset();
+    if (enable_frame_sync_ && (enable_stream_[COLOR] || enable_stream_[DEPTH])) {
+      frame_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
+          enable_frame_drop_log_, frame_timestamp_csv_file_,
+          FrameTimestampCsvLogger::OutputMode::SYNCED, logger_);
+      if (!frame_timestamp_csv_logger_->enabled()) {
+        frame_timestamp_csv_logger_.reset();
+      }
+    } else {
+      if (enable_stream_[COLOR]) {
+        color_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
+            enable_frame_drop_log_, frame_timestamp_csv_file_,
+            FrameTimestampCsvLogger::OutputMode::COLOR, logger_);
+        if (!color_timestamp_csv_logger_->enabled()) {
+          color_timestamp_csv_logger_.reset();
+        }
+      }
+      if (enable_stream_[DEPTH]) {
+        depth_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
+            enable_frame_drop_log_, frame_timestamp_csv_file_,
+            FrameTimestampCsvLogger::OutputMode::DEPTH, logger_);
+        if (!depth_timestamp_csv_logger_->enabled()) {
+          depth_timestamp_csv_logger_.reset();
+        }
+      }
     }
-    if (!frame_timestamp_csv_file_.empty() &&
-        (enable_stream_[ACCEL] || enable_stream_[GYRO])) {
+    if (!frame_timestamp_csv_file_.empty() && (enable_stream_[ACCEL] || enable_stream_[GYRO])) {
       if (enable_sync_output_accel_gyro_) {
         imu_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
             frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::SYNCED, logger_);
@@ -842,6 +862,22 @@ void OBCameraNode::clean() noexcept {
     }
   } catch (...) {
     RCLCPP_WARN_STREAM(logger_, "Exception while shutting down frame timestamp CSV logger");
+  }
+  try {
+    if (color_timestamp_csv_logger_) {
+      color_timestamp_csv_logger_->shutdown();
+      color_timestamp_csv_logger_.reset();
+    }
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down color timestamp CSV logger");
+  }
+  try {
+    if (depth_timestamp_csv_logger_) {
+      depth_timestamp_csv_logger_->shutdown();
+      depth_timestamp_csv_logger_.reset();
+    }
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down depth timestamp CSV logger");
   }
   try {
     if (imu_timestamp_csv_logger_) {
@@ -6156,7 +6192,9 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
   if (frame_set == nullptr) {
     return;
   }
-  if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) {
+  if ((frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) ||
+      (color_timestamp_csv_logger_ && color_timestamp_csv_logger_->enabled()) ||
+      (depth_timestamp_csv_logger_ && depth_timestamp_csv_logger_->enabled())) {
     const auto frame_set_arrival_system_us = getSystemNowUs();
     const auto frame_set_arrival_steady_us = getSteadyNowUs();
     auto final_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
@@ -6166,10 +6204,23 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     const bool color_publish_expected = track_color;
     const bool depth_publish_expected = track_depth;
 
-    frame_timestamp_csv_logger_->recordFrameSet(
-        final_color_frame, final_depth_frame, frame_set_arrival_system_us,
-        frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
-        depth_publish_expected);
+    if (frame_timestamp_csv_logger_) {
+      frame_timestamp_csv_logger_->recordFrameSet(
+          final_color_frame, final_depth_frame, frame_set_arrival_system_us,
+          frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
+          depth_publish_expected);
+    } else {
+      if (track_color && color_timestamp_csv_logger_) {
+        color_timestamp_csv_logger_->recordStandaloneFrameArrival(
+            OB_STREAM_COLOR, final_color_frame, frame_set_arrival_system_us,
+            frame_set_arrival_steady_us, color_publish_expected);
+      }
+      if (track_depth && depth_timestamp_csv_logger_) {
+        depth_timestamp_csv_logger_->recordStandaloneFrameArrival(
+            OB_STREAM_DEPTH, final_depth_frame, frame_set_arrival_system_us,
+            frame_set_arrival_steady_us, depth_publish_expected);
+      }
+    }
   }
 
   try {
@@ -6611,7 +6662,7 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
       target_buffer_size = &rgb_buffer_size_;
     }
     if (video_frame->getDataSize() > *target_buffer_size) {
-      delete[](*target_buffer);
+      delete[] (*target_buffer);
       *target_buffer_size = video_frame->getDataSize();
       *target_buffer = new uint8_t[*target_buffer_size];
       buffer = *target_buffer;
@@ -6663,10 +6714,17 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (frame == nullptr) {
     return;
   }
+  FrameTimestampCsvLogger *timestamp_csv_logger = nullptr;
+  if (stream_index == COLOR) {
+    timestamp_csv_logger = frame_timestamp_csv_logger_ ? frame_timestamp_csv_logger_.get()
+                                                       : color_timestamp_csv_logger_.get();
+  } else if (stream_index == DEPTH) {
+    timestamp_csv_logger = frame_timestamp_csv_logger_ ? frame_timestamp_csv_logger_.get()
+                                                       : depth_timestamp_csv_logger_.get();
+  }
   const auto record_image_publish_skipped = [&]() {
-    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
-        (stream_index == COLOR || stream_index == DEPTH)) {
-      frame_timestamp_csv_logger_->recordImagePublishSkipped(stream_index.first, frame);
+    if (timestamp_csv_logger && timestamp_csv_logger->enabled()) {
+      timestamp_csv_logger->recordImagePublishSkipped(stream_index.first, frame);
     }
   };
   CHECK_NOTNULL(image_publishers_[stream_index]);
@@ -6783,10 +6841,10 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
-    if (!has_raw_image_subscriber && stream_index == COLOR && frame_timestamp_csv_logger_ &&
-        frame_timestamp_csv_logger_->enabled()) {
-      frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
-                                                         getSystemNowUs(), getSteadyNowUs());
+    if (!has_raw_image_subscriber && stream_index == COLOR && timestamp_csv_logger &&
+        timestamp_csv_logger->enabled()) {
+      timestamp_csv_logger->recordPreImagePublish(stream_index.first, frame, getSystemNowUs(),
+                                                  getSteadyNowUs());
     }
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
     if (!has_raw_image_subscriber && stream_index == COLOR) {
@@ -6858,10 +6916,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       record_image_publish_skipped();
       return;
     }
-    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
-        (stream_index == COLOR || stream_index == DEPTH)) {
-      frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
-                                                         getSystemNowUs(), getSteadyNowUs());
+    if (timestamp_csv_logger && timestamp_csv_logger->enabled()) {
+      timestamp_csv_logger->recordPreImagePublish(stream_index.first, frame, getSystemNowUs(),
+                                                  getSteadyNowUs());
     }
     if (stream_index == COLOR) {
       fps_delay_status_color_->tick(frame_timestamp);
@@ -7041,8 +7098,8 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
-  auto *timestamp_csv_logger = stream_index == ACCEL ? accel_timestamp_csv_logger_.get()
-                                                     : gyro_timestamp_csv_logger_.get();
+  auto *timestamp_csv_logger =
+      stream_index == ACCEL ? accel_timestamp_csv_logger_.get() : gyro_timestamp_csv_logger_.get();
   const bool log_imu_timestamps = timestamp_csv_logger && timestamp_csv_logger->enabled();
   const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
   const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
@@ -8189,9 +8246,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         if (request->filter_param.size() > 1) {
           temporal_filter->setDiffScale(request->filter_param[0]);
           temporal_filter->setWeight(request->filter_param[1]);
-          RCLCPP_INFO_STREAM(logger_, "Set TemporalFilter params: "
-                                          << "\ndiff_scale:" << request->filter_param[0]
-                                          << "\nweight:" << request->filter_param[1]);
+          RCLCPP_INFO_STREAM(
+              logger_, "Set TemporalFilter params: " << "\ndiff_scale:" << request->filter_param[0]
+                                                     << "\nweight:" << request->filter_param[1]);
           temporal_filter_diff_threshold_ = request->filter_param[0];
           temporal_filter_weight_ = request->filter_param[1];
         } else {
