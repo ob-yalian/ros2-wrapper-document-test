@@ -30,7 +30,7 @@ TimestampCsvLogger::TimestampCsvLogger(Config config, rclcpp::Logger logger)
     }
   }
 
-  if (config.csv_file_path.empty() || (!config.accel_enabled && !config.gyro_enabled)) {
+  if (config.csv_file_path.empty()) {
     return;
   }
 

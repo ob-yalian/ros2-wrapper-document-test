@@ -820,11 +820,6 @@ void OBCameraNode::clean() noexcept {
   is_running_.store(false);
   is_camera_node_initialized_.store(false);
 
-  if (timestamp_csv_logger_) {
-    timestamp_csv_logger_->shutdown();
-    timestamp_csv_logger_.reset();
-  }
-
   // Stop diagnostic timer and updater first BEFORE acquiring device_lock to prevent deadlock
   try {
     if (diagnostic_timer_) {
@@ -882,6 +877,11 @@ void OBCameraNode::clean() noexcept {
     }
   } catch (...) {
     RCLCPP_DEBUG_STREAM(logger_, "Exception while stopping streams");
+  }
+
+  if (timestamp_csv_logger_) {
+    timestamp_csv_logger_->shutdown();
+    timestamp_csv_logger_.reset();
   }
 
   // Clean up d2c_viewer_ before cleaning buffers
