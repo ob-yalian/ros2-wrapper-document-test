@@ -159,6 +159,7 @@ set(SOURCE_FILES
   src/image_publisher.cpp
   src/frame_timestamp_csv_logger.cpp
   src/imu_timestamp_csv_logger.cpp
+  src/timestamp_csv_logger.cpp
   src/ob_camera_node_driver.cpp
   src/ob_camera_node.cpp
   src/ob_lidar_node.cpp

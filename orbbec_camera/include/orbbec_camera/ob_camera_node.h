@@ -70,8 +70,7 @@
 #include "orbbec_camera/image_publisher.h"
 #include "orbbec_camera/fps_counter.hpp"
 #include "orbbec_camera/fps_delay_status.hpp"
-#include "orbbec_camera/frame_timestamp_csv_logger.h"
-#include "orbbec_camera/imu_timestamp_csv_logger.h"
+#include "orbbec_camera/timestamp_csv_logger.h"
 #include "jpeg_decoder.h"
 #include <std_msgs/msg/header.hpp>
 #include <fcntl.h>
@@ -1023,12 +1022,7 @@ class OBCameraNode {
   std::string time_domain_ = "global";  // device, system, global
   bool enable_frame_drop_log_ = false;
   std::string frame_timestamp_csv_file_;
-  std::unique_ptr<FrameTimestampCsvLogger> frame_timestamp_csv_logger_;
-  std::unique_ptr<FrameTimestampCsvLogger> color_timestamp_csv_logger_;
-  std::unique_ptr<FrameTimestampCsvLogger> depth_timestamp_csv_logger_;
-  std::unique_ptr<ImuTimestampCsvLogger> imu_timestamp_csv_logger_;
-  std::unique_ptr<ImuTimestampCsvLogger> accel_timestamp_csv_logger_;
-  std::unique_ptr<ImuTimestampCsvLogger> gyro_timestamp_csv_logger_;
+  std::unique_ptr<TimestampCsvLogger> timestamp_csv_logger_;
   std::string exposure_range_mode_;
   std::string load_config_json_file_path_ = "";
   std::string export_config_json_file_path_ = "";

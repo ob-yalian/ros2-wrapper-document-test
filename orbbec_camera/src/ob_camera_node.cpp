@@ -738,54 +738,19 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   setupTopics();
 
   if (enable_frame_drop_log_ || !frame_timestamp_csv_file_.empty()) {
-    if (enable_frame_sync_ && (enable_stream_[COLOR] || enable_stream_[DEPTH])) {
-      frame_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
-          enable_frame_drop_log_, frame_timestamp_csv_file_,
-          FrameTimestampCsvLogger::OutputMode::SYNCED, logger_);
-      if (!frame_timestamp_csv_logger_->enabled()) {
-        frame_timestamp_csv_logger_.reset();
-      }
-    } else {
-      if (enable_stream_[COLOR]) {
-        color_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
-            enable_frame_drop_log_, frame_timestamp_csv_file_,
-            FrameTimestampCsvLogger::OutputMode::COLOR, logger_);
-        if (!color_timestamp_csv_logger_->enabled()) {
-          color_timestamp_csv_logger_.reset();
-        }
-      }
-      if (enable_stream_[DEPTH]) {
-        depth_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
-            enable_frame_drop_log_, frame_timestamp_csv_file_,
-            FrameTimestampCsvLogger::OutputMode::DEPTH, logger_);
-        if (!depth_timestamp_csv_logger_->enabled()) {
-          depth_timestamp_csv_logger_.reset();
-        }
-      }
-    }
-    if (!frame_timestamp_csv_file_.empty() && (enable_stream_[ACCEL] || enable_stream_[GYRO])) {
-      if (enable_sync_output_accel_gyro_) {
-        imu_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
-            frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::SYNCED, logger_);
-        if (!imu_timestamp_csv_logger_->enabled()) {
-          imu_timestamp_csv_logger_.reset();
-        }
-      } else {
-        if (enable_stream_[ACCEL]) {
-          accel_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
-              frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::ACCEL, logger_);
-          if (!accel_timestamp_csv_logger_->enabled()) {
-            accel_timestamp_csv_logger_.reset();
-          }
-        }
-        if (enable_stream_[GYRO]) {
-          gyro_timestamp_csv_logger_ = std::make_unique<ImuTimestampCsvLogger>(
-              frame_timestamp_csv_file_, ImuTimestampCsvLogger::OutputMode::GYRO, logger_);
-          if (!gyro_timestamp_csv_logger_->enabled()) {
-            gyro_timestamp_csv_logger_.reset();
-          }
-        }
-      }
+    TimestampCsvLogger::Config timestamp_config;
+    timestamp_config.frame_drop_log_enabled = enable_frame_drop_log_;
+    timestamp_config.csv_file_path = frame_timestamp_csv_file_;
+    timestamp_config.frame_sync_enabled = enable_frame_sync_;
+    timestamp_config.color_enabled = enable_stream_[COLOR];
+    timestamp_config.depth_enabled = enable_stream_[DEPTH];
+    timestamp_config.imu_sync_enabled = enable_sync_output_accel_gyro_;
+    timestamp_config.accel_enabled = enable_stream_[ACCEL];
+    timestamp_config.gyro_enabled = enable_stream_[GYRO];
+    timestamp_csv_logger_ =
+        std::make_unique<TimestampCsvLogger>(std::move(timestamp_config), logger_);
+    if (!timestamp_csv_logger_->enabled()) {
+      timestamp_csv_logger_.reset();
     }
   }
 
@@ -855,53 +820,9 @@ void OBCameraNode::clean() noexcept {
   is_running_.store(false);
   is_camera_node_initialized_.store(false);
 
-  try {
-    if (frame_timestamp_csv_logger_) {
-      frame_timestamp_csv_logger_->shutdown();
-      frame_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down frame timestamp CSV logger");
-  }
-  try {
-    if (color_timestamp_csv_logger_) {
-      color_timestamp_csv_logger_->shutdown();
-      color_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down color timestamp CSV logger");
-  }
-  try {
-    if (depth_timestamp_csv_logger_) {
-      depth_timestamp_csv_logger_->shutdown();
-      depth_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down depth timestamp CSV logger");
-  }
-  try {
-    if (imu_timestamp_csv_logger_) {
-      imu_timestamp_csv_logger_->shutdown();
-      imu_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down IMU timestamp CSV logger");
-  }
-  try {
-    if (accel_timestamp_csv_logger_) {
-      accel_timestamp_csv_logger_->shutdown();
-      accel_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down accel timestamp CSV logger");
-  }
-  try {
-    if (gyro_timestamp_csv_logger_) {
-      gyro_timestamp_csv_logger_->shutdown();
-      gyro_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down gyro timestamp CSV logger");
+  if (timestamp_csv_logger_) {
+    timestamp_csv_logger_->shutdown();
+    timestamp_csv_logger_.reset();
   }
 
   // Stop diagnostic timer and updater first BEFORE acquiring device_lock to prevent deadlock
@@ -4214,13 +4135,13 @@ void OBCameraNode::startIMUSyncStream() {
       auto aFrame = frameSet->getFrame(OB_FRAME_ACCEL);
       auto gFrame = frameSet->getFrame(OB_FRAME_GYRO);
       const bool log_imu_timestamps = is_camera_node_initialized_.load() && rclcpp::ok() &&
-                                      imu_timestamp_csv_logger_ &&
-                                      imu_timestamp_csv_logger_->enabled();
+                                      timestamp_csv_logger_ &&
+                                      timestamp_csv_logger_->syncedImuEnabled();
       const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
       if (aFrame && gFrame) {
         onNewIMUFrameSyncOutputCallback(aFrame, gFrame, arrival_system_us);
       } else if (log_imu_timestamps && (aFrame || gFrame)) {
-        imu_timestamp_csv_logger_->recordFrameSet(aFrame, gFrame, arrival_system_us, std::nullopt);
+        timestamp_csv_logger_->recordSyncedImu(aFrame, gFrame, arrival_system_us, std::nullopt);
       }
     });
 
@@ -6192,9 +6113,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
   if (frame_set == nullptr) {
     return;
   }
-  if ((frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) ||
-      (color_timestamp_csv_logger_ && color_timestamp_csv_logger_->enabled()) ||
-      (depth_timestamp_csv_logger_ && depth_timestamp_csv_logger_->enabled())) {
+  if (timestamp_csv_logger_ && timestamp_csv_logger_->imageEnabled()) {
     const auto frame_set_arrival_system_us = getSystemNowUs();
     const auto frame_set_arrival_steady_us = getSteadyNowUs();
     auto final_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
@@ -6204,23 +6123,10 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     const bool color_publish_expected = track_color;
     const bool depth_publish_expected = track_depth;
 
-    if (frame_timestamp_csv_logger_) {
-      frame_timestamp_csv_logger_->recordFrameSet(
-          final_color_frame, final_depth_frame, frame_set_arrival_system_us,
-          frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
-          depth_publish_expected);
-    } else {
-      if (track_color && color_timestamp_csv_logger_) {
-        color_timestamp_csv_logger_->recordStandaloneFrameArrival(
-            OB_STREAM_COLOR, final_color_frame, frame_set_arrival_system_us,
-            frame_set_arrival_steady_us, color_publish_expected);
-      }
-      if (track_depth && depth_timestamp_csv_logger_) {
-        depth_timestamp_csv_logger_->recordStandaloneFrameArrival(
-            OB_STREAM_DEPTH, final_depth_frame, frame_set_arrival_system_us,
-            frame_set_arrival_steady_us, depth_publish_expected);
-      }
-    }
+    timestamp_csv_logger_->recordImageFrameSet(
+        final_color_frame, final_depth_frame, frame_set_arrival_system_us,
+        frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
+        depth_publish_expected);
   }
 
   try {
@@ -6714,17 +6620,11 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (frame == nullptr) {
     return;
   }
-  FrameTimestampCsvLogger *timestamp_csv_logger = nullptr;
-  if (stream_index == COLOR) {
-    timestamp_csv_logger = frame_timestamp_csv_logger_ ? frame_timestamp_csv_logger_.get()
-                                                       : color_timestamp_csv_logger_.get();
-  } else if (stream_index == DEPTH) {
-    timestamp_csv_logger = frame_timestamp_csv_logger_ ? frame_timestamp_csv_logger_.get()
-                                                       : depth_timestamp_csv_logger_.get();
-  }
+  const bool log_image_timestamps =
+      timestamp_csv_logger_ && timestamp_csv_logger_->imageStreamEnabled(stream_index.first);
   const auto record_image_publish_skipped = [&]() {
-    if (timestamp_csv_logger && timestamp_csv_logger->enabled()) {
-      timestamp_csv_logger->recordImagePublishSkipped(stream_index.first, frame);
+    if (log_image_timestamps) {
+      timestamp_csv_logger_->recordImagePublishSkipped(stream_index.first, frame);
     }
   };
   CHECK_NOTNULL(image_publishers_[stream_index]);
@@ -6841,10 +6741,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
-    if (!has_raw_image_subscriber && stream_index == COLOR && timestamp_csv_logger &&
-        timestamp_csv_logger->enabled()) {
-      timestamp_csv_logger->recordPreImagePublish(stream_index.first, frame, getSystemNowUs(),
-                                                  getSteadyNowUs());
+    if (!has_raw_image_subscriber && stream_index == COLOR && log_image_timestamps) {
+      timestamp_csv_logger_->recordImagePrePublish(stream_index.first, frame, getSystemNowUs(),
+                                                   getSteadyNowUs());
     }
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
     if (!has_raw_image_subscriber && stream_index == COLOR) {
@@ -6916,9 +6815,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       record_image_publish_skipped();
       return;
     }
-    if (timestamp_csv_logger && timestamp_csv_logger->enabled()) {
-      timestamp_csv_logger->recordPreImagePublish(stream_index.first, frame, getSystemNowUs(),
-                                                  getSteadyNowUs());
+    if (log_image_timestamps) {
+      timestamp_csv_logger_->recordImagePrePublish(stream_index.first, frame, getSystemNowUs(),
+                                                   getSteadyNowUs());
     }
     if (stream_index == COLOR) {
       fps_delay_status_color_->tick(frame_timestamp);
@@ -7039,10 +6938,10 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
     return;
   }
   const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
-    if (arrival_system_us != 0 && imu_timestamp_csv_logger_ &&
-        imu_timestamp_csv_logger_->enabled()) {
-      imu_timestamp_csv_logger_->recordFrameSet(accelframe, gryoframe, arrival_system_us,
-                                                publish_system_us);
+    if (arrival_system_us != 0 && timestamp_csv_logger_ &&
+        timestamp_csv_logger_->syncedImuEnabled()) {
+      timestamp_csv_logger_->recordSyncedImu(accelframe, gryoframe, arrival_system_us,
+                                             publish_system_us);
     }
   };
   if (!imu_gyro_accel_publisher_) {
@@ -7098,14 +6997,13 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
-  auto *timestamp_csv_logger =
-      stream_index == ACCEL ? accel_timestamp_csv_logger_.get() : gyro_timestamp_csv_logger_.get();
-  const bool log_imu_timestamps = timestamp_csv_logger && timestamp_csv_logger->enabled();
+  const bool log_imu_timestamps =
+      timestamp_csv_logger_ && timestamp_csv_logger_->standaloneImuEnabled(stream_index.first);
   const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
   const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
     if (log_imu_timestamps) {
-      timestamp_csv_logger->recordStandaloneFrame(stream_index.first, frame, arrival_system_us,
-                                                  publish_system_us);
+      timestamp_csv_logger_->recordStandaloneImu(stream_index.first, frame, arrival_system_us,
+                                                 publish_system_us);
     }
   };
   if (!imu_publishers_.count(stream_index)) {
