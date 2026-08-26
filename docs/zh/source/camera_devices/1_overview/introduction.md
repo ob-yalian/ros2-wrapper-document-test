@@ -1,6 +1,6 @@
 # 引言
 
-OrbbecSDK ROS2 封装为 Orbbec 相机与 ROS 2 环境提供无缝集成。它支持 ROS2 Foxy、Humble 和 Jazzy 发行版。
+OrbbecSDK ROS2 封装为 Orbbec 相机与 ROS 2 环境提供无缝集成。它支持 ROS2 Foxy、Humble、Jazzy 和 Lyrical 发行版，并提供对 Rolling 的实验性支持。
 
 默认推荐使用 **v2-main** 分支。对于 v2-main 尚不支持的旧 OpenNI 设备，请使用 **main** 分支。仅由 main 分支支持的设备型号列在下表中。
 
