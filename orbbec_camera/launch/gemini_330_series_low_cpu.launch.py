@@ -7,6 +7,12 @@ from launch_ros.actions import PushRosNamespace, ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
 
 
+OPTIONAL_BOOLEAN_PARAMS = {
+    'enable_hardware_noise_removal_filter',
+    'enable_noise_removal_filter',
+}
+
+
 def load_yaml(file_path):
     with open(file_path, 'r') as f:
         return yaml.safe_load(f)
@@ -47,6 +53,10 @@ def load_parameters(context, args):
 
     result = {}
     for key, value in default_params.items():
+        # An empty optional boolean means "auto". Do not pass it to the ROS node,
+        # because a declared bool parameter cannot represent an unset value.
+        if key in OPTIONAL_BOOLEAN_PARAMS and value == '':
+            continue
         if key in skip_convert:
             result[key] = value
         elif 'enable_pub_plugins' in key:
@@ -230,8 +240,9 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_hdr_merge', default_value='false'),
         DeclareLaunchArgument('enable_sequence_id_filter', default_value='false'),
         DeclareLaunchArgument('enable_threshold_filter', default_value='false'),
-        DeclareLaunchArgument('enable_hardware_noise_removal_filter', default_value='true'),
-        DeclareLaunchArgument('enable_noise_removal_filter', default_value='false'),
+        # Empty means that the node will not change the device's current setting.
+        DeclareLaunchArgument('enable_hardware_noise_removal_filter', default_value=''),
+        DeclareLaunchArgument('enable_noise_removal_filter', default_value=''),
         DeclareLaunchArgument('enable_disp_outliers_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_filter', default_value='false'),
         DeclareLaunchArgument('enable_temporal_filter', default_value='false'),
