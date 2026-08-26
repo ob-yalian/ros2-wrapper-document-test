@@ -280,7 +280,7 @@ The following are the launch parameters available:
   > **Supported Modules**: Gemini 330 series
 * **`enable_fps_boost`**
   * Enable device FPS Boost. The default is `false`; this parameter only takes effect when the device supports the `FPS Boost` property.
-  > **Supported Modules**: Gemini 330 series
+  > **Supported Modules:** Gemini 305 / Gemini 330 series
 * **`enable_edge_noise_removal_filter`**
   * Enable EdgeNoiseRemovalFilter to reduce edge noise in depth frames.
   > **Supported Modules**: DaBai Max Pro
