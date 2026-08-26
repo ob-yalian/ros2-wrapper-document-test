@@ -2,8 +2,8 @@
 
 **File path:** [image_sync_example_node.cpp](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/multi_camera_time_sync/image_sync_example_node.cpp)
 
-This example node is designed for **synchronized capture and timestamp verification** across **four Orbbec cameras**.
-It can be used to validate frame alignment accuracy under the multi-camera **Primary / Secondary Synced** mode.
+This example node performs synchronized capture and timestamp verification across multiple Orbbec cameras and supports **1 to 8 image topics** at a time.
+At startup, it automatically discovers published color/depth image topics and can be used to validate frame alignment accuracy under the multi-camera **Primary / Secondary Synced** mode.
 
 ---
 
@@ -11,15 +11,13 @@ It can be used to validate frame alignment accuracy under the multi-camera **Pri
 
 ### **Modify `multi_camera_synced.launch.py` as follows**
 
-   - Add `launch_include` to support four cameras.
+   - Adjust `launch_include` according to the number of cameras participating in synchronization.
 
    - Select the appropriate launch file based on your camera model.
      For example, use `gemini_330_series.launch.py` for the Gemini 330 series.
 
    - Naming convention:
      `camera_name` should follow the format `camera_01`, `camera_02`, `camera_03`, ...
-
-   - Set `device_num` to **4**.
 
    - Configure the USB ports using:
 
@@ -61,11 +59,11 @@ It can be used to validate frame alignment accuracy under the multi-camera **Pri
 
      `ros2 run orbbec_camera image_sync_example_node`
 
-     This node outputs timestamp differences between multiple camera streams for synchronization validation.
+     The node automatically discovers color/depth image topics from the running cameras, displays synchronized images, and outputs timestamp differences and FPS statistics for synchronization validation.
 
 ---
 
-### **Reference Launch File**
+### **Four-Camera Reference Launch File**
 
 ```
 import os
@@ -93,7 +91,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_01",
             "usb_port": "2-2.3",
-            "device_num": "4",
             "sync_mode": "primary",
             "config_file_path": config_file_path,
             "trigger_out_enabled": "true"
@@ -107,7 +104,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_02",
             "usb_port": "2-1",
-            "device_num": "4",
             "sync_mode": "secondary_synced",
             "config_file_path": secondary_config_file_path,
             "trigger_out_enabled": "false"
@@ -121,7 +117,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_03",
             "usb_port": "2-3",
-            "device_num": "4",
             "sync_mode": "secondary_synced",
             "config_file_path": secondary_config_file_path,
             "trigger_out_enabled": "false"
@@ -135,7 +130,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_04",
             "usb_port": "2-4",
-            "device_num": "4",
             "sync_mode": "secondary_synced",
             "config_file_path": secondary_config_file_path,
             "trigger_out_enabled": "false"

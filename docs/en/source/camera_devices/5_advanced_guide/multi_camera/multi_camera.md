@@ -6,7 +6,6 @@
 ros2 run orbbec_camera list_devices_node
 ```
 
-- Set the `device_num` parameter to the number of cameras you have.
 - Go to the `OrbbecSDK_ROS2/orbbec_camera/launch/multi_xxx.launch.py` file and change the `usb_port`.
 - Don't forget to put the `include` tag inside the `group` tag.
   Otherwise, the parameter values of different cameras may become contaminated.
@@ -31,7 +30,6 @@ def generate_launch_description():
         launch_arguments={
             'camera_name': 'camera_01',
             'usb_port': '6-2.4.4.2',  # replace your usb port here
-            'device_num': '2'
         }.items()
     )
 
@@ -42,11 +40,10 @@ def generate_launch_description():
         launch_arguments={
             'camera_name': 'camera_02',
             'usb_port': '6-2.4.1',  # replace your usb port here
-            'device_num': '2'
         }.items()
     )
 
-    # If you need more cameras, just add more launch_include here, and change the usb_port and device_num
+    # If you need more cameras, just add more launch_include here and change the usb_port
 
     # Launch description
     ld = LaunchDescription([

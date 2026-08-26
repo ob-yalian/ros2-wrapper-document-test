@@ -2,20 +2,18 @@
 
 文件路径：[image_sync_example_node.cpp](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/multi_camera_time_sync/image_sync_example_node.cpp)
 
-此示例节点用于 **4 台 Orbbec 相机** 的同步采集与时间戳验证。
-它可用于验证多相机主从同步（Primary / Secondary Synced）模式下的帧对齐精度。
+此示例节点用于多台 Orbbec 相机的同步采集与时间戳验证，支持同时验证 **1～8 路图像 topic**。
+节点启动时会自动发现已发布的 color/depth 图像 topic，可用于验证多相机主从同步（Primary / Secondary Synced）模式下的帧对齐精度。
 
 ## 使用教程
 
 ### **在 `multi_camera_synced.launch.py` 的基础上做以下修改**
 
-   - 增加 `launch_include` 以适配 4 台相机
+   - 根据参与同步的相机数量调整 `launch_include`
 
    - 根据设备型号选择对应的 launch 文件，如 330 系列选择 gemini_330_series.launch.py
 
    - 命名规范：camera_name 命名方式 camera_01、camera_02、camera_03 ...
-
-   - 设置 device_num 数量为 4
 
    - USB 端口配置 usb_port，使用以下命令查看并绑定正确的端口
    `ros2 run orbbec_camera list_devices_node`
@@ -46,11 +44,11 @@
    - 启动多机同步 launch： `multi_camera_synced.launch.py`
 
    - 打开新终端运行同步验证节点： `ros2 run orbbec_camera image_sync_example_node`
-      该节点会输出多相机图像的时间戳差异信息，用于验证同步效果。
+      该节点会自动发现已启动相机的 color/depth 图像 topic，显示同步图像，并输出时间戳差异和 FPS 统计，用于验证同步效果。
 
 ---
 
-### **参考 launch 文件**
+### **4 台相机参考 launch 文件**
 
 ```
 import os
@@ -78,7 +76,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_01",
             "usb_port": "2-2.3",
-            "device_num": "4",
             "sync_mode": "primary",
             "config_file_path": config_file_path,
             "trigger_out_enabled": "true"
@@ -92,7 +89,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_02",
             "usb_port": "2-1",
-            "device_num": "4",
             "sync_mode": "secondary_synced",
             "config_file_path": secondary_config_file_path,
             "trigger_out_enabled": "false"
@@ -106,7 +102,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_03",
             "usb_port": "2-3",
-            "device_num": "4",
             "sync_mode": "secondary_synced",
             "config_file_path": secondary_config_file_path,
             "trigger_out_enabled": "false"
@@ -120,7 +115,6 @@ def generate_launch_description():
         launch_arguments={
             "camera_name": "camera_04",
             "usb_port": "2-4",
-            "device_num": "4",
             "sync_mode": "secondary_synced",
             "config_file_path": secondary_config_file_path,
             "trigger_out_enabled": "false"
