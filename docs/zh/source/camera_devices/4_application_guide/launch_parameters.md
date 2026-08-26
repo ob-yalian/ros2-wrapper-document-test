@@ -82,6 +82,9 @@
     *   启用无效点云过滤。
 *   **`point_cloud_qos`、`[stream]_qos`、`[stream]_camera_info_qos`**
     *   ROS 2消息服务质量（QoS）设置。可能的值为 `SYSTEM_DEFAULT`、`DEFAULT`、`PARAMETER_EVENTS`、`SERVICES_DEFAULT`、`PARAMETERS`、`SENSOR_DATA`，不区分大小写。这些分别对应 `rmw_qos_profile_system_default`、`rmw_qos_profile_default`、`rmw_qos_profile_parameter_events`、`rmw_qos_profile_services_default`、`rmw_qos_profile_parameters` 和 `SENSOR_DATA`。
+*   **`[stream]_qos_history`、`[stream]_qos_depth`**
+    *   覆盖图像发布器的 History 和 Depth。常用参数包括 `color_qos_history`、`color_qos_depth`、`depth_qos_history` 和 `depth_qos_depth`；根据所使用的 launch 文件，`stream` 还可以是 `left_color`、`right_color`、`ir`、`left_ir` 或 `right_ir`。
+    *   `qos_history` 支持 `DEFAULT`、`KEEP_LAST` 和 `KEEP_ALL`（大小写不敏感）。默认值为 `default`，表示沿用 `[stream]_qos` 的 History 策略。`qos_depth` 默认为 `-1`，表示沿用基础 QoS 的 Depth；设置为正数时覆盖该值。
 * **`color.image_raw.enable_pub_plugins`**
   * 启用彩色图像传输插件。具体启用列表由设备 launch 文件决定。压缩图像订阅方法参考 [压缩图像](compressed_image.md)。
 * **`depth.image_raw.enable_pub_plugins`**

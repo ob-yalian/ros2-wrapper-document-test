@@ -82,6 +82,9 @@ The following are the launch parameters available:
     *   Enable filtering of invalid point clouds.
 *   **`point_cloud_qos`, `[stream]_qos`, `[stream]_camera_info_qos`**
     *   ROS 2 Message Quality of Service (QoS) settings. The possible values are `SYSTEM_DEFAULT`, `DEFAULT`, `PARAMETER_EVENTS`, `SERVICES_DEFAULT`, `PARAMETERS`, `SENSOR_DATA` and are case-insensitive. These correspond to `rmw_qos_profile_system_default`, `rmw_qos_profile_default`, `rmw_qos_profile_parameter_events`, `rmw_qos_profile_services_default`, `rmw_qos_profile_parameters`, and `SENSOR_DATA`, respectively.
+*   **`[stream]_qos_history`, `[stream]_qos_depth`**
+    *   Override the image publisher History and Depth. Common parameters include `color_qos_history`, `color_qos_depth`, `depth_qos_history`, and `depth_qos_depth`; depending on the selected launch file, `stream` can also be `left_color`, `right_color`, `ir`, `left_ir`, or `right_ir`.
+    *   `qos_history` accepts `DEFAULT`, `KEEP_LAST`, or `KEEP_ALL` (case-insensitive). The default is `default`, which keeps the history policy from `[stream]_qos`. `qos_depth` defaults to `-1`, which keeps the base QoS depth; a positive value overrides it.
 * **`color.image_raw.enable_pub_plugins`**
   * Enable Color image transport plugins. The enabled list is determined by the device launch file. See [Compressed Image](compressed_image.md) for subscribing to compressed images.
 * **`depth.image_raw.enable_pub_plugins`**
