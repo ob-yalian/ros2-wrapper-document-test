@@ -242,7 +242,7 @@ The following are the launch parameters available:
   *   `DEPTH`: Align color to depth.
   *   This parameter is case-insensitive. Hardware D2C only supports `COLOR` as the target stream; use `align_mode:=SW` if you need to align to `DEPTH`. See [Aligning Depth to Color](../5_advanced_guide/configuration/align_depth_color.md) for startup and viewing examples.
 - **`intra_camera_sync_reference`**
-  - Sets the reference point for intra-camera synchronization. Applicable for Gemini 330 series devices when `sync_mode` is set to **software** or **hardware trigger** mode. **Options:** `Start`, `Middle`, `End`. When empty, the node leaves the device's current setting unchanged.
+  - Sets the reference point for intra-camera synchronization on supported Gemini 330/335 series devices. **Options:** `Start`, `Middle`, `End`. When empty, the node leaves the device's current setting unchanged.
 
 ## Device-Specific Parameters
 * **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**

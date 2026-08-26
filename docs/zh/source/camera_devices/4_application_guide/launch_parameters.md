@@ -243,7 +243,7 @@
   *   `DEPTH`：将彩色对齐到深度。
   *   该参数大小写不敏感。硬件 D2C 仅支持 `COLOR` 作为对齐目标；如需对齐到 `DEPTH`，请使用 `align_mode:=SW`。启动和查看方法参考 [对齐深度到彩色](../5_advanced_guide/configuration/align_depth_color.md)。
 - **`intra_camera_sync_reference`**
-  - 设置相机内同步的参考点。适用于Gemini 330系列设备，当 `sync_mode` 设置为**软件**或**硬件触发**模式时。**选项：** `Start`、`Middle`、`End`。参数为空时，节点不修改设备当前设置。
+  - 设置支持的 Gemini 330/335 系列设备的相机内同步参考点。**选项：** `Start`、`Middle`、`End`。参数为空时，节点不修改设备当前设置。
 
 ## 设备特定参数
 *   **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
