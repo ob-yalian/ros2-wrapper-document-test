@@ -377,7 +377,7 @@
 *   **`enable_sync_output_accel_gyro`**
     *   启用同步 `accel_gyro`，并输出IMU话题实时数据。
 *   **`accel_rate`** / **`gyro_rate`**
-    *   加速度计/陀螺仪的频率。值范围从 `1.5625hz` 到 `32khz`。高采样率也支持 `1000hz`、`2000hz`、`4000hz`、`8000hz`、`16000hz` 和 `32000hz` 写法；等价的 `1khz`～`32khz` 写法仍然支持。
+    *   加速度计/陀螺仪的频率。值范围从 `1.5625hz` 到 `32khz`。
 *   **`accel_range`** / **`gyro_range`**
     *   加速度计（`2g`、`4g`、`8g`、`16g`）和陀螺仪（`16dps` 到 `2000dps`）的范围。
 *   **`enable_accel_data_correction`** / **`enable_gyro_data_correction`**
