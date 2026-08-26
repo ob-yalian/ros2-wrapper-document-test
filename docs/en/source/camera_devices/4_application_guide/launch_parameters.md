@@ -246,8 +246,7 @@ The following are the launch parameters available:
 
 ## Device-Specific Parameters
 * **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
-  * Enable the gmsl trigger out signal / set gmsl trigger fps.
-  > Only supports [gmsl camera](../5_advanced_guide/multi_camera/gmsl_camera.md).
+  * Enable the GMSL trigger output signal / set the GMSL trigger frame rate. Supported modules are Gemini 335Lg, 338Lg, 345Lg, and 305g; see [GMSL camera](../5_advanced_guide/multi_camera/gmsl_camera.md).
   >
 * **`enable_ptp_config`**
   * Enable PTP time synchronization. Requires `enable_sync_host_time` to be `false`.

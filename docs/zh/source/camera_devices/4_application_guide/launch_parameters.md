@@ -247,7 +247,7 @@
 
 ## 设备特定参数
 *   **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
-    *   启用gmsl触发输出信号 / 设置gmsl触发fps。用于 [gmsl相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
+    *   启用 GMSL 触发输出信号 / 设置 GMSL 触发帧率。支持 Gemini 335Lg、338Lg、345Lg 和 305g，具体参考 [GMSL 相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
 * **`enable_ptp_config`**
   * 启用PTP时间同步。仅适用于Gemini 335Le。需要 `enable_sync_host_time` 设置为 `false`。
   > **支持模组**：Gemini 335Le。

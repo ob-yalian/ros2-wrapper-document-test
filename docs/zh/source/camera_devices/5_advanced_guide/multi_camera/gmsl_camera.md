@@ -6,7 +6,7 @@
 
 ## 单个 GMSL 相机
 
-GMSL 相机在 OrbbecSDK_ROS2 中的使用与通过 USB 的 Gemini 330 系列相机相同。
+GMSL 相机在 OrbbecSDK_ROS2 中的使用与通过 USB 的 Gemini 330 系列相机相同。ROS2 v2.10.1 支持 Gemini 335Lg、Gemini 338Lg、Gemini 345Lg 和 Gemini 305g。
 
 ```bash
 ros2 launch orbbec_camera gemini_330_gmsl.launch.py
@@ -29,6 +29,8 @@ ros2 launch orbbec_camera multi_gmsl_camera.launch.py
 ```
 
 > 注意：默认情况下，multi_gmsl_camera.launch.py 仅启动 color 和 depth。如果您想启动其他传感器，请转到 [camera_secondary_params.yaml](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/config/camera_secondary_params.yaml) 进行修改。
+
+组合多相机启动时，Gemini 335Lg / 338Lg 使用 `gemini_330_gmsl.launch.py`，Gemini 305g 使用 `gemini_301_series.launch.py`，Gemini 345Lg 使用 `gemini345_lg.launch.py`。
 
 ## 多个 GMSL 相机同步
 

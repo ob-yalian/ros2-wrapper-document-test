@@ -6,7 +6,7 @@ You can find example usage code in the [example](https://github.com/orbbec/Orbbe
 
 ## Single GMSL camera
 
-The usage of GMSL camera in OrbbecSDK_ROS2 is the same as that of Gemini 330 series camera via USB.
+The usage of GMSL camera in OrbbecSDK_ROS2 is the same as that of Gemini 330 series camera via USB. ROS2 v2.10.1 supports Gemini 335Lg, Gemini 338Lg, Gemini 345Lg, and Gemini 305g.
 
 ```bash
 ros2 launch orbbec_camera gemini_330_gmsl.launch.py
@@ -29,6 +29,8 @@ ros2 launch orbbec_camera multi_gmsl_camera.launch.py
 ```
 
 > Note: By default, multi_gmsl_camera.launch.py only starts color and depth. If you want to start other sensors, please go to [camera_secondary_params.yaml](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/config/camera_secondary_params.yaml) to modify them.
+
+Use `gemini_330_gmsl.launch.py` for Gemini 335Lg / 338Lg, `gemini_301_series.launch.py` for Gemini 305g, and `gemini345_lg.launch.py` for Gemini 345Lg when composing a multi-camera launch.
 
 ## Multi GMSL camera synced
 
