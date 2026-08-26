@@ -65,6 +65,8 @@
     *   如需降低 CPU 使用率，可参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md) 中的 `color_format` 建议。
 *   **`enable_[color|depth|left_ir|right_ir|ir]`**
     *   启用或关闭对应图像流。
+*   **`color_frame_queue_max_frames`**、**`left_color_frame_queue_max_frames`**、**`right_color_frame_queue_max_frames`**
+    *   设置对应彩色帧线程缓存的最大帧数，默认值为 `10`。队列满时会丢弃最旧帧，并增加溢出计数；当前队列长度和溢出统计可通过 `/camera/get_color_queue_stats` 查询。
 *   **`[color|depth|left_ir|right_ir|ir]_rotation`**
     *   设置流图像旋转。
     *   可能的值为 `0`、`90`、`180`、`270`。
@@ -82,6 +84,9 @@
     *   启用无效点云过滤。
 *   **`point_cloud_qos`、`[stream]_qos`、`[stream]_camera_info_qos`**
     *   ROS 2消息服务质量（QoS）设置。可能的值为 `SYSTEM_DEFAULT`、`DEFAULT`、`PARAMETER_EVENTS`、`SERVICES_DEFAULT`、`PARAMETERS`、`SENSOR_DATA`，不区分大小写。这些分别对应 `rmw_qos_profile_system_default`、`rmw_qos_profile_default`、`rmw_qos_profile_parameter_events`、`rmw_qos_profile_services_default`、`rmw_qos_profile_parameters` 和 `SENSOR_DATA`。
+*   **`[stream]_qos_history`、`[stream]_qos_depth`**
+    *   覆盖图像发布器的 History 和 Depth。常用参数包括 `color_qos_history`、`color_qos_depth`、`depth_qos_history` 和 `depth_qos_depth`；根据所使用的 launch 文件，`stream` 还可以是 `left_color`、`right_color`、`ir`、`left_ir` 或 `right_ir`。
+    *   `qos_history` 支持 `DEFAULT`、`KEEP_LAST` 和 `KEEP_ALL`（大小写不敏感）。默认值为 `default`，表示沿用 `[stream]_qos` 的 History 策略。`qos_depth` 默认为 `-1`，表示沿用基础 QoS 的 Depth；设置为正数时覆盖该值。
 * **`color.image_raw.enable_pub_plugins`**
   * 启用彩色图像传输插件。具体启用列表由设备 launch 文件决定。压缩图像订阅方法参考 [压缩图像](compressed_image.md)。
 * **`depth.image_raw.enable_pub_plugins`**
@@ -240,11 +245,11 @@
   *   `DEPTH`：将彩色对齐到深度。
   *   该参数大小写不敏感。硬件 D2C 仅支持 `COLOR` 作为对齐目标；如需对齐到 `DEPTH`，请使用 `align_mode:=SW`。启动和查看方法参考 [对齐深度到彩色](../5_advanced_guide/configuration/align_depth_color.md)。
 - **`intra_camera_sync_reference`**
-  - 设置相机内同步的参考点。适用于Gemini 330系列设备，当 `sync_mode` 设置为**软件**或**硬件触发**模式时。**选项：** `Start`、`Middle`、`End`。参数为空时，节点不修改设备当前设置。
+  - 设置支持的 Gemini 330/335 系列设备的相机内同步参考点。**选项：** `Start`、`Middle`、`End`。参数为空时，节点不修改设备当前设置。
 
 ## 设备特定参数
 *   **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
-    *   启用gmsl触发输出信号 / 设置gmsl触发fps。用于 [gmsl相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
+    *   启用 GMSL 触发输出信号 / 设置 GMSL 触发帧率。支持 Gemini 335Lg、338Lg、345Lg 和 305g，具体参考 [GMSL 相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
 * **`enable_ptp_config`**
   * 启用PTP时间同步。仅适用于Gemini 335Le。需要 `enable_sync_host_time` 设置为 `false`。
   > **支持模组**：Gemini 335Le。
@@ -279,7 +284,7 @@
   > **支持模组**：Gemini 330 系列。
 * **`enable_fps_boost`**
   * 启用设备 FPS Boost。默认值为 `false`；仅在设备支持 `FPS Boost` 属性时生效。
-  > **支持模组**：Gemini 330 系列。
+  > **支持模组：** Gemini 305 / Gemini 330 系列。
 * **`enable_edge_noise_removal_filter`**
   * 启用 EdgeNoiseRemovalFilter，用于减少深度图边缘噪声。
   > **支持模组**：DaBai Max Pro。
@@ -344,6 +349,8 @@
     *   诊断周期（秒）。
 *   **`enable_heartbeat`**
     *   启用心跳功能。默认为 `false`。如果为 `true`，相机节点将向固件发送心跳信号。
+* **`monitor_poll_interval_sec`**
+  *   设置 SDK 设备心跳和固件日志的轮询间隔，单位为秒。默认值为 `-1`，表示不修改 SDK 当前轮询间隔。有效范围为 `1–10`；超出范围的值会被限制到最近的边界。该参数只设置轮询间隔，不会自动启用心跳或固件日志抓取。
 
 ### 其他
 *   **`config_file_path`**
@@ -359,6 +366,9 @@
     *   该参数大小写不敏感；请使用上述有效值。
 *   **`enable_d2c_viewer`**
     *   发布D2C叠加图像（仅用于测试）。使用示例参考 [对齐深度到彩色](../5_advanced_guide/configuration/align_depth_color.md)。
+*   **`depth_colorizer_mode`**
+    *   对发布到 `/camera/depth/image_raw` 的深度图进行彩色化。支持 `none`、`jet`、`jet_inv` 和 `gray`。`none` 保持原始深度图，`gray` 发布 `mono8`，`jet` 和 `jet_inv` 发布 `rgb8`。
+    *   当选择非 `none` 模式且同时设置 `enable_d2c_viewer:=true` 时，节点会输出告警并自动关闭 `enable_d2c_viewer`，因为 D2C Viewer 要求输入原始 `16UC1` 深度图。
 
 ## IMU
 
@@ -384,11 +394,11 @@
 *   **`enable_sequence_id_filter`**
     *   启用深度序列id滤波器。使用 `sequence_id_filter_id` 设置。
 *   **`enable_threshold_filter`**
-    *   启用深度阈值滤波器。使用 `threshold_filter_max`、`threshold_filter_min` 设置。
+    *   启用深度阈值滤波器。使用 `threshold_filter_max` 和 `threshold_filter_min` 设置。
 *   **`enable_hardware_noise_removal_filter`**
-    *   启用深度硬件降噪滤波器。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
+    *   启用深度硬件降噪滤波器。Gemini 330 系列设备中，参数为空表示使用 SDK 默认值。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
 *   **`enable_noise_removal_filter`**
-    *   启用深度软件降噪滤波器。使用 `noise_removal_filter_min_diff` 等设置。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
+    *   启用深度软件降噪滤波器。Gemini 330 系列设备中，参数为空表示使用 SDK 默认值。使用 `noise_removal_filter_min_diff` 等参数设置。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
 *   **`enable_spatial_filter`**
     *   启用深度空间滤波器。使用 `spatial_filter_alpha` 等设置。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
 *   **`enable_temporal_filter`**

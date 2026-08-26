@@ -19,6 +19,7 @@
 
 *   `/camera/depth/image_raw`
     *   深度流的原始图像数据。
+    *   当 `depth_colorizer_mode` 为 `none` 时保持原始深度编码；`gray` 会将发布编码改为 `mono8`，`jet` 和 `jet_inv` 会改为 `rgb8`。
 *   `/camera/depth/camera_info`
     *   深度流的相机校准数据和元数据。
 *   `/camera/depth/metadata`

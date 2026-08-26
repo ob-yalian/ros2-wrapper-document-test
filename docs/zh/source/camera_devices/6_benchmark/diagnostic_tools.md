@@ -4,7 +4,7 @@
 
 ## 帧丢失日志与时间戳 CSV 记录
 
-开启 `enable_frame_drop_log` 后，相机节点会在日志中输出彩色和深度帧丢失统计，用于定位 SDK 接收阶段和 ROS 发布阶段的丢帧。设置 `frame_timestamp_csv_file` 后，相机节点会额外记录彩色和深度帧的时间戳数据到 CSV 文件，用于分析帧连续性、发布延迟和时间戳异常。
+开启 `enable_frame_drop_log` 后，相机节点会在日志中输出彩色和深度帧丢失统计，用于定位 SDK 接收阶段和 ROS 发布阶段的丢帧。设置 `frame_timestamp_csv_file` 后，节点会将彩色、深度以及已启用 IMU 流的时间戳记录到 CSV 文件，用于分析帧连续性、发布延迟和时间戳异常。启用帧同步（`enable_frame_sync:=true`）时，彩色和深度时间戳会汇聚到同一个 CSV 文件中；未启用时分别写入 `<stem>_color.csv` 和 `<stem>_depth.csv`。同步加速度计和陀螺仪数据写入 `<stem>_imu.csv`，独立加速度计和陀螺仪数据分别写入 `<stem>_accel.csv` 和 `<stem>_gyro.csv`。所有 CSV 文件遵循相同的分片规则。
 
 ```bash
 ros2 launch orbbec_camera gemini_330_series.launch.py \
@@ -13,6 +13,10 @@ frame_timestamp_csv_file:=/tmp/frame_timestamp.csv
 ```
 
 CSV 中包含 SDK frame index、hardware frame number、sensor timestamp、device/global/system timestamp、steady arrival/publish delta、ROS 发布耗时以及 SDK delay 等字段。
+
+### CSV 分片
+
+每个 CSV 文件最多保存 `1,024,575` 行帧数据和 1 行表头。达到上限后，日志器会自动写入下一个带序号的文件，例如 `frame_timestamp_1.csv`、`frame_timestamp_2.csv`。
 
 ### 字段说明
 

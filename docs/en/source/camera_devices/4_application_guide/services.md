@@ -108,6 +108,22 @@
     ros2 service call /camera/set_streams_enable std_srvs/srv/SetBool '{data: false}'
     ```
 
+### Color Queue Diagnostics
+
+* `/camera/get_color_queue_stats`
+
+This service uses `std_srvs/srv/SetBool`. Pass `false` to query the current statistics, or `true` to query and reset the accumulated statistics.
+
+```bash
+ros2 service call /camera/get_color_queue_stats std_srvs/srv/SetBool '{data: false}'
+```
+
+The JSON response in `message` contains the total `overflow_count` and a `queues` object. Each enabled queue reports `capacity_frames`, `queue_size`, `max_queue_size`, `overflow_count`, `oldest_queue_wait_ms`, and `max_queue_wait_ms`. The service also reports the node `namespace` and whether the statistics were reset in `statistics_reset`.
+
+```bash
+ros2 service call /camera/get_color_queue_stats std_srvs/srv/SetBool '{data: true}'
+```
+
 ### Runtime Stream Configuration
 
 *   `/camera/set_stream_profile`
@@ -138,6 +154,35 @@
     ros2 service call /camera/set_white_balance orbbec_camera_msgs/srv/SetInt32 '{data: 2800}'
     ros2 service call /camera/get_white_balance orbbec_camera_msgs/srv/GetInt32 '{}'
     ```
+
+#### Gemini 330 AE/AWB Debugging
+
+On Gemini 330 series devices with firmware `1.8.21` or later, the following services are advertised when the corresponding SDK properties are supported:
+
+*   `/camera/get_color_ae_awb_status`
+
+    Returns the device AE/AWB status value.
+
+    ```bash
+    ros2 service call /camera/get_color_ae_awb_status orbbec_camera_msgs/srv/GetInt32 '{}'
+    ```
+
+*   `/camera/get_color_awb_gain`
+
+    Returns the raw Q8.8 `r_gain`, `b_gain`, and `g_gain` values.
+
+    ```bash
+    ros2 service call /camera/get_color_awb_gain orbbec_camera_msgs/srv/GetAwbGain '{}'
+    ```
+
+*   `/camera/set_color_awb_gain`
+
+    Sets raw Q8.8 RGB channel gains. Color auto white balance must be disabled before setting the gains.
+
+    ```bash
+    ros2 service call /camera/set_color_awb_gain orbbec_camera_msgs/srv/SetAwbGain "{r_gain: 512, b_gain: 512, g_gain: 512}"
+    ```
+
 *   `/camera/set_laser_enable`
     ```bash
     ros2 service call /camera/set_laser_enable std_srvs/srv/SetBool '{data: true}'
@@ -302,6 +347,7 @@
     ```bash
     ros2 service call /camera/save_images std_srvs/srv/Empty '{}'
     ```
+    The service saves frames from each enabled image stream, up to the configured `max_save_images_count` (default `10`). For every frame, the node writes matching `.raw`, `.png`, and metadata `.json` files under the `image` directory in the current working directory. File names include the stream, resolution, frame rate, local timestamp with microsecond precision, and frame index.
 *   `/camera/save_point_cloud`
     ```bash
     ros2 service call /camera/save_point_cloud std_srvs/srv/Empty '{}'
