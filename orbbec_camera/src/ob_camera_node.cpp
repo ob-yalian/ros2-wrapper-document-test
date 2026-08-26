@@ -65,13 +65,6 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
 
 namespace {
 
-constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
-constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
-constexpr double kViewerColorizerGamma = 0.65;
-constexpr uint16_t kViewerColorizerMaxDistanceMm = 10000;
-constexpr uint16_t kViewerColorizerDefaultMinDistanceMm = 100;
-constexpr uint16_t kViewerColorizerG305MinDistanceMm = 40;
-
 std::string getDepthFilterStatusName(const std::string &filter_name) {
   if (filter_name == "SpatialAdvancedFilter") {
     return "SpatialFilter";
@@ -743,10 +736,19 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   setupTopics();
 
   if (enable_frame_drop_log_ || !frame_timestamp_csv_file_.empty()) {
-    frame_timestamp_csv_logger_ = std::make_unique<FrameTimestampCsvLogger>(
-        enable_frame_drop_log_, frame_timestamp_csv_file_, logger_);
-    if (!frame_timestamp_csv_logger_->enabled()) {
-      frame_timestamp_csv_logger_.reset();
+    TimestampCsvLogger::Config timestamp_config;
+    timestamp_config.frame_drop_log_enabled = enable_frame_drop_log_;
+    timestamp_config.csv_file_path = frame_timestamp_csv_file_;
+    timestamp_config.frame_sync_enabled = enable_frame_sync_;
+    timestamp_config.color_enabled = enable_stream_[COLOR];
+    timestamp_config.depth_enabled = enable_stream_[DEPTH];
+    timestamp_config.imu_sync_enabled = enable_sync_output_accel_gyro_;
+    timestamp_config.accel_enabled = enable_stream_[ACCEL];
+    timestamp_config.gyro_enabled = enable_stream_[GYRO];
+    timestamp_csv_logger_ =
+        std::make_unique<TimestampCsvLogger>(std::move(timestamp_config), logger_);
+    if (!timestamp_csv_logger_->enabled()) {
+      timestamp_csv_logger_.reset();
     }
   }
 
@@ -816,15 +818,6 @@ void OBCameraNode::clean() noexcept {
   is_running_.store(false);
   is_camera_node_initialized_.store(false);
 
-  try {
-    if (frame_timestamp_csv_logger_) {
-      frame_timestamp_csv_logger_->shutdown();
-      frame_timestamp_csv_logger_.reset();
-    }
-  } catch (...) {
-    RCLCPP_WARN_STREAM(logger_, "Exception while shutting down frame timestamp CSV logger");
-  }
-
   // Stop diagnostic timer and updater first BEFORE acquiring device_lock to prevent deadlock
   try {
     if (diagnostic_timer_) {
@@ -882,6 +875,11 @@ void OBCameraNode::clean() noexcept {
     }
   } catch (...) {
     RCLCPP_DEBUG_STREAM(logger_, "Exception while stopping streams");
+  }
+
+  if (timestamp_csv_logger_) {
+    timestamp_csv_logger_->shutdown();
+    timestamp_csv_logger_.reset();
   }
 
   // Clean up d2c_viewer_ before cleaning buffers
@@ -1040,6 +1038,17 @@ void OBCameraNode::setupDevices() {
                           sync_io_voltage_level_);
       RCLCPP_INFO_STREAM(logger_, "Current sync IO voltage level: " << device_->getIntProperty(
                                       OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT));
+    }
+  }
+  if (monitor_poll_interval_sec_ != -1) {
+    try {
+      const auto interval_ms = static_cast<uint32_t>(monitor_poll_interval_sec_) * 1000U;
+      device_->setMonitorPollInterval(interval_ms);
+      RCLCPP_INFO_STREAM(
+          logger_, "Current monitor poll interval: " << device_->getMonitorPollInterval() << " ms");
+    } catch (const ob::Error &e) {
+      RCLCPP_WARN_STREAM(logger_, "Skipping monitor poll interval configuration: "
+                                      << orbbec_camera::formatObErrorWithStatus(e));
     }
   }
   if (should_apply_launch_config("enable_heartbeat") &&
@@ -4196,8 +4205,14 @@ void OBCameraNode::startIMUSyncStream() {
       auto frameSet = frame->as<ob::FrameSet>();
       auto aFrame = frameSet->getFrame(OB_FRAME_ACCEL);
       auto gFrame = frameSet->getFrame(OB_FRAME_GYRO);
+      const bool log_imu_timestamps = is_camera_node_initialized_.load() && rclcpp::ok() &&
+                                      timestamp_csv_logger_ &&
+                                      timestamp_csv_logger_->syncedImuEnabled();
+      const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
       if (aFrame && gFrame) {
-        onNewIMUFrameSyncOutputCallback(aFrame, gFrame);
+        onNewIMUFrameSyncOutputCallback(aFrame, gFrame, arrival_system_us);
+      } else if (log_imu_timestamps && (aFrame || gFrame)) {
+        timestamp_csv_logger_->recordSyncedImu(aFrame, gFrame, arrival_system_us, std::nullopt);
       }
     });
 
@@ -4763,6 +4778,16 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(max_depth_limit_, "max_depth_limit", 0);
   setAndGetNodeParameter<bool>(enable_heartbeat_, "enable_heartbeat", false);
   setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
+  setAndGetNodeParameter<int>(monitor_poll_interval_sec_, "monitor_poll_interval_sec", -1);
+  if (monitor_poll_interval_sec_ != -1 &&
+      (monitor_poll_interval_sec_ < 1 || monitor_poll_interval_sec_ > 10)) {
+    const auto requested_monitor_poll_interval_sec = monitor_poll_interval_sec_;
+    monitor_poll_interval_sec_ = std::clamp(monitor_poll_interval_sec_, 1, 10);
+    RCLCPP_WARN_STREAM(logger_, "monitor_poll_interval_sec value "
+                                    << requested_monitor_poll_interval_sec
+                                    << " is out of range [1, 10], clamped to "
+                                    << monitor_poll_interval_sec_);
+  }
   setAndGetNodeParameter<bool>(enable_fps_boost_, "enable_fps_boost", false);
   setAndGetNodeParameter<std::string>(time_domain_, "time_domain", "global");
   time_domain_ = normalizeClosedSetParameterValue(logger_, "time_domain", time_domain_,
@@ -5132,6 +5157,9 @@ void OBCameraNode::setupPipelineConfig() {
 }
 
 bool OBCameraNode::validateEnhancedDepthFilterConfig(std::string &message) const {
+  constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
+  constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
+
   if (!enable_stream_.count(COLOR) || !enable_stream_.at(COLOR) || !enable_stream_.count(DEPTH) ||
       !enable_stream_.at(DEPTH)) {
     message = "Enhanced depth filter requires color and depth streams";
@@ -5740,6 +5768,11 @@ cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image,
     return {};
   }
 
+  constexpr double kViewerColorizerGamma = 0.65;
+  constexpr uint16_t kViewerColorizerMaxDistanceMm = 10000;
+  constexpr uint16_t kViewerColorizerDefaultMinDistanceMm = 100;
+  constexpr uint16_t kViewerColorizerG305MinDistanceMm = 40;
+
   cv::Mat depth_16u;
   depth_image.convertTo(depth_16u, CV_16UC1);
 
@@ -6312,7 +6345,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
   if (frame_set == nullptr) {
     return;
   }
-  if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled()) {
+  if (timestamp_csv_logger_ && timestamp_csv_logger_->imageEnabled()) {
     const auto frame_set_arrival_system_us = getSystemNowUs();
     const auto frame_set_arrival_steady_us = getSteadyNowUs();
     auto final_color_frame = frame_set->getFrame(OB_FRAME_COLOR);
@@ -6322,7 +6355,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
     const bool color_publish_expected = track_color;
     const bool depth_publish_expected = track_depth;
 
-    frame_timestamp_csv_logger_->recordFrameSet(
+    timestamp_csv_logger_->recordImageFrameSet(
         final_color_frame, final_depth_frame, frame_set_arrival_system_us,
         frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
         depth_publish_expected);
@@ -6797,7 +6830,7 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
       target_buffer_size = &rgb_buffer_size_;
     }
     if (video_frame->getDataSize() > *target_buffer_size) {
-      delete[](*target_buffer);
+      delete[] (*target_buffer);
       *target_buffer_size = video_frame->getDataSize();
       *target_buffer = new uint8_t[*target_buffer_size];
       buffer = *target_buffer;
@@ -6849,10 +6882,11 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (frame == nullptr) {
     return;
   }
+  const bool log_image_timestamps =
+      timestamp_csv_logger_ && timestamp_csv_logger_->imageStreamEnabled(stream_index.first);
   const auto record_image_publish_skipped = [&]() {
-    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
-        (stream_index == COLOR || stream_index == DEPTH)) {
-      frame_timestamp_csv_logger_->recordImagePublishSkipped(stream_index.first, frame);
+    if (log_image_timestamps) {
+      timestamp_csv_logger_->recordImagePublishSkipped(stream_index.first, frame);
     }
   };
   CHECK_NOTNULL(image_publishers_[stream_index]);
@@ -6969,10 +7003,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
-    if (!has_raw_image_subscriber && stream_index == COLOR && frame_timestamp_csv_logger_ &&
-        frame_timestamp_csv_logger_->enabled()) {
-      frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
-                                                         getSystemNowUs(), getSteadyNowUs());
+    if (!has_raw_image_subscriber && stream_index == COLOR && log_image_timestamps) {
+      timestamp_csv_logger_->recordImagePrePublish(stream_index.first, frame, getSystemNowUs(),
+                                                   getSteadyNowUs());
     }
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
     if (!has_raw_image_subscriber && stream_index == COLOR) {
@@ -7058,10 +7091,9 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       record_image_publish_skipped();
       return;
     }
-    if (frame_timestamp_csv_logger_ && frame_timestamp_csv_logger_->enabled() &&
-        (stream_index == COLOR || stream_index == DEPTH)) {
-      frame_timestamp_csv_logger_->recordPreImagePublish(stream_index.first, frame,
-                                                         getSystemNowUs(), getSteadyNowUs());
+    if (log_image_timestamps) {
+      timestamp_csv_logger_->recordImagePrePublish(stream_index.first, frame, getSystemNowUs(),
+                                                   getSteadyNowUs());
     }
     if (stream_index == COLOR) {
       fps_delay_status_color_->tick(frame_timestamp);
@@ -7248,11 +7280,20 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
 }
 
 void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Frame> &accelframe,
-                                                   const std::shared_ptr<ob::Frame> &gryoframe) {
+                                                   const std::shared_ptr<ob::Frame> &gryoframe,
+                                                   int64_t arrival_system_us) {
   if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
+  const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
+    if (arrival_system_us != 0 && timestamp_csv_logger_ &&
+        timestamp_csv_logger_->syncedImuEnabled()) {
+      timestamp_csv_logger_->recordSyncedImu(accelframe, gryoframe, arrival_system_us,
+                                             publish_system_us);
+    }
+  };
   if (!imu_gyro_accel_publisher_) {
+    record_timestamps(std::nullopt);
     RCLCPP_ERROR_STREAM(logger_, "stream Accel Gryo publisher not initialized");
     return;
   }
@@ -7260,6 +7301,7 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
   has_subscriber = has_subscriber || imu_info_publishers_[GYRO]->get_subscription_count() > 0;
   has_subscriber = has_subscriber || imu_info_publishers_[ACCEL]->get_subscription_count() > 0;
   if (!has_subscriber) {
+    record_timestamps(std::nullopt);
     return;
   }
   auto imu_msg = sensor_msgs::msg::Imu();
@@ -7293,7 +7335,9 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
   imu_msg.linear_acceleration.y = accelData.y - accel_info.bias[1];
   imu_msg.linear_acceleration.z = accelData.z - accel_info.bias[2];
 
+  const auto publish_system_us = getSystemNowUs();
   imu_gyro_accel_publisher_->publish(imu_msg);
+  record_timestamps(publish_system_us);
 }
 
 void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame,
@@ -7301,7 +7345,17 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   if (!is_camera_node_initialized_.load() || !rclcpp::ok()) {
     return;
   }
+  const bool log_imu_timestamps =
+      timestamp_csv_logger_ && timestamp_csv_logger_->standaloneImuEnabled(stream_index.first);
+  const auto arrival_system_us = log_imu_timestamps ? getSystemNowUs() : 0;
+  const auto record_timestamps = [&](std::optional<int64_t> publish_system_us) {
+    if (log_imu_timestamps) {
+      timestamp_csv_logger_->recordStandaloneImu(stream_index.first, frame, arrival_system_us,
+                                                 publish_system_us);
+    }
+  };
   if (!imu_publishers_.count(stream_index)) {
+    record_timestamps(std::nullopt);
     RCLCPP_ERROR_STREAM(logger_,
                         "stream " << stream_name_[stream_index] << " publisher not initialized");
     return;
@@ -7310,6 +7364,7 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   has_subscriber =
       has_subscriber || imu_info_publishers_[stream_index]->get_subscription_count() > 0;
   if (!has_subscriber) {
+    record_timestamps(std::nullopt);
     return;
   }
   auto imu_msg = sensor_msgs::msg::Imu();
@@ -7336,10 +7391,13 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
     imu_msg.linear_acceleration.y = data.y - imu_info.bias[1];
     imu_msg.linear_acceleration.z = data.z - imu_info.bias[2];
   } else {
+    record_timestamps(std::nullopt);
     RCLCPP_ERROR(logger_, "Unsupported IMU frame type");
     return;
   }
+  const auto publish_system_us = getSystemNowUs();
   imu_publishers_[stream_index]->publish(imu_msg);
+  record_timestamps(publish_system_us);
 }
 
 void OBCameraNode::setDefaultIMUMessage(sensor_msgs::msg::Imu &imu_msg) {
@@ -8434,9 +8492,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         if (request->filter_param.size() > 1) {
           temporal_filter->setDiffScale(request->filter_param[0]);
           temporal_filter->setWeight(request->filter_param[1]);
-          RCLCPP_INFO_STREAM(logger_, "Set TemporalFilter params: "
-                                          << "\ndiff_scale:" << request->filter_param[0]
-                                          << "\nweight:" << request->filter_param[1]);
+          RCLCPP_INFO_STREAM(
+              logger_, "Set TemporalFilter params: " << "\ndiff_scale:" << request->filter_param[0]
+                                                     << "\nweight:" << request->filter_param[1]);
           temporal_filter_diff_threshold_ = request->filter_param[0];
           temporal_filter_weight_ = request->filter_param[1];
         } else {
