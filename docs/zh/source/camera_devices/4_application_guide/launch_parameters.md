@@ -359,6 +359,9 @@
     *   该参数大小写不敏感；请使用上述有效值。
 *   **`enable_d2c_viewer`**
     *   发布D2C叠加图像（仅用于测试）。使用示例参考 [对齐深度到彩色](../5_advanced_guide/configuration/align_depth_color.md)。
+*   **`depth_colorizer_mode`**
+    *   对发布到 `/camera/depth/image_raw` 的深度图进行彩色化。支持 `none`、`jet`、`jet_inv` 和 `gray`。`none` 保持原始深度图，`gray` 发布 `mono8`，`jet` 和 `jet_inv` 发布 `rgb8`。
+    *   当选择非 `none` 模式且同时设置 `enable_d2c_viewer:=true` 时，节点会输出告警并自动关闭 `enable_d2c_viewer`，因为 D2C Viewer 要求输入原始 `16UC1` 深度图。
 
 ## IMU
 

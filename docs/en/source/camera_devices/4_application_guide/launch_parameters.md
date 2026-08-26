@@ -361,6 +361,9 @@ The following are the launch parameters available:
     *   This parameter is case-insensitive. Use one of the valid values listed above.
 *   **`enable_d2c_viewer`**
     *   Publishes the D2C overlay image (for testing only). See [Aligning Depth to Color](../5_advanced_guide/configuration/align_depth_color.md) for examples.
+*   **`depth_colorizer_mode`**
+    *   Colorizes the depth image published on `/camera/depth/image_raw`. Supported values are `none`, `jet`, `jet_inv`, and `gray`. `none` keeps the raw depth image, `gray` publishes `mono8`, and `jet` / `jet_inv` publish `rgb8`.
+    *   When a colorizer mode other than `none` is selected together with `enable_d2c_viewer:=true`, the node logs a warning and automatically disables `enable_d2c_viewer`, because the viewer requires a raw `16UC1` depth image.
 
 ## IMU
 

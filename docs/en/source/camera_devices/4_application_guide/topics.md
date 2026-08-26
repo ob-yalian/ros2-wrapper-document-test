@@ -19,6 +19,7 @@ These topics provide the raw image data and corresponding calibration informatio
 
 *   `/camera/depth/image_raw`
     *   Raw image data from the depth stream.
+    *   When `depth_colorizer_mode` is `none`, the topic keeps the raw depth encoding. `gray` changes the published encoding to `mono8`; `jet` and `jet_inv` change it to `rgb8`.
 *   `/camera/depth/camera_info`
     *   Camera calibration data and metadata for the depth stream.
 *   `/camera/depth/metadata`
