@@ -14,6 +14,10 @@ frame_timestamp_csv_file:=/tmp/frame_timestamp.csv
 
 The CSV contains SDK frame index, hardware frame number, sensor timestamp, device/global/system timestamp, steady arrival/publish delta, ROS publish duration, and SDK delay fields.
 
+### CSV Rotation
+
+Each CSV file contains at most `1,024,575` frame rows plus the header. When the limit is reached, the logger automatically starts the next indexed file, for example `frame_timestamp_1.csv` and `frame_timestamp_2.csv`.
+
 ### Field Description
 
 The current CSV contains two groups of fields with the same structure, prefixed by `color_` and `depth_`, for example `color_sdk_frame_index` and `depth_sdk_frame_index`. The two groups have identical definitions and differ only in data source.

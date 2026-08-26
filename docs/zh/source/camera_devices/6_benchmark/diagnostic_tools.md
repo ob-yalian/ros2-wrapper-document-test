@@ -14,6 +14,10 @@ frame_timestamp_csv_file:=/tmp/frame_timestamp.csv
 
 CSV 中包含 SDK frame index、hardware frame number、sensor timestamp、device/global/system timestamp、steady arrival/publish delta、ROS 发布耗时以及 SDK delay 等字段。
 
+### CSV 分片
+
+每个 CSV 文件最多保存 `1,024,575` 行帧数据和 1 行表头。达到上限后，日志器会自动写入下一个带序号的文件，例如 `frame_timestamp_1.csv`、`frame_timestamp_2.csv`。
+
 ### 字段说明
 
 当前 CSV 中包含两组同构字段，分别以 `color_` 和 `depth_` 为前缀，例如 `color_sdk_frame_index` 和 `depth_sdk_frame_index`。两组字段定义完全一致，仅数据来源不同。
