@@ -376,7 +376,7 @@ The following are the launch parameters available:
 *   **`enable_sync_output_accel_gyro`**
     *   Enable the sync `accel_gyro`, and output IMU topic real-time data.
 *   **`accel_rate`** / **`gyro_rate`**
-    *   The frequency of the accelerometer/gyroscope. Values range from `1.5625hz` to `32khz`.
+    *   The frequency of the accelerometer/gyroscope. Values range from `1.5625hz` to `32khz`. High-rate aliases such as `1000hz`, `2000hz`, `4000hz`, `8000hz`, `16000hz`, and `32000hz` are also accepted; the equivalent `1khz`–`32khz` forms remain supported.
 *   **`accel_range`** / **`gyro_range`**
     *   The range of the accelerometer (`2g`, `4g`, `8g`, `16g`) and gyroscope (`16dps` to `2000dps`).
 *   **`enable_accel_data_correction`** / **`enable_gyro_data_correction`**
