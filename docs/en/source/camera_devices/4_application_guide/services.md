@@ -331,6 +331,7 @@ On Gemini 330 series devices with firmware `1.8.21` or later, the following serv
     ```bash
     ros2 service call /camera/save_images std_srvs/srv/Empty '{}'
     ```
+    The service saves frames from each enabled image stream, up to the configured `max_save_images_count` (default `10`). For every frame, the node writes matching `.raw`, `.png`, and metadata `.json` files under the `image` directory in the current working directory. File names include the stream, resolution, frame rate, local timestamp with microsecond precision, and frame index.
 *   `/camera/save_point_cloud`
     ```bash
     ros2 service call /camera/save_point_cloud std_srvs/srv/Empty '{}'

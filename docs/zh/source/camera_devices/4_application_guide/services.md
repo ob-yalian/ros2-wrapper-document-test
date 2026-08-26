@@ -332,6 +332,7 @@ Gemini 330 系列设备使用固件 `1.8.21` 及以上版本时，如果设备�
     ```bash
     ros2 service call /camera/save_images std_srvs/srv/Empty '{}'
     ```
+    该服务会为每个已启用的图像流保存帧，数量受 `max_save_images_count` 限制（默认值为 `10`）。每帧都会在当前工作目录下的 `image` 目录中生成对应的 `.raw`、`.png` 和元数据 `.json` 文件。文件名包含流名称、分辨率、帧率、带微秒精度的本地时间戳和帧序号。
 *   `/camera/save_point_cloud`
     ```bash
     ros2 service call /camera/save_point_cloud std_srvs/srv/Empty '{}'
