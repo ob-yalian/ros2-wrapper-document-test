@@ -4,7 +4,7 @@ This section describes frame continuity, timestamp, topic statistics, end-to-end
 
 ## Frame Drop Log and Timestamp CSV Recording
 
-After `enable_frame_drop_log` is enabled, the camera node prints color and depth frame drop statistics in the log. This helps locate frame drops at the SDK receive stage and ROS publish stage. When `frame_timestamp_csv_file` is set, the camera node also records color and depth frame timestamp data to a CSV file for analyzing frame continuity, publish latency, and timestamp anomalies.
+After `enable_frame_drop_log` is enabled, the camera node prints color and depth frame drop statistics in the log. This helps locate frame drops at the SDK receive stage and ROS publish stage. When `frame_timestamp_csv_file` is set, the camera node records timestamp data for color, depth, and enabled IMU streams to CSV files for analyzing frame continuity, publish latency, and timestamp anomalies. When frame synchronization (`enable_frame_sync:=true`) is enabled, color and depth timestamps are combined into one CSV file; otherwise, they are written to separate `<stem>_color.csv` and `<stem>_depth.csv` files. Synchronized accelerometer and gyroscope data are written to `<stem>_imu.csv`, while standalone accelerometer and gyroscope data are written to `<stem>_accel.csv` and `<stem>_gyro.csv`. All CSV files follow the same rotation rule.
 
 ```bash
 ros2 launch orbbec_camera gemini_330_series.launch.py \
