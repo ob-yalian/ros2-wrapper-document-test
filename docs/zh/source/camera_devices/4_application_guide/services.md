@@ -108,6 +108,22 @@
     ros2 service call /camera/set_streams_enable std_srvs/srv/SetBool '{data: false}'
     ```
 
+### 彩色帧队列诊断
+
+* `/camera/get_color_queue_stats`
+
+该服务使用 `std_srvs/srv/SetBool`。请求值为 `false` 时查询当前统计信息；请求值为 `true` 时查询并重置累计统计信息。
+
+```bash
+ros2 service call /camera/get_color_queue_stats std_srvs/srv/SetBool '{data: false}'
+```
+
+响应的 `message` 字段为 JSON，包含总 `overflow_count` 和 `queues` 对象。每个已启用队列会报告 `capacity_frames`、`queue_size`、`max_queue_size`、`overflow_count`、`oldest_queue_wait_ms` 和 `max_queue_wait_ms`。响应同时包含节点 `namespace` 以及是否执行了统计重置的 `statistics_reset` 字段。
+
+```bash
+ros2 service call /camera/get_color_queue_stats std_srvs/srv/SetBool '{data: true}'
+```
+
 ### 运行时数据流配置
 
 *   `/camera/set_stream_profile`

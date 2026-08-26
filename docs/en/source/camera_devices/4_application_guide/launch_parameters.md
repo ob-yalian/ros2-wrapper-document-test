@@ -65,6 +65,8 @@ The following are the launch parameters available:
     *   For lower CPU usage, see the `color_format` recommendations in [Lower CPU Usage](../5_advanced_guide/performance/lower_cpu_usage.md).
 *   **`enable_[color|depth|left_ir|right_ir|ir]`**
     *   Enable or disable the corresponding image stream.
+*   **`color_frame_queue_max_frames`**, **`left_color_frame_queue_max_frames`**, **`right_color_frame_queue_max_frames`**
+    *   Set the maximum number of color frames buffered by the corresponding color-frame worker. The default is `10`; when the queue is full, the oldest frame is discarded and the overflow counter is incremented. The current queue size and overflow counters can be queried with `/camera/get_color_queue_stats`.
 *   **`[color|depth|left_ir|right_ir|ir]_rotation`**
     *   Set stream image rotation.
     *   The possible values are `0`, `90`, `180`, `270`.

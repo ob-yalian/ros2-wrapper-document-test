@@ -65,6 +65,8 @@
     *   如需降低 CPU 使用率，可参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md) 中的 `color_format` 建议。
 *   **`enable_[color|depth|left_ir|right_ir|ir]`**
     *   启用或关闭对应图像流。
+*   **`color_frame_queue_max_frames`**、**`left_color_frame_queue_max_frames`**、**`right_color_frame_queue_max_frames`**
+    *   设置对应彩色帧线程缓存的最大帧数，默认值为 `10`。队列满时会丢弃最旧帧，并增加溢出计数；当前队列长度和溢出统计可通过 `/camera/get_color_queue_stats` 查询。
 *   **`[color|depth|left_ir|right_ir|ir]_rotation`**
     *   设置流图像旋转。
     *   可能的值为 `0`、`90`、`180`、`270`。

@@ -108,6 +108,22 @@
     ros2 service call /camera/set_streams_enable std_srvs/srv/SetBool '{data: false}'
     ```
 
+### Color Queue Diagnostics
+
+* `/camera/get_color_queue_stats`
+
+This service uses `std_srvs/srv/SetBool`. Pass `false` to query the current statistics, or `true` to query and reset the accumulated statistics.
+
+```bash
+ros2 service call /camera/get_color_queue_stats std_srvs/srv/SetBool '{data: false}'
+```
+
+The JSON response in `message` contains the total `overflow_count` and a `queues` object. Each enabled queue reports `capacity_frames`, `queue_size`, `max_queue_size`, `overflow_count`, `oldest_queue_wait_ms`, and `max_queue_wait_ms`. The service also reports the node `namespace` and whether the statistics were reset in `statistics_reset`.
+
+```bash
+ros2 service call /camera/get_color_queue_stats std_srvs/srv/SetBool '{data: true}'
+```
+
 ### Runtime Stream Configuration
 
 *   `/camera/set_stream_profile`
