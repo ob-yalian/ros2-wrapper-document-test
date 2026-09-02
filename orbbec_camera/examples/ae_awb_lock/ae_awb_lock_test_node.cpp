@@ -132,6 +132,18 @@ class AeAwbLockTestNode : public rclcpp::Node {
     }
   }
 
+  // Foxy has no public API for removing timed-out requests. Newer rclcpp versions do, so use it
+  // when available without making the example depend on a particular ROS distribution.
+  template <typename ClientT, typename PendingRequestT>
+  static auto removePendingRequestIfSupported(const ClientT& client,
+                                              const PendingRequestT& pending_request, int)
+      -> decltype(client->remove_pending_request(pending_request), void()) {
+    client->remove_pending_request(pending_request);
+  }
+
+  template <typename ClientT, typename PendingRequestT>
+  static void removePendingRequestIfSupported(const ClientT&, const PendingRequestT&, long) {}
+
   template <typename ServiceT>
   typename ServiceT::Response::SharedPtr callService(
       const typename rclcpp::Client<ServiceT>::SharedPtr& client,
@@ -139,7 +151,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
       const Deadline& deadline) {
     auto pending_request = client->async_send_request(request);
     if (pending_request.wait_until(deadline) != std::future_status::ready) {
-      client->remove_pending_request(pending_request);
+      removePendingRequestIfSupported(client, pending_request, 0);
       throw std::runtime_error(service_name + " timed out");
     }
     auto response = pending_request.get();
@@ -174,7 +186,7 @@ class AeAwbLockTestNode : public rclcpp::Node {
     return getIntValue(get_status_client_, "get_color_ae_awb_status", deadline);
   }
 
-  void colorMetadataCallback(const Metadata::ConstSharedPtr& metadata) {
+  void colorMetadataCallback(Metadata::ConstSharedPtr metadata) {
     {
       std::lock_guard<std::mutex> lock(metadata_mutex_);
       latest_color_metadata_ = metadata;
