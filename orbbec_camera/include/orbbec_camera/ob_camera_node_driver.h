@@ -88,6 +88,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
   void setBagRecordingCallback(
       const std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Request> request,
       std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Response> response);
+  void setupActionCommandService();
   void sendActionCommandCallback(
       const std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Request> request,
       std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Response> response);

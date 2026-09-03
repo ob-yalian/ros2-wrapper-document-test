@@ -386,9 +386,6 @@ void OBCameraNodeDriver::init() {
   set_bag_recording_srv_ = this->create_service<orbbec_camera_msgs::srv::SetBagRecording>(
       "set_bag_recording", std::bind(&OBCameraNodeDriver::setBagRecordingCallback, this,
                                      std::placeholders::_1, std::placeholders::_2));
-  send_action_command_srv_ = this->create_service<orbbec_camera_msgs::srv::SendActionCommand>(
-      "send_action_command", std::bind(&OBCameraNodeDriver::sendActionCommandCallback, this,
-                                       std::placeholders::_1, std::placeholders::_2));
   pthread_mutexattr_init(&orb_device_lock_attr_);
   pthread_mutexattr_setpshared(&orb_device_lock_attr_, PTHREAD_PROCESS_SHARED);
   orb_device_lock_ = (pthread_mutex_t *)orb_device_lock_shm_addr_;
@@ -519,6 +516,7 @@ void OBCameraNodeDriver::onDeviceDisconnected(const std::shared_ptr<ob::DeviceLi
     if (uid == device_unique_id_ || serial_number_ == serial_number) {
       RCLCPP_INFO_STREAM(logger_,
                          "device with " << uid << " disconnected, notify reset device thread");
+      send_action_command_srv_.reset();
       delay_stream_start_after_reconnect_ = true;
       reset_device_flag_ = true;
       reset_device_cond_.notify_all();
@@ -643,6 +641,7 @@ void OBCameraNodeDriver::resetDevice() {
         // Mark device as disconnected immediately to prevent other threads from accessing it
         device_connected_ = false;
         device_connecting_ = false;  // Clear connecting flag
+        send_action_command_srv_.reset();
 
         // Stop recording before tearing down the pipeline so the bag file is finalized
         if (record_device_) {
@@ -975,6 +974,61 @@ void OBCameraNodeDriver::rebootDeviceCallback(
   return;
 }
 
+void OBCameraNodeDriver::setupActionCommandService() {
+  send_action_command_srv_.reset();
+  if (!device_ || !device_info_ || device_type_ != "camera" || playback_device_) {
+    return;
+  }
+
+  try {
+    const char *connection_type = device_info_->getConnectionType();
+    if (connection_type == nullptr || std::string(connection_type) != "Ethernet") {
+      RCLCPP_DEBUG_STREAM(logger_, "Action Command service is unavailable for non-Ethernet device");
+      return;
+    }
+
+    const auto is_supported = [this](OBPropertyID property_id, OBPermissionType permission) {
+      return device_->isPropertySupported(property_id, permission);
+    };
+    const auto is_readable = [&is_supported](OBPropertyID property_id) {
+      return is_supported(property_id, OB_PERMISSION_READ) ||
+             is_supported(property_id, OB_PERMISSION_READ_WRITE);
+    };
+    const auto is_writable = [&is_supported](OBPropertyID property_id) {
+      return is_supported(property_id, OB_PERMISSION_WRITE) ||
+             is_supported(property_id, OB_PERMISSION_READ_WRITE);
+    };
+
+    const bool supports_action_command =
+        is_readable(OB_PROP_ACTION_SIGNAL_COUNT_INT) &&
+        is_writable(OB_PROP_ACTION_DEVICE_KEY_INT) && is_writable(OB_PROP_ACTION_SELECTOR_INT) &&
+        is_writable(OB_PROP_ACTION_GROUP_KEY_INT) && is_writable(OB_PROP_ACTION_GROUP_MASK_INT);
+    if (!supports_action_command) {
+      RCLCPP_DEBUG_STREAM(logger_, "Current Ethernet device does not support Action Command");
+      return;
+    }
+
+    const int action_signal_count = device_->getIntProperty(OB_PROP_ACTION_SIGNAL_COUNT_INT);
+    if (action_signal_count <= 0) {
+      RCLCPP_DEBUG_STREAM(logger_, "Current device reports no Action Signal blocks");
+      return;
+    }
+
+    send_action_command_srv_ = this->create_service<orbbec_camera_msgs::srv::SendActionCommand>(
+        "send_action_command", std::bind(&OBCameraNodeDriver::sendActionCommandCallback, this,
+                                         std::placeholders::_1, std::placeholders::_2));
+    RCLCPP_INFO_STREAM(logger_, "Action Command service enabled with "
+                                    << action_signal_count << " Action Signal block(s)");
+  } catch (const ob::Error &e) {
+    RCLCPP_DEBUG_STREAM(logger_, "Action Command service is unavailable: "
+                                     << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_DEBUG_STREAM(logger_, "Action Command service is unavailable: " << e.what());
+  } catch (...) {
+    RCLCPP_DEBUG_STREAM(logger_, "Action Command service is unavailable");
+  }
+}
+
 void OBCameraNodeDriver::sendActionCommandCallback(
     const std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Request> request,
     std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Response> response) {
@@ -985,6 +1039,11 @@ void OBCameraNodeDriver::sendActionCommandCallback(
   }
 
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  if (!device_connected_.load() || !device_) {
+    response->success = false;
+    response->message = "Action Command device is not connected";
+    return;
+  }
   if (!ctx_) {
     response->success = false;
     response->message = "SDK context is not available";
@@ -1000,7 +1059,8 @@ void OBCameraNodeDriver::sendActionCommandCallback(
     };
     response->success =
         ob_camera_node_ ? ob_camera_node_->withDeviceLock(send_command) : send_command();
-    response->message = response->success ? "OK" : "SDK failed to send Action Command";
+    response->message =
+        response->success ? "Action Command dispatched" : "SDK failed to send Action Command";
   } catch (const ob::Error &e) {
     response->success = false;
     response->message = orbbec_camera::formatObErrorWithStatus(e);
@@ -1218,6 +1278,7 @@ void OBCameraNodeDriver::initializeBagPlayback() {
 }
 
 void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &device) {
+  send_action_command_srv_.reset();
   device_ = device;
   updatePresetFirmware(preset_firmware_path_);
   CHECK_NOTNULL(device_);
@@ -1272,6 +1333,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   serial_number_ = device_info_->getSerialNumber();
   CHECK_NOTNULL(device_info_.get());
   device_unique_id_ = device_info_->getUid();
+  setupActionCommandService();
 
   if (enable_sync_host_time_ && !isOpenNIDevice(device_info_->pid()) && device_type_ == "camera" &&
       !playback_device_) {
