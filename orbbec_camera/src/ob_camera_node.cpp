@@ -4519,7 +4519,10 @@ int OBCameraNode::closeSocSyncPwmTrigger() {
 }
 
 void OBCameraNode::startGmslTrigger() {
-  if (gmsl_trigger_fps_ > 0 && enable_gmsl_trigger_) {
+  if (!enable_gmsl_trigger_) {
+    return;
+  }
+  if (gmsl_trigger_fps_ > 0) {
     RCLCPP_WARN_STREAM(logger_, "Start HardwareTrigger by soc-trigger-source. gmsl_trigger_fps_: "
                                     << gmsl_trigger_fps_);
     openSocSyncPwmTrigger(gmsl_trigger_fps_);
