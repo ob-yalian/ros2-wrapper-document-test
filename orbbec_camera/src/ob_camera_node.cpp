@@ -1958,10 +1958,10 @@ void OBCameraNode::setupDevices() {
   if (should_apply_launch_config("ae_strategy") &&
       device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEVICE_AE_STRATEGY_INT,
-                        (ae_strategy_ == "motion" ? 0 : 1));
+                        (ae_strategy_ == "motion" ? 1 : 0));
     TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current Sports Mode: "
-                     << (device_->getIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT) == 0 ? "ON"
+                     << (device_->getIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT) == 1 ? "ON"
                                                                                       : "OFF")));
   }
 
