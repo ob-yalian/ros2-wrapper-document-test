@@ -49,7 +49,7 @@ def load_parameters(context, args):
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
     skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
-                    'enhanced_depth_model_path', 'depth_colorizer_mode'}
+                    'enhanced_depth_model_path', 'depth_colorizer_mode', 'device_preset_version'}
 
     result = {}
     for key, value in default_params.items():
@@ -282,6 +282,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_precision', default_value=''),
         DeclareLaunchArgument('device_preset', default_value='Default'),
+        DeclareLaunchArgument('device_preset_version', default_value=''),
         DeclareLaunchArgument('color_preset', default_value='Default'),# color preset name reported by the device
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('laser_energy_level', default_value='-1'),

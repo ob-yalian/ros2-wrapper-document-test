@@ -922,8 +922,11 @@ void OBCameraNode::clean() noexcept {
 }
 
 void OBCameraNode::setupDevices() {
-  if (!depth_work_mode_.empty() &&
-      device_->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE, OB_PERMISSION_READ_WRITE)) {
+  if (is_playback_device_ && (!depth_work_mode_.empty() || !device_preset_.empty())) {
+    RCLCPP_INFO_STREAM(logger_, "Skip device preset selection during bag playback");
+  } else if (!depth_work_mode_.empty() &&
+             device_->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE,
+                                          OB_PERMISSION_READ_WRITE)) {
     auto depthModeList = device_->getDepthWorkModeList();
     for (uint32_t i = 0; i < depthModeList->getCount(); i++) {
       RCLCPP_INFO_STREAM(logger_, "depthModeList[" << i << "]: " << (*depthModeList)[i].name);
@@ -935,10 +938,48 @@ void OBCameraNode::setupDevices() {
       RCLCPP_DEBUG_STREAM(logger_, "Available presets:");
       auto preset_list = device_->getAvailablePresetList();
       for (uint32_t i = 0; i < preset_list->getCount(); i++) {
-        RCLCPP_DEBUG_STREAM(logger_, "Preset " << i << ": " << preset_list->getName(i));
+        std::string version;
+        try {
+          const char *version_value = preset_list->getDepthWorkModeVersion(i);
+          version = version_value == nullptr ? "" : version_value;
+        } catch (...) {
+          // Older firmware can enumerate presets but may not report per-preset versions.
+        }
+        RCLCPP_DEBUG_STREAM(logger_, "Preset " << i << ": " << preset_list->getName(i)
+                                               << ", depth work mode version: "
+                                               << (version.empty() ? "not available" : version));
       }
-      TRY_EXECUTE_BLOCK(device_->loadPreset(device_preset_.c_str()));
-      RCLCPP_INFO_STREAM(logger_, "Loaded device preset: " << device_->getCurrentPresetName());
+
+      if (device_preset_version_.empty()) {
+        device_->loadPreset(device_preset_.c_str());
+      } else {
+        device_->loadPreset(device_preset_.c_str(), device_preset_version_.c_str());
+      }
+
+      std::string current_preset = device_preset_;
+      std::string current_version;
+      try {
+        const char *preset_name = device_->getCurrentPresetName();
+        current_preset = preset_name == nullptr ? device_preset_ : preset_name;
+      } catch (...) {
+        // Loading succeeded; failure to read back the name should not mark the load as failed.
+      }
+      try {
+        const char *version = device_->getCurrentPresetDepthWorkModeVersion();
+        current_version = version == nullptr ? "" : version;
+      } catch (...) {
+        // Older firmware does not report the current preset's depth work mode version.
+      }
+      RCLCPP_INFO_STREAM(logger_,
+                         "Loaded device preset: "
+                             << current_preset << ", depth work mode version: "
+                             << (current_version.empty() ? "not available" : current_version));
+      if (!device_preset_version_.empty() && !current_version.empty() &&
+          current_version != device_preset_version_) {
+        RCLCPP_WARN_STREAM(logger_, "Requested device preset depth work mode version "
+                                        << device_preset_version_ << ", but device reports "
+                                        << current_version);
+      }
     } catch (const ob::Error &e) {
       RCLCPP_ERROR_STREAM(
           logger_, "Failed to load device preset: " << orbbec_camera::formatObErrorWithStatus(e));
@@ -947,6 +988,8 @@ void OBCameraNode::setupDevices() {
     } catch (...) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to load device preset");
     }
+  } else if (!device_preset_version_.empty()) {
+    RCLCPP_WARN_STREAM(logger_, "Ignore device_preset_version because device_preset is empty");
   }
 
   if (!preset_resolution_config_.empty()) {
@@ -4738,6 +4781,7 @@ void OBCameraNode::getParameters() {
   } else {
     setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
   }
+  setAndGetNodeParameter<std::string>(device_preset_version_, "device_preset_version", "");
   setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
   setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);
   setAndGetNodeParameter<bool>(enable_sequence_id_filter_, "enable_sequence_id_filter", false);
