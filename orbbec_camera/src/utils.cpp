@@ -95,15 +95,14 @@ sensor_msgs::msg::CameraInfo convertToCameraInfo(OBCameraIntrinsic intrinsic,
   info.distortion_model = getDistortionModels(distortion);
   info.width = intrinsic.width;
   info.height = intrinsic.height;
-  info.d.resize(8, 0.0);
-  info.d[0] = distortion.k1;
-  info.d[1] = distortion.k2;
-  info.d[2] = distortion.p1;
-  info.d[3] = distortion.p2;
-  info.d[4] = distortion.k3;
-  info.d[5] = distortion.k4;
-  info.d[6] = distortion.k5;
-  info.d[7] = distortion.k6;
+  if (info.distortion_model == sensor_msgs::distortion_models::RATIONAL_POLYNOMIAL) {
+    info.d = {distortion.k1, distortion.k2, distortion.p1, distortion.p2,
+              distortion.k3, distortion.k4, distortion.k5, distortion.k6};
+  } else if (info.distortion_model == sensor_msgs::distortion_models::EQUIDISTANT) {
+    info.d = {distortion.k1, distortion.k2, distortion.k3, distortion.k4};
+  } else {
+    info.d = {distortion.k1, distortion.k2, distortion.p1, distortion.p2, distortion.k3};
+  }
   bool all_zero = std::all_of(info.d.begin(), info.d.end(), [](double val) { return val == 0.0; });
   info.roi.do_rectify = all_zero;
 
@@ -1176,7 +1175,7 @@ std::string getDistortionModels(OBCameraDistortion distortion) {
     case OB_DISTORTION_BROWN_CONRADY:
       return sensor_msgs::distortion_models::PLUMB_BOB;
     case OB_DISTORTION_BROWN_CONRADY_K6:
-      return sensor_msgs::distortion_models::PLUMB_BOB;
+      return sensor_msgs::distortion_models::RATIONAL_POLYNOMIAL;
     case OB_DISTORTION_KANNALA_BRANDT4:
       return sensor_msgs::distortion_models::EQUIDISTANT;
     default:
