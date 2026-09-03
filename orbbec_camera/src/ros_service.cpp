@@ -19,7 +19,6 @@
 #include <cctype>
 #include <rclcpp/rclcpp.hpp>
 #include <nlohmann/json.hpp>
-#include <stdexcept>
 #include <thread>
 
 #include "orbbec_camera/utils.h"
@@ -1757,20 +1756,6 @@ void OBCameraNode::setActionConfigCallback(const std::shared_ptr<SetActionConfig
                           std::to_string(std::max(action_signal_count, 0));
       return;
     }
-
-    const auto validate_property = [this](OBPropertyID property_id, uint32_t value,
-                                          const char* property_name) {
-      const auto range = device_->getIntPropertyRange(property_id);
-      const int64_t signed_value = static_cast<int64_t>(value);
-      if (signed_value < range.min || signed_value > range.max) {
-        throw std::out_of_range(std::string(property_name) + " must be in [" +
-                                std::to_string(range.min) + ", " + std::to_string(range.max) + "]");
-      }
-    };
-    validate_property(OB_PROP_ACTION_DEVICE_KEY_INT, request->device_key, "device_key");
-    validate_property(OB_PROP_ACTION_SELECTOR_INT, request->selector, "selector");
-    validate_property(OB_PROP_ACTION_GROUP_KEY_INT, request->group_key, "group_key");
-    validate_property(OB_PROP_ACTION_GROUP_MASK_INT, request->group_mask, "group_mask");
 
     device_->setIntProperty(OB_PROP_ACTION_DEVICE_KEY_INT,
                             static_cast<int32_t>(request->device_key));
