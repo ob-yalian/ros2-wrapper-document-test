@@ -679,6 +679,8 @@ OBMultiDeviceSyncMode OBSyncModeFromString(const std::string &mode) {
     return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING;
   } else if (mode == "HARDWARE_TRIGGERING") {
     return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_HARDWARE_TRIGGERING;
+  } else if (mode == "GROUP_ACTIONS") {
+    return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_GROUP_ACTIONS;
   } else {
     return OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_FREE_RUN;
   }

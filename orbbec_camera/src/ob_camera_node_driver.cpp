@@ -386,6 +386,9 @@ void OBCameraNodeDriver::init() {
   set_bag_recording_srv_ = this->create_service<orbbec_camera_msgs::srv::SetBagRecording>(
       "set_bag_recording", std::bind(&OBCameraNodeDriver::setBagRecordingCallback, this,
                                      std::placeholders::_1, std::placeholders::_2));
+  send_action_command_srv_ = this->create_service<orbbec_camera_msgs::srv::SendActionCommand>(
+      "send_action_command", std::bind(&OBCameraNodeDriver::sendActionCommandCallback, this,
+                                       std::placeholders::_1, std::placeholders::_2));
   pthread_mutexattr_init(&orb_device_lock_attr_);
   pthread_mutexattr_setpshared(&orb_device_lock_attr_, PTHREAD_PROCESS_SHARED);
   orb_device_lock_ = (pthread_mutex_t *)orb_device_lock_shm_addr_;
@@ -970,6 +973,44 @@ void OBCameraNodeDriver::rebootDeviceCallback(
   }
   malloc_trim(0);
   return;
+}
+
+void OBCameraNodeDriver::sendActionCommandCallback(
+    const std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Request> request,
+    std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Response> response) {
+  if (!request) {
+    response->success = false;
+    response->message = "Invalid request";
+    return;
+  }
+
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  if (!ctx_) {
+    response->success = false;
+    response->message = "SDK context is not available";
+    return;
+  }
+
+  const std::string destination_ip =
+      request->destination_ip.empty() ? "255.255.255.255" : request->destination_ip;
+  try {
+    const auto send_command = [this, &request, &destination_ip]() {
+      return ctx_->sendActionCommand(request->device_key, request->group_key, request->group_mask,
+                                     destination_ip.c_str(), request->scheduled_time);
+    };
+    response->success =
+        ob_camera_node_ ? ob_camera_node_->withDeviceLock(send_command) : send_command();
+    response->message = response->success ? "OK" : "SDK failed to send Action Command";
+  } catch (const ob::Error &e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception &e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
 }
 
 std::shared_ptr<ob::Device> OBCameraNodeDriver::selectDevice(

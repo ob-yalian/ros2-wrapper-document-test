@@ -19,6 +19,7 @@
 #include <cctype>
 #include <rclcpp/rclcpp.hpp>
 #include <nlohmann/json.hpp>
+#include <stdexcept>
 #include <thread>
 
 #include "orbbec_camera/utils.h"
@@ -112,6 +113,8 @@ std::string OBSyncModeToString(const OBMultiDeviceSyncMode& mode) {
       return "SOFTWARE_TRIGGERING";
     case OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_HARDWARE_TRIGGERING:
       return "HARDWARE_TRIGGERING";
+    case OBMultiDeviceSyncMode::OB_MULTI_DEVICE_SYNC_MODE_GROUP_ACTIONS:
+      return "GROUP_ACTIONS";
     default:
       return "FREE_RUN";
   }
@@ -334,6 +337,28 @@ void OBCameraNode::setupCameraCtrlServices() {
                                   std::shared_ptr<GetDeviceConfig::Response> response) {
         getDeviceConfigCallback(request, response);
       });
+  if (isPropertyReadable(device_, OB_PROP_ACTION_SIGNAL_COUNT_INT) &&
+      isPropertyReadable(device_, OB_PROP_ACTION_DEVICE_KEY_INT) &&
+      isPropertyWritable(device_, OB_PROP_ACTION_SELECTOR_INT) &&
+      isPropertyReadable(device_, OB_PROP_ACTION_GROUP_KEY_INT) &&
+      isPropertyReadable(device_, OB_PROP_ACTION_GROUP_MASK_INT)) {
+    get_action_config_srv_ = node_->create_service<GetActionConfig>(
+        "get_action_config", [this](const std::shared_ptr<GetActionConfig::Request> request,
+                                    std::shared_ptr<GetActionConfig::Response> response) {
+          getActionConfigCallback(request, response);
+        });
+  }
+  if (isPropertyReadable(device_, OB_PROP_ACTION_SIGNAL_COUNT_INT) &&
+      isPropertyWritable(device_, OB_PROP_ACTION_DEVICE_KEY_INT) &&
+      isPropertyWritable(device_, OB_PROP_ACTION_SELECTOR_INT) &&
+      isPropertyWritable(device_, OB_PROP_ACTION_GROUP_KEY_INT) &&
+      isPropertyWritable(device_, OB_PROP_ACTION_GROUP_MASK_INT)) {
+    set_action_config_srv_ = node_->create_service<SetActionConfig>(
+        "set_action_config", [this](const std::shared_ptr<SetActionConfig::Request> request,
+                                    std::shared_ptr<SetActionConfig::Response> response) {
+          setActionConfigCallback(request, response);
+        });
+  }
   get_sdk_version_srv_ = node_->create_service<GetString>(
       "get_sdk_version",
       [this](const std::shared_ptr<GetString::Request> request,
@@ -1586,6 +1611,100 @@ void OBCameraNode::getDeviceInfoCallback(const std::shared_ptr<GetDeviceInfo::Re
     response->info.current_sdk_version = getObSDKVersion();
     response->info.hardware_version = device_info->getHardwareVersion();
     response->success = true;
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
+}
+
+void OBCameraNode::getActionConfigCallback(const std::shared_ptr<GetActionConfig::Request>& request,
+                                           std::shared_ptr<GetActionConfig::Response>& response) {
+  if (!request) {
+    response->success = false;
+    response->message = "Invalid request";
+    return;
+  }
+
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  try {
+    const int action_signal_count = device_->getIntProperty(OB_PROP_ACTION_SIGNAL_COUNT_INT);
+    if (action_signal_count <= 0 ||
+        request->selector >= static_cast<uint32_t>(action_signal_count)) {
+      response->success = false;
+      response->message = "selector must be less than action signal count " +
+                          std::to_string(std::max(action_signal_count, 0));
+      return;
+    }
+
+    device_->setIntProperty(OB_PROP_ACTION_SELECTOR_INT, static_cast<int32_t>(request->selector));
+    response->action_signal_count = static_cast<uint32_t>(action_signal_count);
+    response->device_key =
+        static_cast<uint32_t>(device_->getIntProperty(OB_PROP_ACTION_DEVICE_KEY_INT));
+    response->group_key =
+        static_cast<uint32_t>(device_->getIntProperty(OB_PROP_ACTION_GROUP_KEY_INT));
+    response->group_mask =
+        static_cast<uint32_t>(device_->getIntProperty(OB_PROP_ACTION_GROUP_MASK_INT));
+    response->success = true;
+    response->message = "OK";
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
+}
+
+void OBCameraNode::setActionConfigCallback(const std::shared_ptr<SetActionConfig::Request>& request,
+                                           std::shared_ptr<SetActionConfig::Response>& response) {
+  if (!request) {
+    response->success = false;
+    response->message = "Invalid request";
+    return;
+  }
+
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  try {
+    const int action_signal_count = device_->getIntProperty(OB_PROP_ACTION_SIGNAL_COUNT_INT);
+    if (action_signal_count <= 0 ||
+        request->selector >= static_cast<uint32_t>(action_signal_count)) {
+      response->success = false;
+      response->message = "selector must be less than action signal count " +
+                          std::to_string(std::max(action_signal_count, 0));
+      return;
+    }
+
+    const auto validate_property = [this](OBPropertyID property_id, uint32_t value,
+                                          const char* property_name) {
+      const auto range = device_->getIntPropertyRange(property_id);
+      const int64_t signed_value = static_cast<int64_t>(value);
+      if (signed_value < range.min || signed_value > range.max) {
+        throw std::out_of_range(std::string(property_name) + " must be in [" +
+                                std::to_string(range.min) + ", " + std::to_string(range.max) + "]");
+      }
+    };
+    validate_property(OB_PROP_ACTION_DEVICE_KEY_INT, request->device_key, "device_key");
+    validate_property(OB_PROP_ACTION_SELECTOR_INT, request->selector, "selector");
+    validate_property(OB_PROP_ACTION_GROUP_KEY_INT, request->group_key, "group_key");
+    validate_property(OB_PROP_ACTION_GROUP_MASK_INT, request->group_mask, "group_mask");
+
+    device_->setIntProperty(OB_PROP_ACTION_DEVICE_KEY_INT,
+                            static_cast<int32_t>(request->device_key));
+    device_->setIntProperty(OB_PROP_ACTION_SELECTOR_INT, static_cast<int32_t>(request->selector));
+    device_->setIntProperty(OB_PROP_ACTION_GROUP_KEY_INT, static_cast<int32_t>(request->group_key));
+    device_->setIntProperty(OB_PROP_ACTION_GROUP_MASK_INT,
+                            static_cast<int32_t>(request->group_mask));
+    response->success = true;
+    response->message = "OK";
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = orbbec_camera::formatObErrorWithStatus(e);
