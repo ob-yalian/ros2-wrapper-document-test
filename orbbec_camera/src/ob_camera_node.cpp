@@ -1036,8 +1036,9 @@ void OBCameraNode::setupDevices() {
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT,
                           sync_io_voltage_level_);
-      RCLCPP_INFO_STREAM(logger_, "Current sync IO voltage level: " << device_->getIntProperty(
-                                      OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current sync IO voltage level: "
+                       << device_->getIntProperty(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT)));
     }
   }
   if (monitor_poll_interval_sec_ != -1) {
@@ -1054,16 +1055,16 @@ void OBCameraNode::setupDevices() {
   if (should_apply_launch_config("enable_heartbeat") &&
       device_->isPropertySupported(OB_PROP_HEARTBEAT_BOOL, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
-    RCLCPP_INFO_STREAM(
-        logger_,
-        "Current heartbeat: " << (device_->getBoolProperty(OB_PROP_HEARTBEAT_BOOL) ? "ON" : "OFF"));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current heartbeat: "
+                     << (device_->getBoolProperty(OB_PROP_HEARTBEAT_BOOL) ? "ON" : "OFF")));
   }
   if (should_apply_launch_config("enable_fps_boost") &&
       device_->isPropertySupported(OB_PROP_FPS_BOOST_BOOL, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FPS_BOOST_BOOL, enable_fps_boost_);
-    RCLCPP_INFO_STREAM(
-        logger_,
-        "Current fps boost: " << (device_->getBoolProperty(OB_PROP_FPS_BOOST_BOOL) ? "ON" : "OFF"));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current fps boost: "
+                     << (device_->getBoolProperty(OB_PROP_FPS_BOOST_BOOL) ? "ON" : "OFF")));
   }
   if (should_apply_launch_config("enable_firmware_log")) {
     device_->enableFirmwareLog(enable_firmware_log_);
@@ -1072,14 +1073,14 @@ void OBCameraNode::setupDevices() {
   if (max_depth_limit_ > 0 &&
       device_->isPropertySupported(OB_PROP_MAX_DEPTH_INT, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_MAX_DEPTH_INT, max_depth_limit_);
-    RCLCPP_INFO_STREAM(
-        logger_, "Current max depth limit: " << device_->getIntProperty(OB_PROP_MAX_DEPTH_INT));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current max depth limit: " << device_->getIntProperty(OB_PROP_MAX_DEPTH_INT)));
   }
   if (min_depth_limit_ > 0 &&
       device_->isPropertySupported(OB_PROP_MIN_DEPTH_INT, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_MIN_DEPTH_INT, min_depth_limit_);
-    RCLCPP_INFO_STREAM(
-        logger_, "Current min depth limit: " << device_->getIntProperty(OB_PROP_MIN_DEPTH_INT));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current min depth limit: " << device_->getIntProperty(OB_PROP_MIN_DEPTH_INT)));
   }
   if (laser_energy_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_LASER_ENERGY_LEVEL_INT, OB_PERMISSION_READ_WRITE)) {
@@ -1089,8 +1090,10 @@ void OBCameraNode::setupDevices() {
                           "Laser energy level is out of range " << range.min << " - " << range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_ENERGY_LEVEL_INT, laser_energy_level_);
-      auto new_laser_energy_level = device_->getIntProperty(OB_PROP_LASER_ENERGY_LEVEL_INT);
-      RCLCPP_INFO_STREAM(logger_, "Current energy level: " << new_laser_energy_level);
+      TRY_EXECUTE_BLOCK({
+        auto new_laser_energy_level = device_->getIntProperty(OB_PROP_LASER_ENERGY_LEVEL_INT);
+        RCLCPP_INFO_STREAM(logger_, "Current energy level: " << new_laser_energy_level);
+      });
     }
   }
   if (depth_registration_ && align_mode_ == "SW") {
@@ -1103,16 +1106,16 @@ void OBCameraNode::setupDevices() {
       device_->isPropertySupported(OB_PROP_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE) &&
       device_->isPropertySupported(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE)) {
     if (disparity_to_depth_mode_ == "HW") {
-      device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, 1);
-      device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
+      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DISPARITY_TO_DEPTH_BOOL, 1);
+      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
       RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: HW");
     } else if (disparity_to_depth_mode_ == "SW") {
-      device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
-      device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 1);
+      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
+      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 1);
       RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: SW");
     } else if (disparity_to_depth_mode_ == "disable") {
-      device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
-      device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
+      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
+      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
       RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: disabled");
     } else {
       RCLCPP_WARN_STREAM(logger_, "Unknown disparity to depth mode '"
@@ -1153,23 +1156,24 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_POWER_LEVEL_CONTROL_INT, ldp_power_level_);
-      RCLCPP_INFO_STREAM(logger_, "Current lrm power level: " << device_->getIntProperty(
-                                      OB_PROP_LASER_POWER_LEVEL_CONTROL_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current lrm power level: "
+                       << device_->getIntProperty(OB_PROP_LASER_POWER_LEVEL_CONTROL_INT)));
     }
   }
   if (should_apply_launch_config("enable_laser") &&
       device_->isPropertySupported(OB_PROP_LASER_CONTROL_INT, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_CONTROL_INT, enable_laser_);
-    RCLCPP_INFO_STREAM(logger_,
-                       "Current G300 laser control: "
-                           << (device_->getIntProperty(OB_PROP_LASER_CONTROL_INT) ? "ON" : "OFF"));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current G300 laser control: "
+                     << (device_->getIntProperty(OB_PROP_LASER_CONTROL_INT) ? "ON" : "OFF")));
   }
   if (should_apply_launch_config("enable_laser") &&
       device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_BOOL, enable_laser_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
-        "Current laser control: " << (device_->getIntProperty(OB_PROP_LASER_BOOL) ? "ON" : "OFF"));
+        "Current laser control: " << (device_->getIntProperty(OB_PROP_LASER_BOOL) ? "ON" : "OFF")));
   }
   if (!sync_mode_str_.empty()) {
     auto sync_config = device_->getMultiDeviceSyncConfig();
@@ -1183,9 +1187,11 @@ void OBCameraNode::setupDevices() {
     sync_config.triggerOutEnable = trigger_out_enabled_;
     sync_config.framesPerTrigger = frames_per_trigger_;
     TRY_EXECUTE_BLOCK(device_->setMultiDeviceSyncConfig(sync_config));
-    sync_config = device_->getMultiDeviceSyncConfig();
-    RCLCPP_INFO_STREAM(logger_,
-                       "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
+    TRY_EXECUTE_BLOCK({
+      sync_config = device_->getMultiDeviceSyncConfig();
+      RCLCPP_INFO_STREAM(logger_,
+                         "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
+    });
     if (sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING) {
       RCLCPP_INFO_STREAM(logger_, "Frames per trigger: " << sync_config.framesPerTrigger);
       RCLCPP_INFO_STREAM(logger_,
@@ -1200,22 +1206,24 @@ void OBCameraNode::setupDevices() {
   if (should_apply_launch_config("enable_ptp_config") &&
       device_->isPropertySupported(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL,
                                    OB_PERMISSION_READ_WRITE)) {
-    device_->setBoolProperty(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL, enable_ptp_config_);
-    RCLCPP_INFO_STREAM(
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL, enable_ptp_config_);
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current PTP Config: "
                      << (device_->getBoolProperty(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL) ? "ON"
-                                                                                        : "OFF"));
+                                                                                        : "OFF")));
   }
 
   if (device_->isPropertySupported(OB_PROP_DEPTH_PRECISION_LEVEL_INT, OB_PERMISSION_READ_WRITE) &&
       !depth_precision_str_.empty()) {
     auto default_precision_level = device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
     if (default_precision_level != depth_precision_) {
-      device_->setIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT, depth_precision_);
-      const auto current_depth_precision =
-          device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
-      RCLCPP_INFO_STREAM(logger_, "Current depth precision: "
-                                      << depthPrecisionLevelToString(current_depth_precision));
+      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_PRECISION_LEVEL_INT, depth_precision_);
+      TRY_EXECUTE_BLOCK({
+        const auto current_depth_precision =
+            device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
+        RCLCPP_INFO_STREAM(logger_, "Current depth precision: "
+                                        << depthPrecisionLevelToString(current_depth_precision));
+      });
     }
   } else if (device_->isPropertySupported(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT,
                                           OB_PERMISSION_READ_WRITE) &&
@@ -1230,10 +1238,10 @@ void OBCameraNode::setupDevices() {
     } else {
       TRY_TO_SET_PROPERTY(setFloatProperty, OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT,
                           depth_unit_flexible_adjustment);
-      RCLCPP_INFO_STREAM(
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
           logger_, "Current depth unit: "
                        << device_->getFloatProperty(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT)
-                       << "mm");
+                       << "mm"));
     }
   }
 
@@ -1258,9 +1266,9 @@ void OBCameraNode::setupDevices() {
       if (should_apply_launch_config(stream_name_[stream_index] + "_mirror") &&
           device_->isPropertySupported(mirrorPropertyID, OB_PERMISSION_WRITE)) {
         TRY_TO_SET_PROPERTY(setBoolProperty, mirrorPropertyID, mirror_stream_[stream_index]);
-        RCLCPP_INFO_STREAM(
+        TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
             logger_, "Current " << stream_name_[stream_index] << " mirror: "
-                                << (device_->getBoolProperty(mirrorPropertyID) ? "ON" : "OFF"));
+                                << (device_->getBoolProperty(mirrorPropertyID) ? "ON" : "OFF")));
       }
       OBPropertyID flipPropertyID = OB_PROP_DEPTH_FLIP_BOOL;
       if (stream_index == COLOR) {
@@ -1281,9 +1289,9 @@ void OBCameraNode::setupDevices() {
       if (should_apply_launch_config(stream_name_[stream_index] + "_flip") &&
           device_->isPropertySupported(flipPropertyID, OB_PERMISSION_WRITE)) {
         TRY_TO_SET_PROPERTY(setBoolProperty, flipPropertyID, flip_stream_[stream_index]);
-        RCLCPP_INFO_STREAM(logger_,
-                           "Current " << stream_name_[stream_index] << " flip: "
-                                      << (device_->getBoolProperty(flipPropertyID) ? "ON" : "OFF"));
+        TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+            logger_, "Current " << stream_name_[stream_index] << " flip: "
+                                << (device_->getBoolProperty(flipPropertyID) ? "ON" : "OFF")));
       }
       OBPropertyID rotationPropertyID = OB_PROP_DEPTH_ROTATE_INT;
       if (stream_index == COLOR) {
@@ -1304,8 +1312,9 @@ void OBCameraNode::setupDevices() {
       if (rotation_stream_[stream_index] != -1 &&
           device_->isPropertySupported(rotationPropertyID, OB_PERMISSION_WRITE)) {
         TRY_TO_SET_PROPERTY(setIntProperty, rotationPropertyID, rotation_stream_[stream_index]);
-        RCLCPP_INFO_STREAM(logger_, "Current " << stream_name_[stream_index] << " rotation: "
-                                               << device_->getIntProperty(rotationPropertyID));
+        TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+            logger_, "Current " << stream_name_[stream_index]
+                                << " rotation: " << device_->getIntProperty(rotationPropertyID)));
       }
     }
   }
@@ -1314,10 +1323,10 @@ void OBCameraNode::setupDevices() {
       device_->isPropertySupported(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL,
                         enable_color_auto_white_balance_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Current color auto white balance: "
-            << (device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL) ? "ON" : "OFF"));
+            << (device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL) ? "ON" : "OFF")));
   }
   if (should_apply_launch_config("color_preset") && !color_preset_.empty()) {
     try {
@@ -1370,8 +1379,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_EXPOSURE_INT, color_exposure_);
-      RCLCPP_INFO_STREAM(logger_, "Current color exposure: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_EXPOSURE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current color exposure: " << device_->getIntProperty(OB_PROP_COLOR_EXPOSURE_INT)));
     }
   }
   if (color_gain_ != -1 &&
@@ -1382,8 +1392,8 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_GAIN_INT, color_gain_);
-      RCLCPP_INFO_STREAM(logger_,
-                         "Current color gain: " << device_->getIntProperty(OB_PROP_COLOR_GAIN_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current color gain: " << device_->getIntProperty(OB_PROP_COLOR_GAIN_INT)));
     }
   }
   if (color_mjpeg_quality_ != -1) {
@@ -1397,8 +1407,9 @@ void OBCameraNode::setupDevices() {
                      range.min, range.max);
       } else {
         TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_MJPEG_QUALITY_INT, color_mjpeg_quality_);
-        RCLCPP_INFO_STREAM(logger_, "Current color MJPEG quality: "
-                                        << device_->getIntProperty(OB_PROP_MJPEG_QUALITY_INT));
+        TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+            logger_,
+            "Current color MJPEG quality: " << device_->getIntProperty(OB_PROP_MJPEG_QUALITY_INT)));
       }
     }
   }
@@ -1407,19 +1418,19 @@ void OBCameraNode::setupDevices() {
     int set_enable_color_auto_exposure_priority = enable_color_auto_exposure_priority_ ? 1 : 0;
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT,
                         set_enable_color_auto_exposure_priority);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Current color auto exposure priority: "
-            << (device_->getIntProperty(OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF"));
+            << (device_->getIntProperty(OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF")));
   }
   if (should_apply_launch_config("enable_color_auto_exposure") &&
       device_->isPropertySupported(OB_PROP_COLOR_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_AUTO_EXPOSURE_BOOL,
                         enable_color_auto_exposure_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Current color auto exposure: "
-            << (device_->getBoolProperty(OB_PROP_COLOR_AUTO_EXPOSURE_BOOL) ? "ON" : "OFF"));
+            << (device_->getBoolProperty(OB_PROP_COLOR_AUTO_EXPOSURE_BOOL) ? "ON" : "OFF")));
   }
   if (color_white_balance_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_WHITE_BALANCE_INT, OB_PERMISSION_WRITE)) {
@@ -1430,8 +1441,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_WHITE_BALANCE_INT, color_white_balance_);
-      RCLCPP_INFO_STREAM(logger_, "Current color white balance: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_WHITE_BALANCE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current color white balance: "
+                       << device_->getIntProperty(OB_PROP_COLOR_WHITE_BALANCE_INT)));
     }
   }
 
@@ -1445,8 +1457,9 @@ void OBCameraNode::setupDevices() {
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_AE_MAX_EXPOSURE_INT,
                           color_ae_max_exposure_);
-      RCLCPP_INFO_STREAM(logger_, "Current color AE max exposure: " << device_->getIntProperty(
-                                      OB_PROP_COLOR_AE_MAX_EXPOSURE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current color AE max exposure: "
+                       << device_->getIntProperty(OB_PROP_COLOR_AE_MAX_EXPOSURE_INT)));
     }
   }
   if (color_ae_max_gain_ != -1 &&
@@ -1458,8 +1471,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_AE_MAX_GAIN_INT, color_ae_max_gain_);
-      RCLCPP_INFO_STREAM(logger_, "Current color AE max gain: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_AE_MAX_GAIN_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current color AE max gain: " << device_->getIntProperty(OB_PROP_COLOR_AE_MAX_GAIN_INT)));
     }
   }
   if (color_brightness_ != -1 &&
@@ -1470,8 +1484,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_BRIGHTNESS_INT, color_brightness_);
-      RCLCPP_INFO_STREAM(logger_, "Current color brightness: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_BRIGHTNESS_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current color brightness: " << device_->getIntProperty(OB_PROP_COLOR_BRIGHTNESS_INT)));
     }
   }
   if (color_roi_brightness_ != -1 &&
@@ -1483,8 +1498,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_ROI_BRIGHTNESS_INT, color_roi_brightness_);
-      RCLCPP_INFO_STREAM(logger_, "Current color roi brightness: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_ROI_BRIGHTNESS_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current color roi brightness: "
+                       << device_->getIntProperty(OB_PROP_COLOR_ROI_BRIGHTNESS_INT)));
     }
   }
   if (color_sharpness_ != -1 &&
@@ -1495,8 +1511,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_SHARPNESS_INT, color_sharpness_);
-      RCLCPP_INFO_STREAM(logger_, "Current color sharpness: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_SHARPNESS_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current color sharpness: " << device_->getIntProperty(OB_PROP_COLOR_SHARPNESS_INT)));
     }
   }
   if (color_gamma_ != -1 &&
@@ -1507,8 +1524,8 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_GAMMA_INT, color_gamma_);
-      RCLCPP_INFO_STREAM(
-          logger_, "Current color gamma: " << device_->getIntProperty(OB_PROP_COLOR_GAMMA_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current color gamma: " << device_->getIntProperty(OB_PROP_COLOR_GAMMA_INT)));
     }
   }
   if (color_saturation_ != -1 &&
@@ -1519,8 +1536,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_SATURATION_INT, color_saturation_);
-      RCLCPP_INFO_STREAM(logger_, "Current color saturation: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_SATURATION_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current color saturation: " << device_->getIntProperty(OB_PROP_COLOR_SATURATION_INT)));
     }
   }
   if (color_contrast_ != -1 &&
@@ -1531,8 +1549,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_CONTRAST_INT, color_contrast_);
-      RCLCPP_INFO_STREAM(logger_, "Current color contrast: "
-                                      << device_->getIntProperty(OB_PROP_COLOR_CONTRAST_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current color contrast: " << device_->getIntProperty(OB_PROP_COLOR_CONTRAST_INT)));
     }
   }
   if (color_hue_ != -1 &&
@@ -1543,29 +1562,32 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_HUE_INT, color_hue_);
-      RCLCPP_INFO_STREAM(logger_,
-                         "Current color hue: " << device_->getIntProperty(OB_PROP_COLOR_HUE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current color hue: " << device_->getIntProperty(OB_PROP_COLOR_HUE_INT)));
     }
   }
   if (color_backlight_compensation_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_BACKLIGHT_COMPENSATION_INT, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_BACKLIGHT_COMPENSATION_INT,
                         color_backlight_compensation_);
-    RCLCPP_INFO_STREAM(logger_, "Current color backlight compensation: " << device_->getIntProperty(
-                                    OB_PROP_COLOR_BACKLIGHT_COMPENSATION_INT));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current color backlight compensation: "
+                     << device_->getIntProperty(OB_PROP_COLOR_BACKLIGHT_COMPENSATION_INT)));
   }
   if (color_denoising_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_DENOISING_LEVEL_INT, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_DENOISING_LEVEL_INT, color_denoising_level_);
-    RCLCPP_INFO_STREAM(logger_, "Current color denoising level: "
-                                    << device_->getIntProperty(OB_PROP_COLOR_DENOISING_LEVEL_INT));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current color denoising level: "
+                     << device_->getIntProperty(OB_PROP_COLOR_DENOISING_LEVEL_INT)));
   }
   if (should_apply_launch_config("color_anti_flicker") &&
       device_->isPropertySupported(OB_PROP_COLOR_ANTI_FLICKER_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_COLOR_ANTI_FLICKER_BOOL, color_anti_flicker_);
-    RCLCPP_INFO_STREAM(
-        logger_, "Current color anti-flicker to "
-                     << (device_->getBoolProperty(OB_PROP_COLOR_ANTI_FLICKER_BOOL) ? "ON" : "OFF"));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_,
+        "Current color anti-flicker to "
+            << (device_->getBoolProperty(OB_PROP_COLOR_ANTI_FLICKER_BOOL) ? "ON" : "OFF")));
   }
   if (!color_powerline_freq_.empty() &&
       device_->isPropertySupported(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, OB_PERMISSION_WRITE)) {
@@ -1578,10 +1600,13 @@ void OBCameraNode::setupDevices() {
     } else if (color_powerline_freq_ == "auto") {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, 3);
     }
-    const auto current_color_powerline_freq =
-        device_->getIntProperty(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT);
-    RCLCPP_INFO_STREAM(logger_, "Current color powerline freq: " << colorPowerLineFrequencyToString(
-                                    current_color_powerline_freq));
+    TRY_EXECUTE_BLOCK({
+      const auto current_color_powerline_freq =
+          device_->getIntProperty(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT);
+      RCLCPP_INFO_STREAM(logger_,
+                         "Current color powerline freq: "
+                             << colorPowerLineFrequencyToString(current_color_powerline_freq));
+    });
   }
   if (depth_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_DEPTH_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
@@ -1591,8 +1616,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_EXPOSURE_INT, depth_exposure_);
-      RCLCPP_INFO_STREAM(logger_, "Current depth exposure: "
-                                      << device_->getIntProperty(OB_PROP_DEPTH_EXPOSURE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current depth exposure: " << device_->getIntProperty(OB_PROP_DEPTH_EXPOSURE_INT)));
     }
   }
   if (depth_gain_ != -1 &&
@@ -1603,8 +1629,8 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_GAIN_INT, depth_gain_);
-      RCLCPP_INFO_STREAM(logger_,
-                         "Current depth gain: " << device_->getIntProperty(OB_PROP_DEPTH_GAIN_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current depth gain: " << device_->getIntProperty(OB_PROP_DEPTH_GAIN_INT)));
     }
   }
   if (should_apply_launch_config("enable_depth_auto_exposure_priority") &&
@@ -1613,17 +1639,17 @@ void OBCameraNode::setupDevices() {
     int set_enable_depth_auto_exposure_priority = enable_depth_auto_exposure_priority_ ? 1 : 0;
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT,
                         set_enable_depth_auto_exposure_priority);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Current depth auto exposure priority: "
-            << (device_->getIntProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF"));
+            << (device_->getIntProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF")));
   }
   if (should_apply_launch_config("enable_ir_auto_exposure") &&
       device_->isPropertySupported(OB_PROP_IR_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_IR_AUTO_EXPOSURE_BOOL, enable_ir_auto_exposure_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current IR auto exposure: "
-                     << (device_->getBoolProperty(OB_PROP_IR_AUTO_EXPOSURE_BOOL) ? "ON" : "OFF"));
+                     << (device_->getBoolProperty(OB_PROP_IR_AUTO_EXPOSURE_BOOL) ? "ON" : "OFF")));
   }
   if (mean_intensity_set_point_ != -1 &&
       device_->isPropertySupported(OB_PROP_IR_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
@@ -1633,8 +1659,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_IR_BRIGHTNESS_INT, mean_intensity_set_point_);
-      RCLCPP_INFO_STREAM(logger_, "Current depth brightness: "
-                                      << device_->getIntProperty(OB_PROP_IR_BRIGHTNESS_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current depth brightness: " << device_->getIntProperty(OB_PROP_IR_BRIGHTNESS_INT)));
     }
   }
   // ir ae max
@@ -1647,8 +1674,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_IR_AE_MAX_EXPOSURE_INT, ir_ae_max_exposure_);
-      RCLCPP_INFO_STREAM(logger_, "Current IR AE max exposure: "
-                                      << device_->getIntProperty(OB_PROP_IR_AE_MAX_EXPOSURE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current IR AE max exposure: "
+                       << device_->getIntProperty(OB_PROP_IR_AE_MAX_EXPOSURE_INT)));
     }
   }
   // ir brightness
@@ -1660,8 +1688,9 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_IR_BRIGHTNESS_INT, ir_brightness_);
-      RCLCPP_INFO_STREAM(
-          logger_, "Current IR brightness: " << device_->getIntProperty(OB_PROP_IR_BRIGHTNESS_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_,
+          "Current IR brightness: " << device_->getIntProperty(OB_PROP_IR_BRIGHTNESS_INT)));
     }
   }
   if (ir_exposure_ != -1 &&
@@ -1672,8 +1701,8 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_IR_EXPOSURE_INT, ir_exposure_);
-      RCLCPP_INFO_STREAM(
-          logger_, "Current IR exposure: " << device_->getIntProperty(OB_PROP_IR_EXPOSURE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current IR exposure: " << device_->getIntProperty(OB_PROP_IR_EXPOSURE_INT)));
     }
   }
   if (ir_gain_ != -1 && device_->isPropertySupported(OB_PROP_IR_GAIN_INT, OB_PERMISSION_WRITE)) {
@@ -1683,16 +1712,16 @@ void OBCameraNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_IR_GAIN_INT, ir_gain_);
-      RCLCPP_INFO_STREAM(logger_,
-                         "Current IR gain: " << device_->getIntProperty(OB_PROP_IR_GAIN_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current IR gain: " << device_->getIntProperty(OB_PROP_IR_GAIN_INT)));
     }
   }
   if (should_apply_launch_config("enable_ir_long_exposure") &&
       device_->isPropertySupported(OB_PROP_IR_LONG_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_IR_LONG_EXPOSURE_BOOL, enable_ir_long_exposure_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current IR long exposure: "
-                     << (device_->getBoolProperty(OB_PROP_IR_LONG_EXPOSURE_BOOL) ? "ON" : "OFF"));
+                     << (device_->getBoolProperty(OB_PROP_IR_LONG_EXPOSURE_BOOL) ? "ON" : "OFF")));
   }
 
   if (should_apply_launch_config("enable_noise_removal_filter") && enable_noise_removal_filter_ &&
@@ -1710,11 +1739,13 @@ void OBCameraNode::setupDevices() {
                      "the value",
                      range.min, range.max);
       } else {
-        device_->setIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT, noise_removal_filter_min_diff_);
+        TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_MAX_DIFF_INT,
+                            noise_removal_filter_min_diff_);
       }
     }
-    RCLCPP_INFO_STREAM(logger_, "Current noise_removal_filter_min_diff: "
-                                    << device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT));
+    TRY_EXECUTE_BLOCK(
+        RCLCPP_INFO_STREAM(logger_, "Current noise_removal_filter_min_diff: "
+                                        << device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT)));
   }
 
   if (should_apply_launch_config("enable_noise_removal_filter") && enable_noise_removal_filter_ &&
@@ -1732,34 +1763,38 @@ void OBCameraNode::setupDevices() {
                      "the value",
                      range.min, range.max);
       } else {
-        device_->setIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT, noise_removal_filter_max_size_);
+        TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT,
+                            noise_removal_filter_max_size_);
       }
     }
-    RCLCPP_INFO_STREAM(logger_, "Current noise_removal_filter_max_size: "
-                                    << device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current noise_removal_filter_max_size: "
+                     << device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT)));
   }
   if (should_apply_launch_config("enable_noise_removal_filter") &&
       sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_SOFT_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
-    device_->setBoolProperty(OB_PROP_DEPTH_SOFT_FILTER_BOOL, enable_noise_removal_filter_);
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DEPTH_SOFT_FILTER_BOOL,
+                        enable_noise_removal_filter_);
     RCLCPP_INFO_STREAM(logger_, "Set noise removal filter to "
                                     << (enable_noise_removal_filter_ ? "true" : "false"));
   }
   if (should_apply_launch_config("enable_disp_outliers_filter") &&
       sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, OB_PERMISSION_READ_WRITE)) {
-    device_->setBoolProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL, enable_disp_outliers_filter_);
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL,
+                        enable_disp_outliers_filter_);
     RCLCPP_INFO_STREAM(
         logger_, "Set DispOutliersFilter to " << (enable_disp_outliers_filter_ ? "true" : "false"));
   }
   if (disp_outliers_filter_search_mode_ != -1 && sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
                                    OB_PERMISSION_READ_WRITE)) {
-    device_->setIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
-                            disp_outliers_filter_search_mode_);
-    RCLCPP_INFO_STREAM(
+    TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT,
+                        disp_outliers_filter_search_mode_);
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current DispOutliersFilter search mode: "
-                     << device_->getIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT));
+                     << device_->getIntProperty(OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT)));
   }
   if (disparity_range_mode_ != -1 &&
       device_->isPropertySupported(OB_PROP_DISP_SEARCH_RANGE_MODE_INT, OB_PERMISSION_WRITE)) {
@@ -1772,30 +1807,33 @@ void OBCameraNode::setupDevices() {
     } else {
       RCLCPP_ERROR(logger_, "disparity range mode does not support this setting");
     }
-    const auto current_disparity_range_mode =
-        device_->getIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
-    RCLCPP_INFO_STREAM(logger_, "Current disparity range mode: "
-                                    << disparityRangeModeToString(current_disparity_range_mode));
+    TRY_EXECUTE_BLOCK({
+      const auto current_disparity_range_mode =
+          device_->getIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
+      RCLCPP_INFO_STREAM(logger_, "Current disparity range mode: "
+                                      << disparityRangeModeToString(current_disparity_range_mode));
+    });
   }
   if (should_apply_launch_config("enable_hardware_noise_removal_filter") &&
       device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
                                    OB_PERMISSION_READ_WRITE)) {
-    device_->setBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
-                             enable_hardware_noise_removal_filter_);
-    RCLCPP_INFO_STREAM(
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL,
+                        enable_hardware_noise_removal_filter_);
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Set hardware noise removal filter to "
             << (device_->getBoolProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL) ? "true"
-                                                                                     : "false"));
+                                                                                     : "false")));
     if (device_->isPropertySupported(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
                                      OB_PERMISSION_READ_WRITE)) {
       if (hardware_noise_removal_filter_threshold_ != -1.0 &&
           enable_hardware_noise_removal_filter_) {
-        device_->setFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
-                                  hardware_noise_removal_filter_threshold_);
-        RCLCPP_INFO_STREAM(logger_, "Current hardware noise removal filter threshold: "
-                                        << device_->getFloatProperty(
-                                               OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT));
+        TRY_TO_SET_PROPERTY(setFloatProperty, OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT,
+                            hardware_noise_removal_filter_threshold_);
+        TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+            logger_,
+            "Current hardware noise removal filter threshold: "
+                << device_->getFloatProperty(OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT)));
       }
     }
   }
@@ -1808,28 +1846,31 @@ void OBCameraNode::setupDevices() {
     } else {
       RCLCPP_ERROR(logger_, "exposure range mode does not support this setting");
     }
-    const auto current_exposure_range_mode =
-        device_->getIntProperty(OB_PROP_DEVICE_PERFORMANCE_MODE_INT);
-    RCLCPP_INFO_STREAM(logger_, "Current exposure range mode: "
-                                    << exposureRangeModeToString(current_exposure_range_mode));
+    TRY_EXECUTE_BLOCK({
+      const auto current_exposure_range_mode =
+          device_->getIntProperty(OB_PROP_DEVICE_PERFORMANCE_MODE_INT);
+      RCLCPP_INFO_STREAM(logger_, "Current exposure range mode: "
+                                      << exposureRangeModeToString(current_exposure_range_mode));
+    });
   }
   if (should_apply_launch_config("enable_accel_data_correction") &&
       device_->isPropertySupported(OB_PROP_SDK_ACCEL_FRAME_TRANSFORMED_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_ACCEL_FRAME_TRANSFORMED_BOOL,
                         enable_accel_data_correction_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Current accel data correction: "
-            << (device_->getBoolProperty(OB_PROP_SDK_ACCEL_FRAME_TRANSFORMED_BOOL) ? "ON" : "OFF"));
+            << (device_->getBoolProperty(OB_PROP_SDK_ACCEL_FRAME_TRANSFORMED_BOOL) ? "ON"
+                                                                                   : "OFF")));
   }
   if (should_apply_launch_config("enable_gyro_data_correction") &&
       device_->isPropertySupported(OB_PROP_SDK_GYRO_FRAME_TRANSFORMED_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_GYRO_FRAME_TRANSFORMED_BOOL,
                         enable_gyro_data_correction_);
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_,
         "Current gyro data correction: "
-            << (device_->getBoolProperty(OB_PROP_SDK_GYRO_FRAME_TRANSFORMED_BOOL) ? "ON" : "OFF"));
+            << (device_->getBoolProperty(OB_PROP_SDK_GYRO_FRAME_TRANSFORMED_BOOL) ? "ON" : "OFF")));
   }
   if (!intra_camera_sync_reference_.empty() &&
       device_->isPropertySupported(OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT, OB_PERMISSION_WRITE)) {
@@ -1842,19 +1883,22 @@ void OBCameraNode::setupDevices() {
     } else {
       RCLCPP_ERROR(logger_, "intra camera sync reference does not support this setting");
     }
-    const auto current_intra_camera_sync_reference =
-        device_->getIntProperty(OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT);
-    RCLCPP_INFO_STREAM(
-        logger_, "Current intra camera sync reference: "
-                     << intraCameraSyncReferenceToString(current_intra_camera_sync_reference));
+    TRY_EXECUTE_BLOCK({
+      const auto current_intra_camera_sync_reference =
+          device_->getIntProperty(OB_PROP_INTRA_CAMERA_SYNC_REFERENCE_INT);
+      RCLCPP_INFO_STREAM(
+          logger_, "Current intra camera sync reference: "
+                       << intraCameraSyncReferenceToString(current_intra_camera_sync_reference));
+    });
   }
   if (should_apply_launch_config("ae_strategy") &&
       device_->isPropertySupported(OB_PROP_DEVICE_AE_STRATEGY_INT, OB_PERMISSION_WRITE)) {
-    device_->setIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT, (ae_strategy_ == "motion" ? 0 : 1));
-    RCLCPP_INFO_STREAM(
+    TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEVICE_AE_STRATEGY_INT,
+                        (ae_strategy_ == "motion" ? 0 : 1));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current Sports Mode: "
                      << (device_->getIntProperty(OB_PROP_DEVICE_AE_STRATEGY_INT) == 0 ? "ON"
-                                                                                      : "OFF"));
+                                                                                      : "OFF")));
   }
 
   if (should_apply_launch_config("ae_reference_stream") &&
@@ -1862,10 +1906,13 @@ void OBCameraNode::setupDevices() {
       device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE)) {
     if (device_->isPropertySupported(OB_PROP_DEVICE_AE_REFERENCE_INT, OB_PERMISSION_WRITE)) {
       auto ae_reference = ae_reference_stream_ == "depth" ? 0 : 1;
-      device_->setIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT, ae_reference);
-      auto current_ae_reference = device_->getIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT);
-      RCLCPP_INFO_STREAM(logger_, "Current AE Reference: "
-                                      << (current_ae_reference == 0 ? "depthbased" : "colorbased"));
+      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEVICE_AE_REFERENCE_INT, ae_reference);
+      TRY_EXECUTE_BLOCK({
+        auto current_ae_reference = device_->getIntProperty(OB_PROP_DEVICE_AE_REFERENCE_INT);
+        RCLCPP_INFO_STREAM(
+            logger_,
+            "Current AE Reference: " << (current_ae_reference == 0 ? "depthbased" : "colorbased"));
+      });
     }
   }
 }
@@ -4154,11 +4201,11 @@ void OBCameraNode::startStreams() {
     if (device_->isPropertySupported(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL, OB_PERMISSION_WRITE)) {
       TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL,
                           interleave_frame_enable_);
-      RCLCPP_INFO_STREAM(
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
           logger_,
           "Enable enable_interleave_depth_frame to "
               << (device_->getBoolProperty(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL) ? "true"
-                                                                                 : "false"));
+                                                                                 : "false")));
     }
   }
   // set interleave larse PATTERN_SYNC_DELAY
@@ -4168,9 +4215,9 @@ void OBCameraNode::startStreams() {
       (sync_mode_str_ == "PRIMARY" || sync_mode_str_ == "SOFTWARE_TRIGGERING")) {
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT, 0);
-    RCLCPP_INFO_STREAM(logger_,
-                       "Current interleave laser pattern sync delay: " << device_->getIntProperty(
-                           OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT));
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current interleave laser pattern sync delay: " << device_->getIntProperty(
+                     OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT)));
   }
   pipeline_started_.store(true);
 }

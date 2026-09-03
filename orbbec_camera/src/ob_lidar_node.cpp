@@ -205,8 +205,10 @@ void OBLidarNode::setupDevices() {
     }
   }
   if (device_->isPropertySupported(OB_PROP_HEARTBEAT_BOOL, OB_PERMISSION_READ_WRITE)) {
-    RCLCPP_INFO_STREAM(logger_, "Current heartbeat: " << (enable_heartbeat_ ? "ON" : "OFF"));
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_HEARTBEAT_BOOL, enable_heartbeat_);
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+        logger_, "Current heartbeat: "
+                     << (device_->getBoolProperty(OB_PROP_HEARTBEAT_BOOL) ? "ON" : "OFF")));
   }
   if (!echo_mode_.empty() &&
       device_->isPropertySupported(OB_PROP_LIDAR_SPECIFIC_MODE_INT, OB_PERMISSION_READ_WRITE)) {
@@ -215,10 +217,10 @@ void OBLidarNode::setupDevices() {
     } else if (echo_mode_ == "First Echo") {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LIDAR_SPECIFIC_MODE_INT, 1);
     }
-    RCLCPP_INFO_STREAM(
+    TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
         logger_, "Current echo mode: " << (device_->getIntProperty(OB_PROP_LIDAR_SPECIFIC_MODE_INT)
                                                ? "First Echo"
-                                               : "Last Echo"));
+                                               : "Last Echo")));
   }
   if (repetitive_scan_mode_ != -1 &&
       device_->isPropertySupported(OB_PROP_LIDAR_REPETITIVE_SCAN_MODE_INT,
@@ -231,8 +233,9 @@ void OBLidarNode::setupDevices() {
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LIDAR_REPETITIVE_SCAN_MODE_INT,
                           repetitive_scan_mode_);
-      RCLCPP_INFO_STREAM(logger_, "Current repetitive scan mode: " << device_->getIntProperty(
-                                      OB_PROP_LIDAR_REPETITIVE_SCAN_MODE_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current repetitive scan mode: "
+                       << device_->getIntProperty(OB_PROP_LIDAR_REPETITIVE_SCAN_MODE_INT)));
     }
   }
   if (filter_level_ != -1 &&
@@ -244,8 +247,9 @@ void OBLidarNode::setupDevices() {
     } else {
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT, filter_level_);
       TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LIDAR_APPLY_CONFIGS_INT, 1);
-      RCLCPP_INFO_STREAM(logger_, "Current filter level: " << device_->getIntProperty(
-                                      OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current filter level: "
+                       << device_->getIntProperty(OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT)));
     }
   }
 
@@ -257,8 +261,9 @@ void OBLidarNode::setupDevices() {
                    range.min, range.max);
     } else {
       TRY_TO_SET_PROPERTY(setFloatProperty, OB_PROP_LIDAR_MEMS_FOV_SIZE_FLOAT, vertical_fov_);
-      RCLCPP_INFO_STREAM(logger_, "Current vertical fov: " << device_->getFloatProperty(
-                                      OB_PROP_LIDAR_MEMS_FOV_SIZE_FLOAT));
+      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
+          logger_, "Current vertical fov: "
+                       << device_->getFloatProperty(OB_PROP_LIDAR_MEMS_FOV_SIZE_FLOAT)));
     }
   }
 }
