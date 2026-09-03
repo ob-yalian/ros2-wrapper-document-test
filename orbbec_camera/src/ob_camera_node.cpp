@@ -7418,7 +7418,7 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
   setDefaultIMUMessage(imu_msg);
 
   imu_msg.header.frame_id = optical_frame_id_[stream_index];
-  auto timestamp = fromUsToROSTime(frame->getTimeStampUs());
+  auto timestamp = fromUsToROSTime(getFrameTimestampUs(frame));
   imu_msg.header.stamp = timestamp;
 
   auto imu_info = createIMUInfo(stream_index);
