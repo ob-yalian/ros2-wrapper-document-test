@@ -28,6 +28,7 @@ rosidl_generate_interfaces(
     "msg/RGBD.msg"
     "msg/StreamProfile.msg"
     "srv/GetBool.srv"
+    "srv/GetActionConfig.srv"
     "srv/GetDeviceConfig.srv"
     "srv/GetDeviceInfo.srv"
     "srv/GetCameraInfo.srv"
@@ -35,6 +36,7 @@ rosidl_generate_interfaces(
     "srv/GetAwbGain.srv"
     "srv/GetString.srv"
     "srv/SetFilter.srv"
+    "srv/SetActionConfig.srv"
     "srv/SetInt32.srv"
     "srv/SetAwbGain.srv"
     "srv/SetString.srv"
@@ -43,6 +45,7 @@ rosidl_generate_interfaces(
     "srv/SetUserCalibParams.srv"
     "srv/SetBagRecording.srv"
     "srv/SetStreamProfile.srv"
+    "srv/SendActionCommand.srv"
     "action/RunAeAwbLockTest.action"
     DEPENDENCIES
     action_msgs
