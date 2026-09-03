@@ -33,7 +33,6 @@
 #include "libobsensor/hpp/Device.hpp"
 #include "libobsensor/hpp/RecordPlayback.hpp"
 #include "orbbec_camera_msgs/srv/set_bag_recording.hpp"
-#include "orbbec_camera_msgs/srv/send_action_command.hpp"
 
 namespace orbbec_camera {
 
@@ -88,10 +87,6 @@ class OBCameraNodeDriver : public rclcpp::Node {
   void setBagRecordingCallback(
       const std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Request> request,
       std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Response> response);
-  void setupActionCommandService();
-  void sendActionCommandCallback(
-      const std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Request> request,
-      std::shared_ptr<orbbec_camera_msgs::srv::SendActionCommand::Response> response);
   void presetUpdateCallback(bool firstCall, OBFwUpdateState state, const char* message,
                             uint8_t percent);
   void updatePresetFirmware(std::string path);
@@ -152,8 +147,6 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::string preset_firmware_path_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr reboot_device_srv_ = nullptr;
   rclcpp::Service<orbbec_camera_msgs::srv::SetBagRecording>::SharedPtr set_bag_recording_srv_ =
-      nullptr;
-  rclcpp::Service<orbbec_camera_msgs::srv::SendActionCommand>::SharedPtr send_action_command_srv_ =
       nullptr;
   std::chrono::time_point<std::chrono::system_clock> start_time_;
   std::string extension_path_;
