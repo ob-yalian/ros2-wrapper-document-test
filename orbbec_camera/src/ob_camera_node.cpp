@@ -1148,22 +1148,42 @@ void OBCameraNode::setupDevices() {
       sensors_.find(DEPTH) != sensors_.end() &&
       device_->isPropertySupported(OB_PROP_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE) &&
       device_->isPropertySupported(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, OB_PERMISSION_READ_WRITE)) {
-    if (disparity_to_depth_mode_ == "HW") {
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DISPARITY_TO_DEPTH_BOOL, 1);
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
-      RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: HW");
-    } else if (disparity_to_depth_mode_ == "SW") {
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 1);
-      RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: SW");
-    } else if (disparity_to_depth_mode_ == "disable") {
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DISPARITY_TO_DEPTH_BOOL, 0);
-      TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, 0);
-      RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: disabled");
-    } else {
-      RCLCPP_WARN_STREAM(logger_, "Unknown disparity to depth mode '"
-                                      << disparity_to_depth_mode_ << "', keeping default settings");
-    }
+    TRY_EXECUTE_BLOCK({
+      bool expected_hardware_enabled = false;
+      bool expected_software_enabled = false;
+      bool mode_supported = true;
+      if (disparity_to_depth_mode_ == "HW") {
+        expected_hardware_enabled = true;
+        device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, false);
+        device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, true);
+      } else if (disparity_to_depth_mode_ == "SW") {
+        expected_software_enabled = true;
+        device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, false);
+        device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, true);
+      } else if (disparity_to_depth_mode_ == "disable") {
+        device_->setBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL, false);
+        device_->setBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL, false);
+      } else {
+        RCLCPP_WARN_STREAM(logger_, "Unknown disparity to depth mode '"
+                                        << disparity_to_depth_mode_
+                                        << "', keeping default settings");
+        mode_supported = false;
+      }
+
+      if (mode_supported) {
+        const bool hardware_enabled = device_->getBoolProperty(OB_PROP_DISPARITY_TO_DEPTH_BOOL);
+        const bool software_enabled = device_->getBoolProperty(OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL);
+        if (hardware_enabled != expected_hardware_enabled ||
+            software_enabled != expected_software_enabled) {
+          RCLCPP_ERROR_STREAM(logger_, "Failed to apply disparity to depth mode "
+                                           << disparity_to_depth_mode_
+                                           << ": device reports hardware=" << hardware_enabled
+                                           << ", software=" << software_enabled);
+        } else {
+          RCLCPP_INFO_STREAM(logger_, "Disparity to depth mode: " << disparity_to_depth_mode_);
+        }
+      }
+    });
   }
   try {
     if (should_apply_launch_config("enable_ldp") &&
@@ -1219,32 +1239,33 @@ void OBCameraNode::setupDevices() {
         "Current laser control: " << (device_->getIntProperty(OB_PROP_LASER_BOOL) ? "ON" : "OFF")));
   }
   if (!sync_mode_str_.empty()) {
-    auto sync_config = device_->getMultiDeviceSyncConfig();
-    std::transform(sync_mode_str_.begin(), sync_mode_str_.end(), sync_mode_str_.begin(), ::toupper);
-    sync_mode_ = OBSyncModeFromString(sync_mode_str_);
-    sync_config.syncMode = sync_mode_;
-    sync_config.depthDelayUs = depth_delay_us_;
-    sync_config.colorDelayUs = color_delay_us_;
-    sync_config.trigger2ImageDelayUs = trigger2image_delay_us_;
-    sync_config.triggerOutDelayUs = trigger_out_delay_us_;
-    sync_config.triggerOutEnable = trigger_out_enabled_;
-    sync_config.framesPerTrigger = frames_per_trigger_;
-    TRY_EXECUTE_BLOCK(device_->setMultiDeviceSyncConfig(sync_config));
     TRY_EXECUTE_BLOCK({
+      auto sync_config = device_->getMultiDeviceSyncConfig();
+      std::transform(sync_mode_str_.begin(), sync_mode_str_.end(), sync_mode_str_.begin(),
+                     ::toupper);
+      sync_mode_ = OBSyncModeFromString(sync_mode_str_);
+      sync_config.syncMode = sync_mode_;
+      sync_config.depthDelayUs = depth_delay_us_;
+      sync_config.colorDelayUs = color_delay_us_;
+      sync_config.trigger2ImageDelayUs = trigger2image_delay_us_;
+      sync_config.triggerOutDelayUs = trigger_out_delay_us_;
+      sync_config.triggerOutEnable = trigger_out_enabled_;
+      sync_config.framesPerTrigger = frames_per_trigger_;
+      device_->setMultiDeviceSyncConfig(sync_config);
       sync_config = device_->getMultiDeviceSyncConfig();
       RCLCPP_INFO_STREAM(logger_,
                          "Current sync mode: " << magic_enum::enum_name(sync_config.syncMode));
+      if (sync_config.syncMode == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING) {
+        RCLCPP_INFO_STREAM(logger_, "Frames per trigger: " << sync_config.framesPerTrigger);
+        RCLCPP_INFO_STREAM(logger_,
+                           "Software trigger period " << software_trigger_period_.count() << " ms");
+        software_trigger_timer_ = node_->create_wall_timer(software_trigger_period_, [this]() {
+          if (software_trigger_enabled_) {
+            TRY_EXECUTE_BLOCK(device_->triggerCapture());
+          }
+        });
+      }
     });
-    if (sync_mode_ == OB_MULTI_DEVICE_SYNC_MODE_SOFTWARE_TRIGGERING) {
-      RCLCPP_INFO_STREAM(logger_, "Frames per trigger: " << sync_config.framesPerTrigger);
-      RCLCPP_INFO_STREAM(logger_,
-                         "Software trigger period " << software_trigger_period_.count() << " ms");
-      software_trigger_timer_ = node_->create_wall_timer(software_trigger_period_, [this]() {
-        if (software_trigger_enabled_) {
-          TRY_EXECUTE_BLOCK(device_->triggerCapture());
-        }
-      });
-    }
   }
   if (should_apply_launch_config("enable_ptp_config") &&
       device_->isPropertySupported(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL,

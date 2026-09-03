@@ -245,11 +245,12 @@ void OBLidarNode::setupDevices() {
       RCLCPP_ERROR(logger_, "filter level value is out of range[%d,%d], please check the value",
                    range.min, range.max);
     } else {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT, filter_level_);
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LIDAR_APPLY_CONFIGS_INT, 1);
-      TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
-          logger_, "Current filter level: "
-                       << device_->getIntProperty(OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT)));
+      TRY_EXECUTE_BLOCK({
+        device_->setIntProperty(OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT, filter_level_);
+        device_->setIntProperty(OB_PROP_LIDAR_APPLY_CONFIGS_INT, 1);
+        RCLCPP_INFO_STREAM(logger_, "Current filter level: " << device_->getIntProperty(
+                                        OB_PROP_LIDAR_TAIL_FILTER_LEVEL_INT));
+      });
     }
   }
 
