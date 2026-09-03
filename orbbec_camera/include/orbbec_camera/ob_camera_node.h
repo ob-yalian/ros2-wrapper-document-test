@@ -437,6 +437,12 @@ class OBCameraNode {
   void setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Request>& request,
                                std::shared_ptr<SetInt32 ::Response>& response);
 
+  void getColorWbCtrlCallback(const std::shared_ptr<GetInt32::Request>& request,
+                              std::shared_ptr<GetInt32::Response>& response);
+
+  void setColorWbCtrlCallback(const std::shared_ptr<SetInt32::Request>& request,
+                              std::shared_ptr<SetInt32::Response>& response);
+
   void getAutoWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                    std::shared_ptr<GetInt32::Response>& response);
 
@@ -772,6 +778,8 @@ class OBCameraNode {
   std::map<stream_index_pair, rclcpp::Service<SetInt32>::SharedPtr> set_rotation_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_white_balance_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_white_balance_srv_;
+  rclcpp::Service<GetInt32>::SharedPtr get_color_wb_ctrl_srv_;
+  rclcpp::Service<SetInt32>::SharedPtr set_color_wb_ctrl_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_auto_white_balance_srv_;
   rclcpp::Service<SetBool>::SharedPtr set_auto_white_balance_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_ae_awb_status_srv_;

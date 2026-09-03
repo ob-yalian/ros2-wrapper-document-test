@@ -296,6 +296,20 @@ void OBCameraNode::setupCameraCtrlServices() {
                                   std::shared_ptr<SetInt32::Response> response) {
         setWhiteBalanceCallback(request, response);
       });
+  if (isPropertyReadable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
+    get_color_wb_ctrl_srv_ = node_->create_service<GetInt32>(
+        "get_color_wb_ctrl", [this](const std::shared_ptr<GetInt32::Request> request,
+                                    std::shared_ptr<GetInt32::Response> response) {
+          getColorWbCtrlCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
+    set_color_wb_ctrl_srv_ = node_->create_service<SetInt32>(
+        "set_color_wb_ctrl", [this](const std::shared_ptr<SetInt32::Request> request,
+                                    std::shared_ptr<SetInt32::Response> response) {
+          setColorWbCtrlCallback(request, response);
+        });
+  }
   get_auto_white_balance_srv_ = node_->create_service<GetInt32>(
       "get_auto_white_balance", [this](const std::shared_ptr<GetInt32::Request> request,
                                        std::shared_ptr<GetInt32::Response> response) {
@@ -1274,6 +1288,67 @@ void OBCameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Requ
   } catch (...) {
     response->message = "unknown error";
     response->success = false;
+  }
+}
+
+void OBCameraNode::getColorWbCtrlCallback(const std::shared_ptr<GetInt32::Request>& request,
+                                          std::shared_ptr<GetInt32::Response>& response) {
+  (void)request;
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  try {
+    response->data = device_->getIntProperty(OB_PROP_COLOR_WB_CTRL_INT);
+    response->success = true;
+    response->message = "OK";
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
+}
+
+void OBCameraNode::setColorWbCtrlCallback(const std::shared_ptr<SetInt32::Request>& request,
+                                          std::shared_ptr<SetInt32::Response>& response) {
+  if (!request) {
+    response->success = false;
+    response->message = "Invalid request";
+    return;
+  }
+
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  try {
+    const auto range = device_->getIntPropertyRange(OB_PROP_COLOR_WB_CTRL_INT);
+    if (request->data < range.min || request->data > range.max) {
+      response->success = false;
+      response->message = "value out of range [" + std::to_string(range.min) + ", " +
+                          std::to_string(range.max) + "]";
+      return;
+    }
+
+    device_->setIntProperty(OB_PROP_COLOR_WB_CTRL_INT, request->data);
+    response->success = true;
+    response->message = "OK";
+    if (isPropertyReadable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
+      const auto current_value = device_->getIntProperty(OB_PROP_COLOR_WB_CTRL_INT);
+      response->success = current_value == request->data;
+      if (!response->success) {
+        response->message = "device reported " + std::to_string(current_value) + " after setting " +
+                            std::to_string(request->data);
+      }
+    }
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
   }
 }
 
