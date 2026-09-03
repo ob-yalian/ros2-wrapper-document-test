@@ -53,6 +53,7 @@
 #include "orbbec_camera_msgs/msg/depth_filter_state.hpp"
 #include "orbbec_camera_msgs/msg/depth_filters_status.hpp"
 #include "orbbec_camera_msgs/srv/get_device_config.hpp"
+#include "orbbec_camera_msgs/srv/get_action_config.hpp"
 #include "orbbec_camera_msgs/srv/get_device_info.hpp"
 #include "orbbec_camera_msgs/srv/get_awb_gain.hpp"
 #include "orbbec_camera_msgs/msg/extrinsics.hpp"
@@ -65,6 +66,7 @@
 #include "orbbec_camera_msgs/srv/get_bool.hpp"
 #include "orbbec_camera_msgs/srv/set_string.hpp"
 #include "orbbec_camera_msgs/srv/set_filter.hpp"
+#include "orbbec_camera_msgs/srv/set_action_config.hpp"
 #include "orbbec_camera_msgs/srv/set_arrays.hpp"
 #include "orbbec_camera_msgs/srv/set_stream_profile.hpp"
 #include "orbbec_camera_msgs/srv/get_user_calib_params.hpp"
@@ -135,6 +137,7 @@
 
 namespace orbbec_camera {
 using GetDeviceConfig = orbbec_camera_msgs::srv::GetDeviceConfig;
+using GetActionConfig = orbbec_camera_msgs::srv::GetActionConfig;
 using GetDeviceInfo = orbbec_camera_msgs::srv::GetDeviceInfo;
 using Extrinsics = orbbec_camera_msgs::msg::Extrinsics;
 using SetInt32 = orbbec_camera_msgs::srv::SetInt32;
@@ -146,6 +149,7 @@ using SetString = orbbec_camera_msgs::srv::SetString;
 using SetBool = std_srvs::srv::SetBool;
 using GetBool = orbbec_camera_msgs::srv::GetBool;
 using SetFilter = orbbec_camera_msgs::srv::SetFilter;
+using SetActionConfig = orbbec_camera_msgs::srv::SetActionConfig;
 using SetArrays = orbbec_camera_msgs::srv::SetArrays;
 using SetStreamProfile = orbbec_camera_msgs::srv::SetStreamProfile;
 using SetUserCalibParams = orbbec_camera_msgs::srv::SetUserCalibParams;
@@ -481,6 +485,12 @@ class OBCameraNode {
   void getDeviceConfigCallback(const std::shared_ptr<GetDeviceConfig::Request>& request,
                                std::shared_ptr<GetDeviceConfig::Response>& response);
 
+  void getActionConfigCallback(const std::shared_ptr<GetActionConfig::Request>& request,
+                               std::shared_ptr<GetActionConfig::Response>& response);
+
+  void setActionConfigCallback(const std::shared_ptr<SetActionConfig::Request>& request,
+                               std::shared_ptr<SetActionConfig::Response>& response);
+
   void getSDKVersion(const std::shared_ptr<GetString::Request>& request,
                      std::shared_ptr<GetString::Response>& response);
 
@@ -778,6 +788,8 @@ class OBCameraNode {
   std::map<stream_index_pair, rclcpp::Service<SetArrays>::SharedPtr> set_ae_roi_srv_;
   rclcpp::Service<GetDeviceInfo>::SharedPtr get_device_srv_;
   rclcpp::Service<GetDeviceConfig>::SharedPtr get_device_config_srv_;
+  rclcpp::Service<GetActionConfig>::SharedPtr get_action_config_srv_;
+  rclcpp::Service<SetActionConfig>::SharedPtr set_action_config_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_laser_enable_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ldp_enable_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ldp_status_srv_;
