@@ -78,18 +78,18 @@ inline std::string formatObErrorWithStatus(const ob::Error& e) {
 
 #define TRY_TO_SET_PROPERTY(func, property, value)                                               \
   try {                                                                                          \
-    device_->func(property, value);                                                              \
+    device_->func((property), (value));                                                          \
   } catch (const ob::Error& e) {                                                                 \
-    RCLCPP_ERROR_STREAM(logger_, "Failed to set " << property << " to " << value << " in "       \
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set " << (property) << " to " << (value) << " in "   \
                                                   << __FUNCTION__ << " at line " << __LINE__     \
                                                   << ": "                                        \
                                                   << orbbec_camera::formatObErrorWithStatus(e)); \
   } catch (const std::exception& e) {                                                            \
-    RCLCPP_ERROR_STREAM(logger_, "Failed to set " << property << " to " << value << " in "       \
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set " << (property) << " to " << (value) << " in "   \
                                                   << __FUNCTION__ << " at line " << __LINE__     \
                                                   << ": " << e.what());                          \
   } catch (...) {                                                                                \
-    RCLCPP_ERROR_STREAM(logger_, "Failed to set " << property << " to " << value << " in "       \
+    RCLCPP_ERROR_STREAM(logger_, "Failed to set " << (property) << " to " << (value) << " in "   \
                                                   << __FUNCTION__ << " at line " << __LINE__);   \
   }
 

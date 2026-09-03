@@ -181,7 +181,15 @@ void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
     for (uint32_t i = 0; i < preset_count; ++i) {
       const char *preset_name = preset_list->getName(i);
       if (preset_name != nullptr && preset_name[0] != '\0') {
-        RCLCPP_INFO_STREAM(logger, "  - " << preset_name);
+        std::string version;
+        try {
+          const char *version_value = preset_list->getDepthWorkModeVersion(i);
+          version = version_value == nullptr ? "" : version_value;
+        } catch (...) {
+          // Older firmware can enumerate presets without exposing version information.
+        }
+        RCLCPP_INFO_STREAM(logger, "  - " << preset_name << " (depth work mode version: "
+                                          << (version.empty() ? "not available" : version) << ")");
       }
     }
 

@@ -70,8 +70,17 @@ struct FirmwareUpdateResult {
   bool success = false;
   bool need_reupdate = false;
   bool retryable = true;
+  bool reboot_command_sent = false;
   OBFwUpdateState final_state = STAT_START;
+  std::chrono::steady_clock::time_point reboot_started_at;
   std::string error_message;
+};
+
+struct DeviceIdentity {
+  std::string serial_number;
+  std::string uid;
+  std::string ip_address;
+  bool is_network = false;
 };
 
 std::string trim(std::string value) {
@@ -405,6 +414,29 @@ bool isBootDeviceName(const std::string &name) {
   return lower == "boot" || lower.find("boot") != std::string::npos;
 }
 
+std::string safeString(const char *value) { return value == nullptr ? "" : value; }
+
+DeviceIdentity getDeviceIdentity(const std::shared_ptr<ob::DeviceInfo> &device_info) {
+  DeviceIdentity identity;
+  identity.serial_number = safeString(device_info->getSerialNumber());
+  identity.uid = safeString(device_info->getUid());
+  identity.ip_address = safeString(device_info->getIpAddress());
+  identity.is_network = safeString(device_info->getConnectionType()) == "Ethernet";
+  return identity;
+}
+
+void logRebootReconnectElapsed(const rclcpp::Logger &logger, const FirmwareUpdateResult &result,
+                               const char *stage) {
+  if (!result.reboot_command_sent) {
+    return;
+  }
+  const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now() - result.reboot_started_at)
+                              .count();
+  RCLCPP_INFO(logger, "[%s] Device detected after reboot in %lld ms", stage,
+              static_cast<long long>(elapsed_ms));
+}
+
 void printUpdateProgress(const std::string &task, OBFwUpdateState state, const char *message,
                          uint8_t percent) {
   std::cout << "[" << task << "] " << static_cast<uint32_t>(percent) << "% | "
@@ -423,7 +455,15 @@ void logCurrentPresetList(const rclcpp::Logger &logger, const std::shared_ptr<ob
     const uint32_t count = preset_list->getCount();
     RCLCPP_INFO(logger, "[%s] Current preset count: %u", stage, count);
     for (uint32_t i = 0; i < count; ++i) {
-      RCLCPP_INFO(logger, "[%s] Preset[%u]: %s", stage, i, preset_list->getName(i));
+      const char *version = nullptr;
+      try {
+        version = preset_list->getDepthWorkModeVersion(i);
+      } catch (...) {
+        // Older firmware can enumerate presets without exposing version information.
+      }
+      RCLCPP_INFO(logger, "[%s] Preset[%u]: %s, depth work mode version: %s", stage, i,
+                  preset_list->getName(i),
+                  version == nullptr || version[0] == '\0' ? "not available" : version);
     }
   } catch (const ob::Error &e) {
     RCLCPP_WARN(logger, "[%s] Failed to query preset list: %s", stage,
@@ -499,33 +539,94 @@ std::shared_ptr<ob::Device> connectDevice(const rclcpp::Logger &logger,
   return device;
 }
 
+bool matchesDeviceIdentity(const std::shared_ptr<ob::DeviceList> &list, uint32_t index,
+                           const DeviceIdentity &identity) {
+  if (!identity.serial_number.empty()) {
+    try {
+      if (safeString(list->getSerialNumber(index)) == identity.serial_number) {
+        return true;
+      }
+    } catch (const ob::Error &) {
+    }
+  }
+
+  if (!identity.uid.empty()) {
+    try {
+      if (safeString(list->getUid(index)) == identity.uid) {
+        return true;
+      }
+    } catch (const ob::Error &) {
+    }
+  }
+
+  if (identity.is_network && identity.serial_number.empty() && identity.uid.empty() &&
+      !identity.ip_address.empty()) {
+    try {
+      return safeString(list->getIpAddress(index)) == identity.ip_address;
+    } catch (const ob::Error &) {
+    }
+  }
+  return false;
+}
+
+std::shared_ptr<ob::Device> findEnumeratedDevice(const std::shared_ptr<ob::DeviceList> &list,
+                                                 const DeviceIdentity &identity) {
+  for (uint32_t i = 0; i < list->getCount(); ++i) {
+    try {
+      if (matchesDeviceIdentity(list, i, identity)) {
+        return list->getDevice(i, OB_DEVICE_DEFAULT_ACCESS);
+      }
+    } catch (const ob::Error &) {
+      continue;
+    }
+  }
+  return nullptr;
+}
+
 std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,
                                              const std::shared_ptr<ob::Context> &ctx,
-                                             const CliArgs &args, bool require_non_boot = false) {
+                                             const CliArgs &args, const DeviceIdentity &identity,
+                                             bool require_non_boot = false,
+                                             bool require_reboot_transition = false) {
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(args.reconnect_timeout_sec);
+  bool reboot_transition_observed = !require_reboot_transition;
   while (std::chrono::steady_clock::now() < deadline) {
     try {
-      auto device = connectDevice(logger, ctx, args);
+      auto list = ctx->queryDeviceList();
+      auto device = findEnumeratedDevice(list, identity);
       if (device) {
         auto device_info = device->getDeviceInfo();
         const std::string name = device_info->getName();
         const std::string serial = device_info->getSerialNumber();
         const bool is_boot = isBootDeviceName(name);
-        RCLCPP_INFO(logger, "Device reconnected: %s (%s)", name.c_str(), serial.c_str());
+        if (!reboot_transition_observed) {
+          if (is_boot) {
+            reboot_transition_observed = true;
+            RCLCPP_INFO(logger, "Device entered boot stage: %s (%s)", name.c_str(), serial.c_str());
+          } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(args.reconnect_poll_ms));
+            continue;
+          }
+        }
         if (require_non_boot && is_boot) {
           RCLCPP_INFO(logger, "Device is still in boot stage, waiting for normal mode...");
           std::this_thread::sleep_for(std::chrono::milliseconds(args.reconnect_poll_ms));
           continue;
         }
+        RCLCPP_INFO(logger, "Device reconnected: %s (%s)", name.c_str(), serial.c_str());
         return device;
       }
+      reboot_transition_observed = true;
     } catch (const ob::Error &e) {
+      reboot_transition_observed = true;
       RCLCPP_WARN(logger, "Reconnect attempt failed (SDK): %s",
                   orbbec_camera::formatObErrorWithStatus(e).c_str());
     } catch (const std::exception &e) {
+      reboot_transition_observed = true;
       RCLCPP_WARN(logger, "Reconnect attempt failed: %s", e.what());
     } catch (...) {
+      reboot_transition_observed = true;
       RCLCPP_WARN(logger, "Reconnect attempt failed: unknown error");
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(args.reconnect_poll_ms));
@@ -536,7 +637,8 @@ std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,
 
 std::shared_ptr<ob::Device> waitForReconnectUntil(
     const rclcpp::Logger &logger, const std::shared_ptr<ob::Context> &ctx, const CliArgs &args,
-    bool require_non_boot, const std::chrono::steady_clock::time_point &deadline) {
+    const DeviceIdentity &identity, bool require_non_boot,
+    const std::chrono::steady_clock::time_point &deadline, bool require_reboot_transition = false) {
   const auto now = std::chrono::steady_clock::now();
   if (now >= deadline) {
     throw std::runtime_error("Timeout waiting for device reconnection");
@@ -548,7 +650,8 @@ std::shared_ptr<ob::Device> waitForReconnectUntil(
   bounded_args.reconnect_timeout_sec = std::max(1, static_cast<int>((remaining_ms + 999) / 1000));
   bounded_args.reconnect_poll_ms =
       std::max(100, std::min(bounded_args.reconnect_poll_ms, static_cast<int>(remaining_ms)));
-  return waitForReconnect(logger, ctx, bounded_args, require_non_boot);
+  return waitForReconnect(logger, ctx, bounded_args, identity, require_non_boot,
+                          require_reboot_transition);
 }
 
 bool updatePresetFirmware(const rclcpp::Logger &logger, const std::shared_ptr<ob::Device> &device,
@@ -684,7 +787,9 @@ FirmwareUpdateResult updateFirmware(const rclcpp::Logger &logger,
     waitForFirmwareLogDrain(logger);
   }
   RCLCPP_INFO(logger, "Rebooting device after firmware update...");
+  result.reboot_started_at = std::chrono::steady_clock::now();
   device->reboot();
+  result.reboot_command_sent = true;
   RCLCPP_INFO(logger, "Device reboot command sent.");
   return result;
 }
@@ -746,8 +851,14 @@ int main(int argc, char **argv) {
       try {
         auto device = connectDevice(logger, ctx, run_args);
         auto device_info = device->getDeviceInfo();
+        const auto device_identity = getDeviceIdentity(device_info);
         RCLCPP_INFO(logger, "Selected device: %s, SN: %s, UID: %s", device_info->getName(),
                     device_info->getSerialNumber(), device_info->getUid());
+        if (device_identity.is_network) {
+          ctx->enableNetDeviceEnumeration(true);
+          RCLCPP_INFO(logger,
+                      "Network device detected; reconnect will be verified by device enumeration.");
+        }
         const bool enable_firmware_log = isSdkLogEnabled(run_args.sdk_log_level);
         bool firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
 
@@ -769,6 +880,7 @@ int main(int argc, char **argv) {
                                          ? "First firmware update failed"
                                          : first_update.error_message);
           }
+          FirmwareUpdateResult final_update = first_update;
 
           if (first_update.need_reupdate) {
             RCLCPP_INFO(
@@ -776,7 +888,10 @@ int main(int argc, char **argv) {
                 "Firmware requires reboot and second update. Waiting for device reconnect...");
             const auto second_deadline = std::chrono::steady_clock::now() +
                                          std::chrono::seconds(run_args.reconnect_timeout_sec);
-            device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+            device.reset();
+            device = waitForReconnectUntil(logger, ctx, run_args, device_identity, true,
+                                           second_deadline, true);
+            logRebootReconnectElapsed(logger, first_update, "first update reconnect");
             firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
             bool second_ok = false;
             while (std::chrono::steady_clock::now() < second_deadline) {
@@ -795,14 +910,20 @@ int main(int argc, char **argv) {
                     RCLCPP_WARN(logger, "Second firmware update attempt failed: %s, retrying...",
                                 second_update.error_message.c_str());
                   }
-                  device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+                  device.reset();
+                  device = waitForReconnectUntil(logger, ctx, run_args, device_identity, true,
+                                                 second_deadline);
                   firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
                   continue;
                 }
+                final_update = second_update;
                 if (second_update.need_reupdate) {
                   RCLCPP_WARN(logger,
                               "Second attempt still requires reupdate, waiting and retrying...");
-                  device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+                  device.reset();
+                  device = waitForReconnectUntil(logger, ctx, run_args, device_identity, true,
+                                                 second_deadline, true);
+                  logRebootReconnectElapsed(logger, second_update, "reupdate reconnect");
                   firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
                   continue;
                 }
@@ -811,7 +932,9 @@ int main(int argc, char **argv) {
               } catch (const ob::Error &e) {
                 RCLCPP_WARN(logger, "Second update transient error: %s, retrying...",
                             orbbec_camera::formatObErrorWithStatus(e).c_str());
-                device = waitForReconnectUntil(logger, ctx, run_args, true, second_deadline);
+                device.reset();
+                device = waitForReconnectUntil(logger, ctx, run_args, device_identity, true,
+                                               second_deadline);
                 firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
               }
             }
@@ -819,6 +942,15 @@ int main(int argc, char **argv) {
               throw std::runtime_error("Second firmware update failed after retries");
             }
           }
+
+          RCLCPP_INFO(logger, "Waiting for device to reconnect after final reboot...");
+          device.reset();
+          device = waitForReconnect(logger, ctx, run_args, device_identity, true, true);
+          logRebootReconnectElapsed(logger, final_update, "final reconnect");
+          device_info = device->getDeviceInfo();
+          RCLCPP_INFO(logger, "Device is online after firmware update: %s, SN: %s, firmware: %s",
+                      device_info->getName(), device_info->getSerialNumber(),
+                      device_info->getFirmwareVersion());
         }
 
         success_count++;
