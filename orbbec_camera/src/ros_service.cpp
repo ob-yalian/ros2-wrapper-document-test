@@ -1746,6 +1746,21 @@ void OBCameraNode::getDeviceConfigCallback(const std::shared_ptr<GetDeviceConfig
   }
 
   try {
+    const char* version = device_->getCurrentPresetDepthWorkModeVersion();
+    if (version != nullptr) {
+      response->preset_depth_work_mode_version = version;
+    }
+  } catch (const ob::Error& e) {
+    RCLCPP_DEBUG_STREAM(logger_, "Failed to get current preset depth work mode version: "
+                                     << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception& e) {
+    RCLCPP_DEBUG_STREAM(logger_,
+                        "Failed to get current preset depth work mode version: " << e.what());
+  } catch (...) {
+    RCLCPP_DEBUG_STREAM(logger_, "Failed to get current preset depth work mode version");
+  }
+
+  try {
     if (device_->isColorPresetSupported()) {
       const char* color_preset_name = device_->getCurrentColorPresetName();
       if (color_preset_name != nullptr && color_preset_name[0] != '\0') {

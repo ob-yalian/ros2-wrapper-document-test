@@ -1002,6 +1002,7 @@ class OBCameraNode {
   int left_ir_decimation_factor_ = 1;
   int right_ir_decimation_factor_ = 1;
   std::string device_preset_;
+  std::string device_preset_version_;
   // filter switch
   bool enable_decimation_filter_ = false;
   bool enable_hdr_merge_ = false;

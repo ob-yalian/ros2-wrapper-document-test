@@ -6,6 +6,7 @@ enable_point_cloud: false
 enable_colored_point_cloud: false
 enable_ldp: false
 device_preset: "Default"
+device_preset_version: ""
 enable_laser: true
 
 # enable_laser: true
