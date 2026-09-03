@@ -20,7 +20,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 
-#include "libobsensor/hpp/Context.hpp"
+#include "libobsensor/ObSensor.hpp"
 #include "orbbec_camera_msgs/srv/send_action_command.hpp"
 
 namespace orbbec_camera {

@@ -412,6 +412,7 @@ if(BUILD_TESTING)
     ament_lint_auto_find_test_dependencies()
 
     ament_add_gtest(camera_info_distortion_test test/camera_info_distortion_test.cpp)
+    target_link_directories(camera_info_distortion_test PRIVATE ${ORBBEC_LIBS_DIR})
     target_link_libraries(camera_info_distortion_test ${PROJECT_NAME})
 endif()
 
