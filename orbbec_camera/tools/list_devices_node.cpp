@@ -188,8 +188,8 @@ void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
         } catch (...) {
           // Older firmware can enumerate presets without exposing version information.
         }
-        RCLCPP_INFO_STREAM(logger, "  - " << preset_name << " (depth work mode version: "
-                                          << (version.empty() ? "not available" : version) << ")");
+        RCLCPP_INFO_STREAM(logger,
+                           "  - " << preset_name << (version.empty() ? "" : " (" + version + ")"));
       }
     }
 

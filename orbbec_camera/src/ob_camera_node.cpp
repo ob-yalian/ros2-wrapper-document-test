@@ -946,8 +946,7 @@ void OBCameraNode::setupDevices() {
           // Older firmware can enumerate presets but may not report per-preset versions.
         }
         RCLCPP_DEBUG_STREAM(logger_, "Preset " << i << ": " << preset_list->getName(i)
-                                               << ", depth work mode version: "
-                                               << (version.empty() ? "not available" : version));
+                                               << (version.empty() ? "" : " (" + version + ")"));
       }
 
       if (device_preset_version_.empty()) {
@@ -972,8 +971,8 @@ void OBCameraNode::setupDevices() {
       }
       RCLCPP_INFO_STREAM(logger_,
                          "Loaded device preset: "
-                             << current_preset << ", depth work mode version: "
-                             << (current_version.empty() ? "not available" : current_version));
+                             << current_preset
+                             << (current_version.empty() ? "" : " (" + current_version + ")"));
       if (!device_preset_version_.empty() && !current_version.empty() &&
           current_version != device_preset_version_) {
         RCLCPP_WARN_STREAM(logger_, "Requested device preset depth work mode version "

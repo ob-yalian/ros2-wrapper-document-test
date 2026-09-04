@@ -461,9 +461,11 @@ void logCurrentPresetList(const rclcpp::Logger &logger, const std::shared_ptr<ob
       } catch (...) {
         // Older firmware can enumerate presets without exposing version information.
       }
-      RCLCPP_INFO(logger, "[%s] Preset[%u]: %s, depth work mode version: %s", stage, i,
-                  preset_list->getName(i),
-                  version == nullptr || version[0] == '\0' ? "not available" : version);
+      if (version == nullptr || version[0] == '\0') {
+        RCLCPP_INFO(logger, "[%s] Preset[%u]: %s", stage, i, preset_list->getName(i));
+      } else {
+        RCLCPP_INFO(logger, "[%s] Preset[%u]: %s (%s)", stage, i, preset_list->getName(i), version);
+      }
     }
   } catch (const ob::Error &e) {
     RCLCPP_WARN(logger, "[%s] Failed to query preset list: %s", stage,
