@@ -1,12 +1,24 @@
 import os
 import yaml
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, GroupAction
-from launch.substitutions import LaunchConfiguration
-from launch_ros.actions import PushRosNamespace, ComposableNodeContainer, Node
-from launch_ros.descriptions import ComposableNode
+from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.conditions import UnlessCondition
-from launch_ros.actions import LoadComposableNodes
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import LoadComposableNodes, Node
+from launch_ros.descriptions import ComposableNode
+
+
+OPTIONAL_BOOLEAN_PARAMS = {
+    'enable_hardware_noise_removal_filter',
+    'enable_noise_removal_filter',
+}
+
+LAUNCH_ONLY_PARAMS = {
+    'attach_to_shared_component_container',
+    'component_container_name',
+    'use_intra_process_comms',
+}
+
 
 def load_yaml(file_path):
     with open(file_path, 'r') as f:
@@ -38,25 +50,58 @@ def convert_value(value):
 
 
 def load_parameters(context, args):
-    default_params = {arg.name: LaunchConfiguration(arg.name).perform(context) for arg in args}
+    default_params = {
+        arg.name: LaunchConfiguration(arg.name).perform(context)
+        for arg in args
+        if arg.name not in LAUNCH_ONLY_PARAMS
+    }
     config_file_path = LaunchConfiguration('config_file_path').perform(context)
     if config_file_path:
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
-    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'device_preset_version'}
-    return {
-        key: (value if key in skip_convert else convert_value(value))
-        for key, value in default_params.items()
-    }
+    skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
+                    'enhanced_depth_model_path', 'depth_colorizer_mode', 'device_preset_version'}
+
+    result = {}
+    for key, value in default_params.items():
+        # An empty optional boolean means "auto". Do not pass it to the ROS node,
+        # because a declared bool parameter cannot represent an unset value.
+        if key in OPTIONAL_BOOLEAN_PARAMS and value == '':
+            continue
+        if key in skip_convert:
+            result[key] = value
+        elif 'enable_pub_plugins' in key:
+            if isinstance(value, str):
+                if value.startswith('[') and value.endswith(']'):
+                    try:
+                        result[key] = yaml.safe_load(value)
+                    except:
+                        result[key] = [value]
+                else:
+                    result[key] = [value]
+            elif isinstance(value, list):
+                result[key] = value
+            else:
+                result[key] = [str(value)]
+        else:
+            result[key] = convert_value(value)
+
+    return result
 
 
 def generate_launch_description():
     args = [
+        DeclareLaunchArgument('device_type', default_value='camera'),
         DeclareLaunchArgument('camera_name', default_value='camera'),
-        DeclareLaunchArgument('depth_registration', default_value='true'),
+        DeclareLaunchArgument('depth_registration', default_value='false'),
         DeclareLaunchArgument('serial_number', default_value=''),
         DeclareLaunchArgument('usb_port', default_value=''),
         DeclareLaunchArgument('device_num', default_value='1'),
+        # Bag recording: record the live stream to an Orbbec .bag file
+        DeclareLaunchArgument('bag_record_filename', default_value=''),
+        # Bag playback: load a previously recorded .bag file as a virtual device
+        DeclareLaunchArgument('bag_filename', default_value=''),
+        DeclareLaunchArgument('bag_loop', default_value='false'),
         DeclareLaunchArgument('upgrade_firmware', default_value=''),
         DeclareLaunchArgument('preset_firmware_path', default_value=''),
         DeclareLaunchArgument('load_config_json_file_path', default_value=''),
@@ -68,12 +113,15 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_colored_point_cloud', default_value='false'),
         DeclareLaunchArgument('cloud_frame_id', default_value=''),
         DeclareLaunchArgument('connection_delay', default_value='10'),
+        DeclareLaunchArgument('color_frame_queue_max_frames', default_value='10'),
         DeclareLaunchArgument('color_width', default_value='0'),
         DeclareLaunchArgument('color_height', default_value='0'),
         DeclareLaunchArgument('color_fps', default_value='0'),
         DeclareLaunchArgument('color_format', default_value='ANY'),
         DeclareLaunchArgument('enable_color', default_value='true'),
         DeclareLaunchArgument('color_qos', default_value='default'),
+        DeclareLaunchArgument('color_qos_history', default_value='default'),
+        DeclareLaunchArgument('color_qos_depth', default_value='-1'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('color_rotation', default_value='-1'),#color rotation degree : 0, 90, 180, 270
@@ -97,15 +145,21 @@ def generate_launch_description():
         DeclareLaunchArgument('color_contrast', default_value='-1'),
         DeclareLaunchArgument('color_hue', default_value='-1'),
         DeclareLaunchArgument('color_backlight_compensation', default_value='-1'),#range: 0 - 6, default: 3
+        DeclareLaunchArgument('color_anti_flicker', default_value='false'),
         DeclareLaunchArgument('color_powerline_freq', default_value=''),#disable ,50hz ,60hz ,auto
         DeclareLaunchArgument('enable_color_decimation_filter', default_value='false'),
         DeclareLaunchArgument('color_decimation_filter_scale', default_value='-1'),
+        DeclareLaunchArgument('color_denoising_level', default_value='-1'),#0: Auto; 1-8: higher values indicate stronger denoising.
+        #Note: The color_denoising_level configuration is supported only when AE is enabled, and requires new firmware support.
+
         DeclareLaunchArgument('depth_width', default_value='0'),
         DeclareLaunchArgument('depth_height', default_value='0'),
         DeclareLaunchArgument('depth_fps', default_value='0'),
         DeclareLaunchArgument('depth_format', default_value='ANY'),
         DeclareLaunchArgument('enable_depth', default_value='true'),
         DeclareLaunchArgument('depth_qos', default_value='default'),
+        DeclareLaunchArgument('depth_qos_history', default_value='default'),
+        DeclareLaunchArgument('depth_qos_depth', default_value='-1'),
         DeclareLaunchArgument('depth_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_depth_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('depth_precision', default_value=''),
@@ -123,6 +177,8 @@ def generate_launch_description():
         DeclareLaunchArgument('left_ir_format', default_value='ANY'),
         DeclareLaunchArgument('enable_left_ir', default_value='false'),
         DeclareLaunchArgument('left_ir_qos', default_value='default'),
+        DeclareLaunchArgument('left_ir_qos_history', default_value='default'),
+        DeclareLaunchArgument('left_ir_qos_depth', default_value='-1'),
         DeclareLaunchArgument('left_ir_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('left_ir_rotation', default_value='-1'),#left_ir rotation degree : 0, 90, 180, 270
         DeclareLaunchArgument('left_ir_flip', default_value='false'),
@@ -135,6 +191,8 @@ def generate_launch_description():
         DeclareLaunchArgument('right_ir_format', default_value='ANY'),
         DeclareLaunchArgument('enable_right_ir', default_value='false'),
         DeclareLaunchArgument('right_ir_qos', default_value='default'),
+        DeclareLaunchArgument('right_ir_qos_history', default_value='default'),
+        DeclareLaunchArgument('right_ir_qos_depth', default_value='-1'),
         DeclareLaunchArgument('right_ir_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('right_ir_rotation', default_value='-1'),#right_ir rotation degree : 0, 90, 180, 270
         DeclareLaunchArgument('right_ir_flip', default_value='false'),
@@ -161,20 +219,25 @@ def generate_launch_description():
         DeclareLaunchArgument('tf_publish_rate', default_value='0.0'),
         DeclareLaunchArgument('ir_info_url', default_value=''),
         DeclareLaunchArgument('color_info_url', default_value=''),
+
         # Network device settings: default enumerate_net_device is set to true, which will automatically enumerate network devices
         # If you do not want to automatically enumerate network devices,
         # you can set enumerate_net_device to false, net_device_ip to the device's IP address, and net_device_port to the default value of 8090
-        DeclareLaunchArgument('enumerate_net_device', default_value='false'),
+        DeclareLaunchArgument('enumerate_net_device', default_value='true'),
         DeclareLaunchArgument('net_device_ip', default_value=''),
         DeclareLaunchArgument('net_device_port', default_value='0'),
+        DeclareLaunchArgument('device_access_mode', default_value='Default'), # Default, EA or CA . only for 335le
         DeclareLaunchArgument('exposure_range_mode', default_value='default'),#default, ultimate or regular
         DeclareLaunchArgument('log_level', default_value='info'),
         DeclareLaunchArgument('log_file_name', default_value=''),
         DeclareLaunchArgument('enable_publish_extrinsic', default_value='false'),
         DeclareLaunchArgument('enable_d2c_viewer', default_value='false'),
+        DeclareLaunchArgument('depth_colorizer_mode', default_value='none'),
         DeclareLaunchArgument('disparity_to_depth_mode', default_value='HW'),
-        DeclareLaunchArgument('enable_ldp', default_value='true'),
+        DeclareLaunchArgument('enable_ldp', default_value='false'),
         DeclareLaunchArgument('ldp_power_level', default_value='-1'),
+        DeclareLaunchArgument('enable_lrm_obstacle_distance_publish', default_value='false'),
+        DeclareLaunchArgument('lrm_obstacle_distance_publish_rate', default_value='10.0'),
         DeclareLaunchArgument('sync_mode', default_value='standalone'),
         DeclareLaunchArgument('depth_delay_us', default_value='0'),
         DeclareLaunchArgument('color_delay_us', default_value='0'),
@@ -182,6 +245,7 @@ def generate_launch_description():
         DeclareLaunchArgument('trigger_out_delay_us', default_value='0'),
         DeclareLaunchArgument('trigger_out_enabled', default_value='true'),
         DeclareLaunchArgument('enable_fps_boost', default_value='false'),
+        DeclareLaunchArgument('software_trigger_enabled', default_value='true'),
         DeclareLaunchArgument('frames_per_trigger', default_value='1'),
         DeclareLaunchArgument('software_trigger_period', default_value='33'),  # ms
         DeclareLaunchArgument('enable_ptp_config', default_value='false'),#Only for Gemini 335Le
@@ -192,13 +256,20 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_hdr_merge', default_value='false'),
         DeclareLaunchArgument('enable_sequence_id_filter', default_value='false'),
         DeclareLaunchArgument('enable_threshold_filter', default_value='false'),
-        DeclareLaunchArgument('enable_hardware_noise_removal_filter', default_value='false'),
-        DeclareLaunchArgument('enable_noise_removal_filter', default_value='true'),
+        # Empty means that the node will not change the device's current setting.
+        DeclareLaunchArgument('enable_hardware_noise_removal_filter', default_value=''),
+        DeclareLaunchArgument('enable_noise_removal_filter', default_value=''),
+        DeclareLaunchArgument('enable_disp_outliers_filter', default_value='false'),
         DeclareLaunchArgument('enable_spatial_filter', default_value='false'),
         DeclareLaunchArgument('enable_temporal_filter', default_value='false'),
         DeclareLaunchArgument('enable_disparity_to_depth', default_value='true'),
         DeclareLaunchArgument('enable_hole_filling_filter', default_value='false'),
+        DeclareLaunchArgument('enable_spatial_fast_filter', default_value='false'),
+        DeclareLaunchArgument('enable_spatial_moderate_filter', default_value='false'),
         DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
+        DeclareLaunchArgument('enable_enhanced_depth', default_value='false'),
+        DeclareLaunchArgument('enhanced_depth_model_path', default_value=''),
+        DeclareLaunchArgument('enhanced_depth_confidence_threshold', default_value='51'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),
@@ -217,18 +288,26 @@ def generate_launch_description():
         DeclareLaunchArgument('hdr_merge_gain_1', default_value='-1'),
         DeclareLaunchArgument('hdr_merge_exposure_2', default_value='-1'),
         DeclareLaunchArgument('hdr_merge_gain_2', default_value='-1'),
+        DeclareLaunchArgument('spatial_fast_filter_radius', default_value='-1'),
+        DeclareLaunchArgument('spatial_moderate_filter_diff_threshold', default_value='-1'),
+        DeclareLaunchArgument('spatial_moderate_filter_magnitude', default_value='-1'),
+        DeclareLaunchArgument('spatial_moderate_filter_radius', default_value='-1'),
         DeclareLaunchArgument('align_mode', default_value='SW'),
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
-        DeclareLaunchArgument('diagnostic_period', default_value='1.0'),
+        DeclareLaunchArgument('diagnostic_period', default_value='1.0'), # seconds
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_precision', default_value=''),
         DeclareLaunchArgument('device_preset', default_value='Default'),
         DeclareLaunchArgument('device_preset_version', default_value=''),
+        DeclareLaunchArgument('color_preset', default_value='Default'),# color preset name reported by the device
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('laser_energy_level', default_value='-1'),
         DeclareLaunchArgument('enable_sync_host_time', default_value='false'),
         DeclareLaunchArgument('time_sync_period', default_value='6.0'), # seconds
         DeclareLaunchArgument('time_domain', default_value='global'),# global, device, system
+        DeclareLaunchArgument('timestamp_clock_type', default_value=''),# realtime or monotonic, default is realtime.
+        DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
+        DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),
         DeclareLaunchArgument('enable_color_undistortion', default_value='false'),
         DeclareLaunchArgument('enable_depth_undistortion', default_value='false'),
         DeclareLaunchArgument('enable_left_ir_undistortion', default_value='false'),
@@ -271,9 +350,28 @@ def generate_launch_description():
         DeclareLaunchArgument('laser_index0_depth_gain', default_value='16'),
         DeclareLaunchArgument('laser_index0_ir_brightness', default_value='60'),
         DeclareLaunchArgument('laser_index0_ir_ae_max_exposure', default_value='30000'),
+        DeclareLaunchArgument('show_fps_enable', default_value='false'),
+
+        #color image transport plugins
+        DeclareLaunchArgument('color.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
+        #depth image transport plugins
+        DeclareLaunchArgument('depth.image_raw.enable_pub_plugins',default_value='["image_transport/compressedDepth", "image_transport/raw"]'),
+        #infra1
+        DeclareLaunchArgument('left_ir.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
+        #infra2
+        DeclareLaunchArgument('right_ir.image_raw.enable_pub_plugins',default_value='["image_transport/compressed", "image_transport/raw", "image_transport/theora"]'),
+
+        # Force IP parameters
+        DeclareLaunchArgument("force_ip_enable", default_value="false"),  # Whether to enable Force IP function
+        DeclareLaunchArgument("force_ip_mac", default_value=""),  # If multiple cameras are connected, specify target MAC (e.g. "54:14:FD:06:07:DA")
+        DeclareLaunchArgument("force_ip_address", default_value="192.168.1.10"),  # Static IP address to assign
+        DeclareLaunchArgument("force_ip_subnet_mask", default_value="255.255.255.0"),  # Subnet mask used for static IP
+        DeclareLaunchArgument("force_ip_gateway", default_value="192.168.1.1"),  # Gateway address used for static IP
+
+        DeclareLaunchArgument('intra_camera_sync_reference', default_value=""),#Start, Middle or End
+        DeclareLaunchArgument('attach_to_shared_component_container', default_value='false'),
+        DeclareLaunchArgument('component_container_name', default_value='orbbec_container'),
         DeclareLaunchArgument('use_intra_process_comms', default_value='false'),
-        DeclareLaunchArgument('attach_component_container_enable', default_value='false'),
-        DeclareLaunchArgument('attach_component_container_name', default_value='orbbec_container'),
 
     ]
 
@@ -295,32 +393,37 @@ def generate_launch_description():
                 )
             ]
         else:
-            attach_to_shared_component_container_arg = LaunchConfiguration('attach_to_shared_component_container', default=False)
-            component_container_name_arg = LaunchConfiguration('component_container_name', default='orbbec_container')
-
-            orbbec_container = Node(
-                name=component_container_name_arg,
-                package='rclcpp_components',
-                executable='component_container_mt',
-                output='screen',
-                condition=UnlessCondition(attach_to_shared_component_container_arg)
+            attach_to_shared_container = LaunchConfiguration(
+                "attach_to_shared_component_container"
             )
-            return [
-                orbbec_container,
-                LoadComposableNodes(
-                  target_container=component_container_name_arg,
-                  composable_node_descriptions=[
+            container_name = LaunchConfiguration("component_container_name")
+            camera_container = Node(
+                package="rclcpp_components",
+                executable="component_container_mt",
+                name=container_name,
+                output="screen",
+                condition=UnlessCondition(attach_to_shared_container),
+            )
+            camera_component = LoadComposableNodes(
+                target_container=container_name,
+                composable_node_descriptions=[
                     ComposableNode(
-                      namespace=LaunchConfiguration("camera_name"),
-                      name=LaunchConfiguration("camera_name"),
-                      package='orbbec_camera',
-                      plugin='orbbec_camera::OBCameraNodeDriver',
-                      parameters=params,
-                      extra_arguments=[{'use_intra_process_comms': LaunchConfiguration("use_intra_process_comms")}],
+                        namespace=LaunchConfiguration("camera_name"),
+                        package="orbbec_camera",
+                        plugin="orbbec_camera::OBCameraNodeDriver",
+                        name=LaunchConfiguration("camera_name"),
+                        parameters=params,
+                        extra_arguments=[
+                            {
+                                "use_intra_process_comms": LaunchConfiguration(
+                                    "use_intra_process_comms"
+                                )
+                            }
+                        ],
                     )
-                  ]
-                )
-            ]
+                ],
+            )
+            return [camera_container, camera_component]
 
     return LaunchDescription(
         args + [
