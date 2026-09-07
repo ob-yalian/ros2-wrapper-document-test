@@ -1,18 +1,18 @@
-# GMSL_camera
+# GMSL Multi-Camera Synchronization
 
-> This section describes how to use GMSL cameras in OrbbecSDK_ROS2.
+> This section describes how to synchronize multiple GMSL-connected Gemini 330 Series cameras in OrbbecSDK_ROS2.
 
-You can find example usage code in the [example](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples).
+The example is available in [gmsl_multi_camera_sync](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples/gmsl_multi_camera_sync).
 
-## Single GMSL camera
+## Configure device file permissions
 
-The usage of GMSL camera in OrbbecSDK_ROS2 is the same as that of Gemini 330 series camera via USB. ROS2 v2.10.1 supports Gemini 335Lg, Gemini 338Lg, Gemini 345Lg, and Gemini 305g.
+Before starting the cameras, grant access to the camera synchronization device:
 
 ```bash
-ros2 launch orbbec_camera gemini_330_gmsl.launch.py
+sudo chmod 777 /dev/camsync
 ```
 
-## Multi GMSL camera
+## Configure the cameras
 
 To get the `usb_port` of the GMSL camera, plug in the camera and run the following command in the terminal:
 
@@ -20,38 +20,26 @@ To get the `usb_port` of the GMSL camera, plug in the camera and run the followi
 ros2 run orbbec_camera list_devices_node
 ```
 
-For example, the obtained gmsl camera `usb_port`: `gmsl2-1`
+For example, a reported GMSL camera `usb_port` may be `gmsl2-1`.
 
-Go to the [multi_gmsl_camera.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/gmsl_camera/multi_gmsl_camera.launch.py) file and change the `usb_port`.
+Update the `usb_port` values in [multi_gmsl_camera_synced.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/gmsl_multi_camera_sync/multi_gmsl_camera_synced.launch.py) to match the GMSL links reported by your system. The example uses the standard `gemini_330_series.launch.py` for both cameras.
 
-```bash
-ros2 launch orbbec_camera multi_gmsl_camera.launch.py
-```
+## Synchronization setup
 
-> Note: By default, multi_gmsl_camera.launch.py only starts color and depth. If you want to start other sensors, please go to [camera_secondary_params.yaml](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/config/camera_secondary_params.yaml) to modify them.
-
-Use `gemini_330_gmsl.launch.py` for Gemini 335Lg / 338Lg, `gemini_301_series.launch.py` for Gemini 305g, and `gemini345_lg.launch.py` for Gemini 345Lg when composing a multi-camera launch.
-
-## Multi GMSL camera synced
-
-First, please see how to use [multi_camera_synced](./multi_camera_synced.md).
-
-In addition, GMSL multi-camera synced does not require Multi-Camera Sync Hub Pro, so there is no need to set the `primary` mode. Each GMSL camera is `secondary`.
+GMSL multi-camera synchronization does not require Multi-Camera Sync Hub Pro. Both cameras use `secondary_synced` mode. The receiving camera starts first; the camera that enables the host-side GMSL trigger starts two seconds later.
 
 **Additional Parameter Settings**
 
-* `gmsl_trigger_fps` : set hardware soc trigger source frame rate.
-* `enable_gmsl_trigger` : enable hardware soc trigger.
+* `gmsl_trigger_fps`: Sets the hardware SoC trigger source frame rate.
+* `enable_gmsl_trigger`: Enables the hardware SoC trigger. Enable it on only one camera in the group.
 
 **Run the launch**
-
-Please refer to the configuration in [multi_gmsl_camera_synced.launch.py.](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/gmsl_camera/multi_gmsl_camera_synced.launch.py)
 
 ```bash
 ros2 launch orbbec_camera multi_gmsl_camera_synced.launch.py
 ```
 
-> Note: By default, multi_gmsl_camera_synced.launch.py only starts color and depth. If you want to start other sensors, please go to [camera_secondary_params.yaml](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/config/camera_secondary_params.yaml) and [camera_params.yaml](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/config/camera_params.yaml) to modify them.
+> Note: Both cameras load [camera_secondary_params.yaml](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/config/camera_secondary_params.yaml), which enables color and depth by default. Modify that file to configure other streams.
 
 ## Usage Limitations of GMSL Cameras
 

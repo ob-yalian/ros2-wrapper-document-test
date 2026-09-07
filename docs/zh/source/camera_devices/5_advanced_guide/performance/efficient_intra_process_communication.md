@@ -26,7 +26,21 @@
 
   以相同方式加载其他组件节点（封装器话题的消费者）。
 
-**使用启动文件**
+**使用多相机共享容器示例**
+
+[multi_camera_shared_container](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples/multi_camera_shared_container) 示例创建一个多线程组件容器，并将两个 Gemini 330 系列相机组件加载到该容器中。修改 `multi_camera_shared_container.launch.py` 中两台相机的 `usb_port` 后，运行：
+
+```bash
+ros2 launch orbbec_camera multi_camera_shared_container.launch.py
+```
+
+该示例向两个相机 include 传递以下参数：
+
+* `attach_to_shared_component_container=true`：将相机组件加载到已有容器中，而不是新建容器。
+* `component_container_name=shared_orbbec_container`：指定目标容器，其值必须与父 launch 文件创建的容器名称一致。
+* `use_intra_process_comms=true`：为相机组件启用进程内通信。
+
+**使用单相机进程内通信演示 launch**
 
 ```bash
 ros2 launch orbbec_camera gemini_intra_process_demo_launch.py

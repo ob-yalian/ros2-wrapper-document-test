@@ -26,7 +26,21 @@ Further details on efficient intra-process communication can be found [here](htt
 
   Load other component nodes (consumers of the wrapper topics) in the same way.
 
-**Using a launch file**
+**Using the shared multi-camera container example**
+
+The [multi_camera_shared_container](https://github.com/orbbec/OrbbecSDK_ROS2/tree/v2-main/orbbec_camera/examples/multi_camera_shared_container) example creates one multithreaded component container and loads two Gemini 330 Series camera components into it. Update the two `usb_port` values in `multi_camera_shared_container.launch.py`, then run:
+
+```bash
+ros2 launch orbbec_camera multi_camera_shared_container.launch.py
+```
+
+The example passes the following arguments to both camera includes:
+
+* `attach_to_shared_component_container=true`: Loads the camera component into an existing container instead of creating another container.
+* `component_container_name=shared_orbbec_container`: Selects the target container. The value must match the name of the container created by the parent launch file.
+* `use_intra_process_comms=true`: Enables intra-process communication for the camera component.
+
+**Using the single-camera intra-process demonstration launch**
 
 ```bash
 ros2 launch orbbec_camera gemini_intra_process_demo_launch.py

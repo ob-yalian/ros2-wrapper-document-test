@@ -38,7 +38,7 @@ ros2 launch orbbec_camera femto_mega.launch.py enumerate_net_device:=false net_d
 
 **多个网络相机**
 
-以 [multi_net_camera.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/net_camera/multi_net_camera.launch.py) 为例：
+以 [multi_net_camera.launch.py](https://github.com/orbbec/OrbbecSDK_ROS2/blob/v2-main/orbbec_camera/examples/multi_net_camera/multi_net_camera.launch.py) 为例：
 
 ```bash
 ros2 launch orbbec_camera multi_net_camera.launch.py
