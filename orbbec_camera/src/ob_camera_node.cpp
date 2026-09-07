@@ -5792,6 +5792,11 @@ void OBCameraNode::syncSoftwareAlignment() {
       align_filter_ = std::make_unique<ob::Align>(align_target_stream_);
       RCLCPP_INFO_STREAM(logger_, "set align mode to " << align_mode_);
     }
+    if (align_target_stream_ != OB_STREAM_COLOR) {
+      releaseGlobalImageTransportPublisher(*node_, "depth/image_unaligned");
+      depth_unaligned_publisher_.reset();
+      return;
+    }
     if (!depth_unaligned_publisher_) {
       const auto depth_image_qos_profile = getImageQosProfile(DEPTH);
       if (use_intra_process_) {
