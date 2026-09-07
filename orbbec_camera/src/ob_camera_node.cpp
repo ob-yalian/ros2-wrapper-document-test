@@ -6036,7 +6036,9 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
   }
   auto frame_timestamp = getFrameTimestampUs(depth_frame);
   auto timestamp = fromUsToROSTime(frame_timestamp);
-  std::string frame_id = depth_registration_ ? optical_frame_id_[COLOR] : optical_frame_id_[DEPTH];
+  std::string frame_id = depth_registration_ && align_target_stream_ == OB_STREAM_COLOR
+                             ? depth_aligned_frame_id_[DEPTH]
+                             : optical_frame_id_[DEPTH];
   if (!cloud_frame_id_.empty()) {
     frame_id = cloud_frame_id_;
   }
@@ -6536,11 +6538,11 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       }
     }
     if (depth_registration_ && align_filter_ && depth_frame) {
-      publishRawDepthImage(depth_frame);
-      auto target_frame_type = STREAM_TYPE_TO_FRAME_TYPE.at(align_target_stream_);
-      if (!frame_set->getFrame(target_frame_type) || !color_frame) {
-        RCLCPP_DEBUG_STREAM(
-            logger_, "Depth registration requires depth and color frames, skip software alignment");
+      if (align_target_stream_ == OB_STREAM_COLOR) {
+        publishRawDepthImage(depth_frame);
+      }
+      if (align_target_stream_ == OB_STREAM_DEPTH && !color_frame) {
+        RCLCPP_DEBUG_STREAM(logger_, "C2D alignment requires a color frame, skip alignment");
       } else {
         auto align_color_frame = color_frame;
         if (align_target_stream_ == OB_STREAM_DEPTH) {
@@ -6568,7 +6570,7 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
             frame_set->pushFrame(color_frame);
           }
         }
-        if (align_color_frame) {
+        if (align_target_stream_ != OB_STREAM_DEPTH || align_color_frame) {
           if (auto new_frame = align_filter_->process(frame_set)) {
             auto new_frame_set = new_frame->as<ob::FrameSet>();
             CHECK_NOTNULL(new_frame_set.get());
@@ -6583,8 +6585,8 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       }
     } else {
       RCLCPP_DEBUG_ONCE(logger_,
-                        "Depth registration is disabled or align filter is null or depth frame is "
-                        "null or color frame is null");
+                        "Depth registration is disabled, align filter is null, or depth frame is "
+                        "null");
     }
 
     if (enable_enhanced_depth_.load()) {
@@ -7077,7 +7079,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     distortion = camera_params.rgbDistortion;
   }
   std::string frame_id = optical_frame_id_[stream_index];
-  if (depth_registration_ && stream_index == DEPTH) {
+  if (depth_registration_ && align_target_stream_ == OB_STREAM_COLOR && stream_index == DEPTH) {
     frame_id = depth_aligned_frame_id_[stream_index];
   }
   sensor_msgs::msg::CameraInfo camera_info{};
