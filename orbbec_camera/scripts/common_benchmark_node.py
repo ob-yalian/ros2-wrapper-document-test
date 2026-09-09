@@ -26,6 +26,14 @@ from sensor_msgs.msg import Image
 from tabulate import tabulate
 
 CAMERA_NODE_NAMES = ["component_container", "orbbec_camera_node", "nodelet"]
+MONITORED_STREAMS = (
+    "color",
+    "depth",
+    "left_ir",
+    "right_ir",
+    "left_color",
+    "right_color",
+)
 DOCUMENTATION_URL = (
     "https://orbbec.github.io/OrbbecSDK_ROS2/en/source/camera_devices/"
     "6_benchmark/benchmark_tools.html"
@@ -110,13 +118,18 @@ class TopicTracker:
     def on_msg(self, header, avg_fps):
         stamp = header.stamp.sec + header.stamp.nanosec * 1e-9
         self.received += 1
+        observed_fps = None
 
-        if self.last_time is not None and avg_fps > 0:
+        if self.last_time is not None:
             dt = stamp - self.last_time
-            expected_interval = 1.0 / avg_fps
-            self.drop_frames += estimate_dropped_frames(dt, expected_interval)
+            if dt > 0:
+                observed_fps = 1.0 / dt
+                if avg_fps > 0:
+                    expected_interval = 1.0 / avg_fps
+                    self.drop_frames += estimate_dropped_frames(dt, expected_interval)
 
         self.last_time = stamp
+        return stamp, observed_fps
 
     def frames_loss_rate(self):
         total = self.received + self.drop_frames
@@ -154,8 +167,8 @@ class CameraMonitorNode(Node):
                 "cpu_stats": make_stat(),
                 "ram_stats": make_stat(),
                 "trackers": {
-                    "color": TopicTracker(logger=self.get_logger()),
-                    "depth": TopicTracker(logger=self.get_logger())
+                    stream: TopicTracker(logger=self.get_logger())
+                    for stream in MONITORED_STREAMS
                 }
             }
 
@@ -177,18 +190,15 @@ class CameraMonitorNode(Node):
                 lambda msg, name=camera_name: self.status_callback(msg, name),
                 5
             )
-            self.create_subscription(
-                Image,
-                f"{ns}/color/image_raw",
-                lambda msg, name=camera_name: self.image_callback(msg, name, "color"),
-                5
-            )
-            self.create_subscription(
-                Image,
-                f"{ns}/depth/image_raw",
-                lambda msg, name=camera_name: self.image_callback(msg, name, "depth"),
-                5
-            )
+            for stream in MONITORED_STREAMS:
+                self.create_subscription(
+                    Image,
+                    f"{ns}/{stream}/image_raw",
+                    lambda msg, name=camera_name, stream_name=stream: self.image_callback(
+                        msg, name, stream_name
+                    ),
+                    5,
+                )
 
         # timer runs every 1s to update system stats, log csv and print status
         self.timer = self.create_timer(1.0, self.timer_callback)
@@ -318,14 +328,27 @@ class CameraMonitorNode(Node):
         self.update_stats(camera["stats"], "depth_delay", msg.depth_delay_ms_cur, msg.depth_delay_ms_min, msg.depth_delay_ms_max, msg.depth_delay_ms_avg)
 
     def image_callback(self, msg: Image, camera_name: str, stream: str):
-        if stream not in ("color", "depth"):
+        if stream not in MONITORED_STREAMS:
             return
-        header = msg.header
         camera = self.cameras[camera_name]
         tracker = camera["trackers"][stream]
         # Prefer a user-specified ideal fps for drop detection when provided.
-        fps_to_use = self.ideal_fps if (self.ideal_fps and self.ideal_fps > 0.0) else camera["stats"][f"{stream}_fps"]["avg"]
-        tracker.on_msg(header, fps_to_use)
+        fps_to_use = (
+            self.ideal_fps
+            if self.ideal_fps and self.ideal_fps > 0.0
+            else camera["stats"][f"{stream}_fps"]["avg"]
+        )
+        stamp, observed_fps = tracker.on_msg(msg.header, fps_to_use)
+
+        # DeviceStatus currently reports detailed values only for the main color/depth streams.
+        # Derive equivalent statistics from image timestamps for the side streams.
+        if stream not in ("color", "depth"):
+            if observed_fps is not None:
+                self.update_sample_stat(camera["stats"], f"{stream}_fps", observed_fps)
+            delay_ms = (self.get_clock().now().nanoseconds * 1e-9 - stamp) * 1000.0
+            # Device-domain timestamps are not comparable with the ROS clock.
+            if 0.0 <= delay_ms <= 60000.0:
+                self.update_sample_stat(camera["stats"], f"{stream}_delay", delay_ms)
 
     def update_stats(self, stats, key, cur, min_val, max_val, avg_val):
         if min_val <= 1e-3 or avg_val < 0:  # ignore invalid data
@@ -337,6 +360,17 @@ class CameraMonitorNode(Node):
         s["avg"] = s["sum"] / s["count"] if s["count"] > 0 else 0.0
         s["min"] = min(s["min"], min_val)
         s["max"] = max(s["max"], max_val)
+
+    def update_sample_stat(self, stats, key, value):
+        if value is None or value < 0.0:
+            return
+        s = stats[key]
+        s["cur"] = value
+        s["count"] += 1
+        s["sum"] += value
+        s["avg"] = s["sum"] / s["count"]
+        s["min"] = min(s["min"], value)
+        s["max"] = max(s["max"], value)
 
     def update_sys_stat(self, stat_dict, value, online=True):
         stat_dict["cur"] = value
@@ -365,17 +399,28 @@ class CameraMonitorNode(Node):
 
     def build_csv_header(self):
         header = ["time(s)"]
-        camera_fields = [
-            "connection_type", "status_online", "disconnects",
-            "color_fps_cur", "color_fps_avg", "color_fps_min", "color_fps_max",
-            "color_delay_cur", "color_delay_avg", "color_delay_min", "color_delay_max",
-            "depth_fps_cur", "depth_fps_avg", "depth_fps_min", "depth_fps_max",
-            "depth_delay_cur", "depth_delay_avg", "depth_delay_min", "depth_delay_max",
-            "cpu_cur", "cpu_avg", "cpu_min", "cpu_max",
-            "ram_cur", "ram_avg", "ram_min", "ram_max",
-            "color_frames_loss", "color_frames_loss_rate(%)",
-            "depth_frames_loss", "depth_frames_loss_rate(%)"
-        ]
+        camera_fields = ["connection_type", "status_online", "disconnects"]
+        for stream in MONITORED_STREAMS:
+            camera_fields.extend(
+                [
+                    f"{stream}_fps_cur",
+                    f"{stream}_fps_avg",
+                    f"{stream}_fps_min",
+                    f"{stream}_fps_max",
+                    f"{stream}_delay_cur",
+                    f"{stream}_delay_avg",
+                    f"{stream}_delay_min",
+                    f"{stream}_delay_max",
+                    f"{stream}_frames_loss",
+                    f"{stream}_frames_loss_rate(%)",
+                ]
+            )
+        camera_fields.extend(
+            [
+                "cpu_cur", "cpu_avg", "cpu_min", "cpu_max",
+                "ram_cur", "ram_avg", "ram_min", "ram_max",
+            ]
+        )
         for camera_name in self.camera_names:
             header.extend([f"{camera_name}_{field}" for field in camera_fields])
 
@@ -386,9 +431,6 @@ class CameraMonitorNode(Node):
         return header
 
     def build_camera_csv_values(self, camera):
-        color_tracker = camera["trackers"]["color"]
-        depth_tracker = camera["trackers"]["depth"]
-
         def safe(k):
             v = camera["stats"].get(k, {})
             return (
@@ -398,29 +440,46 @@ class CameraMonitorNode(Node):
                 self.format_csv_number(v.get("max", 0.0)),
             )
 
-        if not camera["prev_online"]:
-            return [
-                camera["connection_type"], camera["prev_online"], camera["disconnect_count"],
-                *["N/A"] * 16,
-                round(camera["cpu_stats"]["cur"], 2), "N/A", "N/A", "N/A",
-                round(camera["ram_stats"]["cur"], 2), "N/A", "N/A", "N/A",
-                color_tracker.drop_frames, round(color_tracker.frames_loss_rate() * 100.0, 3),
-                depth_tracker.drop_frames, round(depth_tracker.frames_loss_rate() * 100.0, 3)
-            ]
-
-        return [
-            camera["connection_type"], camera["prev_online"], camera["disconnect_count"],
-            *safe("color_fps"),
-            *safe("color_delay"),
-            *safe("depth_fps"),
-            *safe("depth_delay"),
-            round(camera["cpu_stats"]["cur"], 2), round(camera["cpu_stats"]["avg"], 2),
-            self.format_csv_number(camera["cpu_stats"]["min"]), self.format_csv_number(camera["cpu_stats"]["max"]),
-            round(camera["ram_stats"]["cur"], 2), round(camera["ram_stats"]["avg"], 2),
-            self.format_csv_number(camera["ram_stats"]["min"]), self.format_csv_number(camera["ram_stats"]["max"]),
-            color_tracker.drop_frames, round(color_tracker.frames_loss_rate() * 100.0, 3),
-            depth_tracker.drop_frames, round(depth_tracker.frames_loss_rate() * 100.0, 3)
+        values = [
+            camera["connection_type"],
+            camera["prev_online"],
+            camera["disconnect_count"],
         ]
+        for stream in MONITORED_STREAMS:
+            tracker = camera["trackers"][stream]
+            if camera["prev_online"]:
+                values.extend(safe(f"{stream}_fps"))
+                values.extend(safe(f"{stream}_delay"))
+            else:
+                values.extend(["N/A"] * 8)
+            values.extend(
+                [
+                    tracker.drop_frames,
+                    round(tracker.frames_loss_rate() * 100.0, 3),
+                ]
+            )
+
+        if camera["prev_online"]:
+            values.extend(
+                [
+                    round(camera["cpu_stats"]["cur"], 2),
+                    round(camera["cpu_stats"]["avg"], 2),
+                    self.format_csv_number(camera["cpu_stats"]["min"]),
+                    self.format_csv_number(camera["cpu_stats"]["max"]),
+                    round(camera["ram_stats"]["cur"], 2),
+                    round(camera["ram_stats"]["avg"], 2),
+                    self.format_csv_number(camera["ram_stats"]["min"]),
+                    self.format_csv_number(camera["ram_stats"]["max"]),
+                ]
+            )
+        else:
+            values.extend(
+                [
+                    round(camera["cpu_stats"]["cur"], 2), "N/A", "N/A", "N/A",
+                    round(camera["ram_stats"]["cur"], 2), "N/A", "N/A", "N/A",
+                ]
+            )
+        return values
 
     def format_csv_number(self, value):
         if value == float("inf") or value == float("-inf"):
@@ -436,7 +495,7 @@ class CameraMonitorNode(Node):
         rows = []
         for camera_name in self.camera_names:
             camera = self.cameras[camera_name]
-            for stream in ["color", "depth"]:
+            for stream in MONITORED_STREAMS:
                 fps_key = f"{stream}_fps"
                 delay_key = f"{stream}_delay"
                 topic_name = f"/{camera_name}/{stream}/image_raw"

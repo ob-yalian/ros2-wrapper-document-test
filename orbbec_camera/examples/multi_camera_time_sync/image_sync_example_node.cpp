@@ -33,6 +33,7 @@
 #include <opencv2/opencv.hpp>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using Image = sensor_msgs::msg::Image;
@@ -69,7 +70,7 @@ class ImageSyncNode : public rclcpp::Node {
     if (sync_topics_.empty()) {
       sync_topics_ = discover_image_topics();
       RCLCPP_INFO(this->get_logger(),
-                  "Parameter sync_topics is empty. Auto-discovered %zu color/depth image topics.",
+                  "Parameter sync_topics is empty. Auto-discovered %zu supported image topics.",
                   sync_topics_.size());
     } else {
       RCLCPP_INFO(this->get_logger(), "Using %zu image topics from parameter sync_topics.",
@@ -166,6 +167,24 @@ class ImageSyncNode : public rclcpp::Node {
            str.compare(str.size() - suffix.size(), suffix.size(), suffix) == 0;
   }
 
+  static const std::array<std::pair<const char *, const char *>, 7> &supported_stream_suffixes() {
+    static const std::array<std::pair<const char *, const char *>, 7> suffixes = {{
+        {"left_color", "/left_color/image_raw"},
+        {"right_color", "/right_color/image_raw"},
+        {"left_ir", "/left_ir/image_raw"},
+        {"right_ir", "/right_ir/image_raw"},
+        {"color", "/color/image_raw"},
+        {"depth", "/depth/image_raw"},
+        {"ir", "/ir/image_raw"},
+    }};
+    return suffixes;
+  }
+
+  static bool is_supported_image_topic(const std::string &topic) {
+    return std::any_of(supported_stream_suffixes().begin(), supported_stream_suffixes().end(),
+                       [&topic](const auto &entry) { return has_suffix(topic, entry.second); });
+  }
+
   static double stamp_to_seconds(const builtin_interfaces::msg::Time &stamp) {
     return static_cast<double>(stamp.sec) + static_cast<double>(stamp.nanosec) * 1e-9;
   }
@@ -180,7 +199,7 @@ class ImageSyncNode : public rclcpp::Node {
       const auto names_and_types = this->get_topic_names_and_types();
       for (const auto &entry : names_and_types) {
         const auto &topic = entry.first;
-        if (!has_suffix(topic, "/color/image_raw") && !has_suffix(topic, "/depth/image_raw")) {
+        if (!is_supported_image_topic(topic)) {
           continue;
         }
 
@@ -207,8 +226,8 @@ class ImageSyncNode : public rclcpp::Node {
   void validate_topics() {
     if (sync_topics_.empty()) {
       throw std::runtime_error(
-          "No image topics to synchronize. Set parameter sync_topics or start color/depth cameras "
-          "before this node.");
+          "No image topics to synchronize. Set parameter sync_topics or start supported camera "
+          "streams before this node.");
     }
 
     std::vector<std::string> deduplicated_topics;
@@ -233,7 +252,7 @@ class ImageSyncNode : public rclcpp::Node {
           "Official ROS message_filters::Synchronizer supports at most 9 inputs, and this example "
           "supports 1-8 image topics. Found " +
           std::to_string(sync_topics_.size()) +
-          " color/depth image topics. Please pass <= 8 topics with sync_topics or split the sync "
+          " image topics. Please pass <= 8 topics with sync_topics or split the sync "
           "into multiple stages.");
     }
   }
@@ -247,14 +266,13 @@ class ImageSyncNode : public rclcpp::Node {
       info.image_type = "image";
       info.camera_name = topic;
 
-      const auto color_pos = topic.rfind("/color/image_raw");
-      const auto depth_pos = topic.rfind("/depth/image_raw");
-      if (color_pos != std::string::npos) {
-        info.image_type = "color";
-        info.camera_name = topic.substr(0, color_pos);
-      } else if (depth_pos != std::string::npos) {
-        info.image_type = "depth";
-        info.camera_name = topic.substr(0, depth_pos);
+      for (const auto &entry : supported_stream_suffixes()) {
+        const std::string suffix = entry.second;
+        if (has_suffix(topic, suffix)) {
+          info.image_type = entry.first;
+          info.camera_name = topic.substr(0, topic.size() - suffix.size());
+          break;
+        }
       }
 
       const auto slash_pos = info.camera_name.find_last_of('/');
@@ -550,10 +568,8 @@ class ImageSyncNode : public rclcpp::Node {
     const double avg_diff = diff_sum_ / count_;
 
     std::cout << "\nImage Timestamp Difference Statistics" << std::endl;
-    std::cout << "cur: " << cur << " ms"
-              << " avg: " << avg_diff << " ms"
-              << " max: " << max_diff_ << " ms"
-              << " min: " << min_diff_ << " ms" << std::endl;
+    std::cout << "cur: " << cur << " ms" << " avg: " << avg_diff << " ms" << " max: " << max_diff_
+              << " ms" << " min: " << min_diff_ << " ms" << std::endl;
 
     if (last_time_ == 0.0) {
       last_time_ = base_t;
