@@ -3667,11 +3667,11 @@ void OBCameraNode::setupProfiles() {
       if (selected_profile->format() == OB_FORMAT_BGRA) {
         images_[elem] = cv::Mat(height_[elem], width_[elem], CV_8UC4, cv::Scalar(0, 0, 0, 0));
         encoding_[elem] = sensor_msgs::image_encodings::BGRA8;
-        unit_step_size_[COLOR] = 4 * sizeof(uint8_t);
+        unit_step_size_[elem] = 4 * sizeof(uint8_t);
       } else if (selected_profile->format() == OB_FORMAT_RGBA) {
         images_[elem] = cv::Mat(height_[elem], width_[elem], CV_8UC4, cv::Scalar(0, 0, 0, 0));
         encoding_[elem] = sensor_msgs::image_encodings::RGBA8;
-        unit_step_size_[COLOR] = 4 * sizeof(uint8_t);
+        unit_step_size_[elem] = 4 * sizeof(uint8_t);
       } else {
         images_[elem] =
             cv::Mat(height_[elem], width_[elem], image_format_[elem], cv::Scalar(0, 0, 0));
