@@ -3232,7 +3232,7 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  if (isGemini335PID(pid_)) {
+  if (isGemini335PID(pid_) || isGemini305SeriesPID(pid_)) {
     auto left_ir_sensor = device_->getSensor(OB_SENSOR_IR_LEFT);
     left_ir_filter_list_ = left_ir_sensor->createRecommendedFilters();
     if (left_ir_filter_list_.empty()) {
@@ -3273,7 +3273,7 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  if (isGemini335PID(pid_)) {
+  if (isGemini335PID(pid_) || isGemini305SeriesPID(pid_)) {
     auto right_ir_sensor = device_->getSensor(OB_SENSOR_IR_RIGHT);
     right_ir_filter_list_ = right_ir_sensor->createRecommendedFilters();
     if (right_ir_filter_list_.empty()) {
