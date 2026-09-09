@@ -3532,35 +3532,44 @@ void OBCameraNode::selectBaseStream() {
 
 void OBCameraNode::printSensorProfiles(const std::shared_ptr<ob::Sensor> &sensor) {
   auto profiles = sensor->getStreamProfileList();
+  const auto sensor_type = sensor->getType();
   for (size_t i = 0; i < profiles->getCount(); i++) {
     auto origin_profile = profiles->getProfile(i);
-    if (sensor->getType() == OB_SENSOR_COLOR) {
+    if (sensor_type == OB_SENSOR_COLOR || sensor_type == OB_SENSOR_COLOR_LEFT ||
+        sensor_type == OB_SENSOR_COLOR_RIGHT) {
       auto profile = origin_profile->as<ob::VideoStreamProfile>();
-      RCLCPP_INFO_STREAM(
-          logger_, "color profile: " << profile->getWidth() << "x" << profile->getHeight() << " "
-                                     << profile->getFps() << "fps " << profile->getFormat());
-    } else if (sensor->getType() == OB_SENSOR_DEPTH) {
+      const char *stream_name = sensor_type == OB_SENSOR_COLOR_LEFT    ? "left_color"
+                                : sensor_type == OB_SENSOR_COLOR_RIGHT ? "right_color"
+                                                                       : "color";
+      RCLCPP_INFO_STREAM(logger_, stream_name << " profile: " << profile->getWidth() << "x"
+                                              << profile->getHeight() << " " << profile->getFps()
+                                              << "fps " << profile->getFormat());
+    } else if (sensor_type == OB_SENSOR_DEPTH) {
       auto profile = origin_profile->as<ob::VideoStreamProfile>();
       RCLCPP_INFO_STREAM(
           logger_, "depth profile: " << profile->getWidth() << "x" << profile->getHeight() << " "
                                      << profile->getFps() << "fps " << profile->getFormat());
-    } else if (sensor->getType() == OB_SENSOR_IR) {
+    } else if (sensor_type == OB_SENSOR_IR || sensor_type == OB_SENSOR_IR_LEFT ||
+               sensor_type == OB_SENSOR_IR_RIGHT) {
       auto profile = origin_profile->as<ob::VideoStreamProfile>();
-      RCLCPP_INFO_STREAM(logger_, "ir profile: " << profile->getWidth() << "x"
-                                                 << profile->getHeight() << " " << profile->getFps()
-                                                 << "fps " << profile->getFormat());
-    } else if (sensor->getType() == OB_SENSOR_ACCEL) {
+      const char *stream_name = sensor_type == OB_SENSOR_IR_LEFT    ? "left_ir"
+                                : sensor_type == OB_SENSOR_IR_RIGHT ? "right_ir"
+                                                                    : "ir";
+      RCLCPP_INFO_STREAM(logger_, stream_name << " profile: " << profile->getWidth() << "x"
+                                              << profile->getHeight() << " " << profile->getFps()
+                                              << "fps " << profile->getFormat());
+    } else if (sensor_type == OB_SENSOR_ACCEL) {
       auto profile = origin_profile->as<ob::AccelStreamProfile>();
       RCLCPP_INFO_STREAM(logger_, "accel profile: sampleRate " << profile->getSampleRate()
                                                                << "  full scale_range "
                                                                << profile->getFullScaleRange());
-    } else if (sensor->getType() == OB_SENSOR_GYRO) {
+    } else if (sensor_type == OB_SENSOR_GYRO) {
       auto profile = origin_profile->as<ob::GyroStreamProfile>();
       RCLCPP_INFO_STREAM(logger_, "gyro profile: sampleRate " << profile->getSampleRate()
                                                               << "  full scale_range "
                                                               << profile->getFullScaleRange());
     } else {
-      RCLCPP_INFO_STREAM(logger_, "unknown profile: " << magic_enum::enum_name(sensor->getType()));
+      RCLCPP_INFO_STREAM(logger_, "unknown profile: " << magic_enum::enum_name(sensor_type));
     }
   }
 }
