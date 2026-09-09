@@ -741,7 +741,11 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     timestamp_config.csv_file_path = frame_timestamp_csv_file_;
     timestamp_config.frame_sync_enabled = enable_frame_sync_;
     timestamp_config.color_enabled = enable_stream_[COLOR];
+    timestamp_config.left_color_enabled = enable_stream_[COLOR_LEFT];
+    timestamp_config.right_color_enabled = enable_stream_[COLOR_RIGHT];
     timestamp_config.depth_enabled = enable_stream_[DEPTH];
+    timestamp_config.left_ir_enabled = enable_stream_[INFRA1];
+    timestamp_config.right_ir_enabled = enable_stream_[INFRA2];
     timestamp_config.imu_sync_enabled = enable_sync_output_accel_gyro_;
     timestamp_config.accel_enabled = enable_stream_[ACCEL];
     timestamp_config.gyro_enabled = enable_stream_[GYRO];
@@ -761,6 +765,8 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   is_camera_node_initialized_ = true;
 
   fps_counter_color_ = std::make_unique<FpsCounter>("Color", logger_, 1);
+  fps_counter_left_color_ = std::make_unique<FpsCounter>("Left Color", logger_, 1);
+  fps_counter_right_color_ = std::make_unique<FpsCounter>("Right Color", logger_, 1);
   fps_counter_depth_ = std::make_unique<FpsCounter>("Depth", logger_, 1);
   fps_counter_left_ir_ = std::make_unique<FpsCounter>("Left Ir", logger_, 1);
   fps_counter_right_ir_ = std::make_unique<FpsCounter>("Right Ir", logger_, 1);
@@ -770,12 +776,18 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     log_level = LogLevel::INFO;
   }
   fps_counter_color_->setLogLevel(log_level);
+  fps_counter_left_color_->setLogLevel(log_level);
+  fps_counter_right_color_->setLogLevel(log_level);
   fps_counter_depth_->setLogLevel(log_level);
   fps_counter_left_ir_->setLogLevel(log_level);
   fps_counter_right_ir_->setLogLevel(log_level);
 
   fps_delay_status_color_ = std::make_unique<FpsDelayStatus>(logger_);
+  fps_delay_status_left_color_ = std::make_unique<FpsDelayStatus>(logger_);
+  fps_delay_status_right_color_ = std::make_unique<FpsDelayStatus>(logger_);
   fps_delay_status_depth_ = std::make_unique<FpsDelayStatus>(logger_);
+  fps_delay_status_left_ir_ = std::make_unique<FpsDelayStatus>(logger_);
+  fps_delay_status_right_ir_ = std::make_unique<FpsDelayStatus>(logger_);
 }
 
 template <class T>
@@ -6473,6 +6485,20 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
         final_color_frame, final_depth_frame, frame_set_arrival_system_us,
         frame_set_arrival_steady_us, track_color, track_depth, color_publish_expected,
         depth_publish_expected);
+
+    const auto record_side_stream = [&](const stream_index_pair &stream_index,
+                                        OBFrameType frame_type) {
+      auto frame = frame_set->getFrame(frame_type);
+      if (enable_stream_[stream_index] && frame) {
+        timestamp_csv_logger_->recordImageFrameArrival(stream_index.first, frame,
+                                                       frame_set_arrival_system_us,
+                                                       frame_set_arrival_steady_us, true);
+      }
+    };
+    record_side_stream(COLOR_LEFT, OB_FRAME_COLOR_LEFT);
+    record_side_stream(COLOR_RIGHT, OB_FRAME_COLOR_RIGHT);
+    record_side_stream(INFRA1, OB_FRAME_IR_LEFT);
+    record_side_stream(INFRA2, OB_FRAME_IR_RIGHT);
   }
 
   try {
@@ -6514,10 +6540,12 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       setColorAutoExposureROI();
       left_color_frame = processColorFrameFilter(left_color_frame);
       frame_set->pushFrame(left_color_frame);
+      fps_counter_left_color_->tick();
     }
     if (right_color_frame) {
       right_color_frame = processColorFrameFilter(right_color_frame);
       frame_set->pushFrame(right_color_frame);
+      fps_counter_right_color_->tick();
     }
     if (left_ir_frame) {
       left_ir_frame = processLeftIrFrameFilter(left_ir_frame);
@@ -7117,13 +7145,19 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   }
   if ((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT) &&
       frame->getFormat() == OB_FORMAT_MJPG && has_compressed_image_subscriber) {
-    if (!has_raw_image_subscriber && stream_index == COLOR && log_image_timestamps) {
+    if (!has_raw_image_subscriber && log_image_timestamps) {
       timestamp_csv_logger_->recordImagePrePublish(stream_index.first, frame, getSystemNowUs(),
                                                    getSteadyNowUs());
     }
     publishCompressedColorImage(frame, stream_index, timestamp, frame_id);
-    if (!has_raw_image_subscriber && stream_index == COLOR) {
-      fps_delay_status_color_->tick(frame_timestamp);
+    if (!has_raw_image_subscriber) {
+      if (stream_index == COLOR) {
+        fps_delay_status_color_->tick(frame_timestamp);
+      } else if (stream_index == COLOR_LEFT) {
+        fps_delay_status_left_color_->tick(frame_timestamp);
+      } else {
+        fps_delay_status_right_color_->tick(frame_timestamp);
+      }
     }
   }
 
@@ -7148,10 +7182,12 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     }
     if (frame->getType() == OB_FRAME_COLOR_LEFT && !is_left_color_frame_decoded_) {
       RCLCPP_ERROR(logger_, "left color frame is not decoded");
+      record_image_publish_skipped();
       return;
     }
     if (frame->getType() == OB_FRAME_COLOR_RIGHT && !is_right_color_frame_decoded_) {
       RCLCPP_ERROR(logger_, "right color frame is not decoded");
+      record_image_publish_skipped();
       return;
     }
     if (frame->getType() == OB_FRAME_COLOR) {
@@ -7211,8 +7247,16 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
     }
     if (stream_index == COLOR) {
       fps_delay_status_color_->tick(frame_timestamp);
+    } else if (stream_index == COLOR_LEFT) {
+      fps_delay_status_left_color_->tick(frame_timestamp);
+    } else if (stream_index == COLOR_RIGHT) {
+      fps_delay_status_right_color_->tick(frame_timestamp);
     } else if (stream_index == DEPTH) {
       fps_delay_status_depth_->tick(frame_timestamp);
+    } else if (stream_index == INFRA1) {
+      fps_delay_status_left_ir_->tick(frame_timestamp);
+    } else if (stream_index == INFRA2) {
+      fps_delay_status_right_ir_->tick(frame_timestamp);
     }
     image_publishers_[stream_index]->publish(std::move(image_msg));
   }
