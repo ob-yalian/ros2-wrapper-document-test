@@ -3571,11 +3571,6 @@ void OBCameraNode::setupProfiles() {
         if (profile == nullptr) {
           throw std::runtime_error("Failed cast profile to VideoStreamProfile");
         }
-        RCLCPP_DEBUG_STREAM(
-            logger_, "Sensor profile: "
-                         << "stream_type: " << magic_enum::enum_name(profile->getType())
-                         << "Format: " << profile->getFormat() << ", Width: " << profile->getWidth()
-                         << ", Height: " << profile->getHeight() << ", FPS: " << profile->getFps());
         supported_profiles_[elem].emplace_back(profile);
       }
       std::shared_ptr<ob::VideoStreamProfile> selected_profile;
