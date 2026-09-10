@@ -16,10 +16,13 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 #include <sensor_msgs/image_encodings.hpp>
+#include <std_msgs/msg/header.hpp>
 
 #include "orbbec_camera/ob_camera_node.h"
 #include "orbbec_camera/utils.h"
@@ -31,6 +34,19 @@ namespace {
 
 const std::array<std::string, 6> kSupportedStreamNames = {
     "color", "left_color", "right_color", "ir", "left_ir", "right_ir",
+};
+constexpr auto kStreamDiscoveryPollInterval = std::chrono::milliseconds(100);
+constexpr auto kStreamDiscoveryStablePeriod = std::chrono::seconds(1);
+constexpr auto kStreamDiscoveryTimeout = std::chrono::seconds(5);
+constexpr size_t kMinimumPendingFrameLimit = 30;
+
+struct StreamTopicInfo {
+  std::string name;
+  bool metadata_available = false;
+
+  bool operator==(const StreamTopicInfo &other) const {
+    return name == other.name && metadata_available == other.metadata_available;
+  }
 };
 
 bool isSupportedStreamName(const std::string &stream_name) {
@@ -52,18 +68,32 @@ std::string cameraNamespace(const std::string &camera_name) {
 }  // namespace
 
 struct StreamCapture {
+  struct FrameMetadata {
+    std::string exposure;
+    std::string gain;
+  };
+
+  struct PendingImage {
+    cv::Mat image;
+    std::string current_timestamp;
+    std::string receive_timestamp;
+  };
+
   std::vector<cv::Mat> images;
   std::vector<std::string> current_timestamps;
   std::vector<std::string> receive_timestamps;
-  std::vector<std::string> exposures;
-  std::vector<std::string> gains;
+  std::vector<FrameMetadata> frame_metadata;
+  std::map<int64_t, PendingImage> pending_images;
+  std::map<int64_t, FrameMetadata> pending_metadata;
+  bool metadata_required = false;
 
   void clear() {
     images.clear();
     current_timestamps.clear();
     receive_timestamps.clear();
-    exposures.clear();
-    gains.clear();
+    frame_metadata.clear();
+    pending_images.clear();
+    pending_metadata.clear();
   }
 };
 
@@ -95,7 +125,6 @@ class MultiCameraSubscriber : public rclcpp::Node {
         auto device_info = list->getDevice(i)->getDeviceInfo();
         const auto usb_port = parseUsbPort(device_info->uid());
         serial_numbers_[usb_port] = device_info->serialNumber();
-        has_gemini330_device_ = has_gemini330_device_ || isGemini330Series(device_info->getPid());
       }
     } catch (const ob::Error &e) {
       RCLCPP_ERROR_STREAM(get_logger(), orbbec_camera::formatObErrorWithStatus(e));
@@ -104,16 +133,6 @@ class MultiCameraSubscriber : public rclcpp::Node {
     } catch (...) {
       RCLCPP_ERROR(get_logger(), "unknown error while querying devices");
     }
-  }
-
-  bool isGemini330Series(uint32_t pid) const {
-    return pid == GEMINI_335_PID || pid == GEMINI_330_PID || pid == GEMINI_336_PID ||
-           pid == GEMINI_335L_PID || pid == GEMINI_330L_PID || pid == GEMINI_336L_PID ||
-           pid == GEMINI_335LG_PID || pid == GEMINI_336LG_PID || pid == GEMINI_335LE_PID ||
-           pid == GEMINI_336LE_PID || pid == CUSTOM_ADVANTECH_GEMINI_336_PID ||
-           pid == CUSTOM_ADVANTECH_GEMINI_336L_PID || pid == GEMINI_338_PID ||
-           pid == GEMINI_338LG_PID || pid == GEMINI_338LE_PID || pid == GEMINI_338L_PID ||
-           pid == GEMINI_331L_PID;
   }
 
   void loadParameters() {
@@ -148,57 +167,113 @@ class MultiCameraSubscriber : public rclcpp::Node {
     }
   }
 
-  std::vector<std::string> discoverStreamNames(const std::string &camera_name) const {
-    std::vector<std::string> stream_names;
+  std::vector<StreamTopicInfo> discoverStreams(const std::string &camera_name) const {
+    std::vector<StreamTopicInfo> streams;
     const auto names_and_types = this->get_topic_names_and_types();
     const std::string prefix = cameraNamespace(camera_name) + "/";
     for (const auto &stream_name : kSupportedStreamNames) {
-      const std::string topic = prefix + stream_name + "/image_raw";
-      const auto topic_it = names_and_types.find(topic);
-      if (topic_it == names_and_types.end()) {
+      const auto image_topic_it = names_and_types.find(prefix + stream_name + "/image_raw");
+      if (image_topic_it == names_and_types.end()) {
         continue;
       }
-      const auto &types = topic_it->second;
-      if (std::find(types.begin(), types.end(), "sensor_msgs/msg/Image") != types.end()) {
-        stream_names.push_back(stream_name);
+      const auto &image_types = image_topic_it->second;
+      if (std::find(image_types.begin(), image_types.end(), "sensor_msgs/msg/Image") ==
+          image_types.end()) {
+        continue;
       }
+
+      const auto metadata_topic_it = names_and_types.find(prefix + stream_name + "/metadata");
+      const bool metadata_available =
+          metadata_topic_it != names_and_types.end() &&
+          std::find(metadata_topic_it->second.begin(), metadata_topic_it->second.end(),
+                    "orbbec_camera_msgs/msg/Metadata") != metadata_topic_it->second.end();
+      streams.push_back(StreamTopicInfo{stream_name, metadata_available});
     }
-    return stream_names;
+    return streams;
   }
 
-  std::vector<std::string> selectStreamNames(const std::string &camera_name) const {
+  std::vector<std::vector<StreamTopicInfo>> waitForStableStreams() const {
     if (!configured_stream_names_.empty()) {
-      return configured_stream_names_;
-    }
-    auto stream_names = discoverStreamNames(camera_name);
-    if (!stream_names.empty()) {
-      return stream_names;
+      std::vector<std::vector<StreamTopicInfo>> configured_streams;
+      configured_streams.reserve(camera_names_.size());
+      for (const auto &camera_name : camera_names_) {
+        const auto discovered_streams = discoverStreams(camera_name);
+        std::vector<StreamTopicInfo> camera_streams;
+        camera_streams.reserve(configured_stream_names_.size());
+        for (const auto &stream_name : configured_stream_names_) {
+          const auto discovered_it = std::find_if(
+              discovered_streams.begin(), discovered_streams.end(),
+              [&stream_name](const auto &stream) { return stream.name == stream_name; });
+          camera_streams.push_back(StreamTopicInfo{
+              stream_name,
+              discovered_it != discovered_streams.end() && discovered_it->metadata_available});
+        }
+        configured_streams.push_back(std::move(camera_streams));
+      }
+      return configured_streams;
     }
 
-    RCLCPP_WARN(get_logger(),
-                "No supported image topics discovered for %s; using legacy RGB/IR topics",
-                camera_name.c_str());
-    return {has_gemini330_device_ ? "left_ir" : "ir", "color"};
+    std::vector<std::vector<StreamTopicInfo>> candidate;
+    auto candidate_since = std::chrono::steady_clock::time_point{};
+    const auto deadline = std::chrono::steady_clock::now() + kStreamDiscoveryTimeout;
+    while (rclcpp::ok() && std::chrono::steady_clock::now() < deadline) {
+      std::vector<std::vector<StreamTopicInfo>> current;
+      current.reserve(camera_names_.size());
+      bool all_cameras_discovered = !camera_names_.empty();
+      for (const auto &camera_name : camera_names_) {
+        current.push_back(discoverStreams(camera_name));
+        all_cameras_discovered = all_cameras_discovered && !current.back().empty();
+      }
+
+      const auto now = std::chrono::steady_clock::now();
+      if (!all_cameras_discovered) {
+        candidate.clear();
+      } else if (current != candidate) {
+        candidate = std::move(current);
+        candidate_since = now;
+      } else if (now - candidate_since >= kStreamDiscoveryStablePeriod) {
+        return candidate;
+      }
+
+      std::this_thread::sleep_for(kStreamDiscoveryPollInterval);
+    }
+
+    RCLCPP_WARN_STREAM(get_logger(),
+                       "Supported image topics did not become stable within "
+                           << kStreamDiscoveryTimeout.count()
+                           << " seconds; start all cameras and streams first, retry the request, "
+                              "or configure stream_names explicitly");
+    return {};
   }
 
-  void initializeTopics() {
+  bool initializeTopics() {
+    const auto streams_by_camera = waitForStableStreams();
+    if (streams_by_camera.size() != camera_names_.size()) {
+      return false;
+    }
+
+    callback_groups_.clear();
+    image_subscribers_.clear();
+    metadata_subscribers_.clear();
     captures_.resize(camera_names_.size());
     callback_called_.assign(camera_names_.size(), false);
     const auto custom_qos =
         rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_default));
 
     for (size_t camera_index = 0; camera_index < camera_names_.size(); ++camera_index) {
-      const auto stream_names = selectStreamNames(camera_names_[camera_index]);
+      const auto &streams = streams_by_camera[camera_index];
       const std::string prefix = cameraNamespace(camera_names_[camera_index]) + "/";
       auto callback_group = this->create_callback_group(rclcpp::CallbackGroupType::Reentrant);
       callback_groups_.push_back(callback_group);
       rclcpp::SubscriptionOptions options;
       options.callback_group = callback_group;
 
-      for (const auto &stream_name : stream_names) {
-        captures_[camera_index].emplace(stream_name, StreamCapture{});
+      for (const auto &stream : streams) {
+        const auto &stream_name = stream.name;
+        StreamCapture capture;
+        capture.metadata_required = stream.metadata_available;
+        captures_[camera_index].emplace(stream_name, std::move(capture));
         const std::string image_topic = prefix + stream_name + "/image_raw";
-        const std::string metadata_topic = prefix + stream_name + "/metadata";
         RCLCPP_INFO(get_logger(), "Subscribing to %s", image_topic.c_str());
 
         image_subscribers_.push_back(this->create_subscription<sensor_msgs::msg::Image>(
@@ -208,16 +283,21 @@ class MultiCameraSubscriber : public rclcpp::Node {
               imageCallback(image, camera_index, stream_name);
             },
             options));
-        metadata_subscribers_.push_back(
-            this->create_subscription<orbbec_camera_msgs::msg::Metadata>(
-                metadata_topic, custom_qos,
-                [this, camera_index, stream_name](
-                    const std::shared_ptr<const orbbec_camera_msgs::msg::Metadata> metadata) {
-                  metadataCallback(metadata, camera_index, stream_name);
-                },
-                options));
+        if (stream.metadata_available) {
+          const std::string metadata_topic = prefix + stream_name + "/metadata";
+          metadata_subscribers_.push_back(
+              this->create_subscription<orbbec_camera_msgs::msg::Metadata>(
+                  metadata_topic, custom_qos,
+                  [this, camera_index, stream_name](
+                      const std::shared_ptr<const orbbec_camera_msgs::msg::Metadata> metadata) {
+                    metadataCallback(metadata, camera_index, stream_name);
+                  },
+                  options));
+        }
       }
     }
+    return !captures_.empty() && std::all_of(captures_.begin(), captures_.end(),
+                                             [](const auto &streams) { return !streams.empty(); });
   }
 
   std::string currentDateTime() const {
@@ -261,13 +341,42 @@ class MultiCameraSubscriber : public rclcpp::Node {
         });
   }
 
-  std::string metadataSuffix(const StreamCapture &capture, size_t frame_index) const {
-    std::string suffix;
-    if (frame_index < capture.exposures.size()) {
-      suffix += "_e" + capture.exposures[frame_index];
+  int64_t messageStampNs(const std_msgs::msg::Header &header) const {
+    return static_cast<int64_t>(header.stamp.sec) * 1000000000LL + header.stamp.nanosec;
+  }
+
+  size_t pendingFrameLimit() const {
+    return std::max(kMinimumPendingFrameLimit, static_cast<size_t>(saving_images_number_) * 2);
+  }
+
+  template <typename Value>
+  void trimPendingFrames(std::map<int64_t, Value> &pending) const {
+    while (pending.size() > pendingFrameLimit()) {
+      pending.erase(pending.begin());
     }
-    if (frame_index < capture.gains.size()) {
-      suffix += "_d" + capture.gains[frame_index];
+  }
+
+  void appendCompletedFrame(StreamCapture &capture, StreamCapture::PendingImage pending_image,
+                            StreamCapture::FrameMetadata metadata = {}) {
+    if (capture.images.size() >= static_cast<size_t>(saving_images_number_)) {
+      return;
+    }
+    capture.images.push_back(std::move(pending_image.image));
+    capture.current_timestamps.push_back(std::move(pending_image.current_timestamp));
+    capture.receive_timestamps.push_back(std::move(pending_image.receive_timestamp));
+    capture.frame_metadata.push_back(std::move(metadata));
+  }
+
+  std::string metadataSuffix(const StreamCapture &capture, size_t frame_index) const {
+    if (frame_index >= capture.frame_metadata.size()) {
+      return "";
+    }
+    std::string suffix;
+    if (!capture.frame_metadata[frame_index].exposure.empty()) {
+      suffix += "_e" + capture.frame_metadata[frame_index].exposure;
+    }
+    if (!capture.frame_metadata[frame_index].gain.empty()) {
+      suffix += "_d" + capture.frame_metadata[frame_index].gain;
     }
     return suffix;
   }
@@ -333,14 +442,19 @@ class MultiCameraSubscriber : public rclcpp::Node {
       return;
     }
     if (!topics_initialized_) {
-      initializeTopics();
+      if (!initializeTopics()) {
+        callback_groups_.clear();
+        image_subscribers_.clear();
+        metadata_subscribers_.clear();
+        captures_.clear();
+        callback_called_.clear();
+        response->success = false;
+        response->message =
+            "supported image streams did not become stable; retry after all cameras and streams "
+            "start or configure stream_names";
+        return;
+      }
       topics_initialized_ = true;
-    }
-    if (captures_.empty() || std::any_of(captures_.begin(), captures_.end(),
-                                         [](const auto &streams) { return streams.empty(); })) {
-      response->success = false;
-      response->message = "no supported image streams are configured";
-      return;
     }
 
     for (auto &camera_captures : captures_) {
@@ -364,16 +478,37 @@ class MultiCameraSubscriber : public rclcpp::Node {
       return;
     }
     auto &capture = captures_[camera_index].at(stream_name);
+    if (capture.images.size() >= static_cast<size_t>(saving_images_number_)) {
+      saveImages(camera_index);
+      return;
+    }
     cv::Mat output = cv_bridge::toCvCopy(image, image->encoding)->image;
     if (isColorCaptureStreamName(stream_name) &&
         image->encoding == sensor_msgs::image_encodings::RGB8) {
       cv::Mat converted;
       cv::cvtColor(output, converted, cv::COLOR_RGB2BGR);
       output = converted;
+    } else if (isColorCaptureStreamName(stream_name) &&
+               image->encoding == sensor_msgs::image_encodings::RGBA8) {
+      cv::Mat converted;
+      cv::cvtColor(output, converted, cv::COLOR_RGBA2BGRA);
+      output = converted;
     }
-    capture.images.push_back(output);
-    capture.current_timestamps.push_back(imageTimestamp(image));
-    capture.receive_timestamps.push_back(receiveTimestamp());
+    StreamCapture::PendingImage pending_image{std::move(output), imageTimestamp(image),
+                                              receiveTimestamp()};
+    if (capture.metadata_required) {
+      const auto stamp_ns = messageStampNs(image->header);
+      auto metadata_it = capture.pending_metadata.find(stamp_ns);
+      if (metadata_it == capture.pending_metadata.end()) {
+        capture.pending_images.insert_or_assign(stamp_ns, std::move(pending_image));
+        trimPendingFrames(capture.pending_images);
+        return;
+      }
+      appendCompletedFrame(capture, std::move(pending_image), std::move(metadata_it->second));
+      capture.pending_metadata.erase(metadata_it);
+    } else {
+      appendCompletedFrame(capture, std::move(pending_image));
+    }
     RCLCPP_INFO(get_logger(), "%s[%zu]: %zu/%d", stream_name.c_str(), camera_index,
                 capture.images.size(), saving_images_number_);
     saveImages(camera_index);
@@ -385,18 +520,35 @@ class MultiCameraSubscriber : public rclcpp::Node {
     if (saving_images_number_ <= 0 || callback_called_[camera_index]) {
       return;
     }
+    auto &capture = captures_[camera_index].at(stream_name);
+    if (!capture.metadata_required ||
+        capture.images.size() >= static_cast<size_t>(saving_images_number_)) {
+      return;
+    }
+    StreamCapture::FrameMetadata frame_metadata;
     try {
       const auto json_data = nlohmann::json::parse(metadata->json_data);
-      auto &capture = captures_[camera_index].at(stream_name);
       if (json_data.contains("exposure")) {
-        capture.exposures.push_back(json_data["exposure"].dump());
+        frame_metadata.exposure = json_data["exposure"].dump();
       }
       if (json_data.contains("gain")) {
-        capture.gains.push_back(json_data["gain"].dump());
+        frame_metadata.gain = json_data["gain"].dump();
       }
     } catch (const std::exception &e) {
       RCLCPP_WARN(get_logger(), "Failed to parse %s metadata: %s", stream_name.c_str(), e.what());
     }
+    const auto stamp_ns = messageStampNs(metadata->header);
+    auto image_it = capture.pending_images.find(stamp_ns);
+    if (image_it == capture.pending_images.end()) {
+      capture.pending_metadata.insert_or_assign(stamp_ns, std::move(frame_metadata));
+      trimPendingFrames(capture.pending_metadata);
+      return;
+    }
+    appendCompletedFrame(capture, std::move(image_it->second), std::move(frame_metadata));
+    capture.pending_images.erase(image_it);
+    RCLCPP_INFO(get_logger(), "%s[%zu]: %zu/%d", stream_name.c_str(), camera_index,
+                capture.images.size(), saving_images_number_);
+    saveImages(camera_index);
   }
 
   std::mutex capture_mutex_;
@@ -417,7 +569,6 @@ class MultiCameraSubscriber : public rclcpp::Node {
   std::string current_date_time_;
   int saving_images_number_ = 0;
   bool topics_initialized_ = false;
-  bool has_gemini330_device_ = false;
 };
 
 }  // namespace tools

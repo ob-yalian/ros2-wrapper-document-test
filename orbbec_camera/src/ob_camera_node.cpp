@@ -7072,6 +7072,7 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       if (video_frame->getMetadataValue(OB_FRAME_METADATA_TYPE_HDR_SEQUENCE_INDEX) ==
           interleave_skip_index_) {
         RCLCPP_DEBUG(logger_, "interleave filter skip frame type: %d", frame->getType());
+        record_image_publish_skipped();
         return;
       }
     }
