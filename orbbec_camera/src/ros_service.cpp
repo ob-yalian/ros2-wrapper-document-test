@@ -217,11 +217,11 @@ void OBCameraNode::setupCameraCtrlServices() {
         });
   }
   if (isPropertyWritable(device_, OB_PROP_FLOOD_BOOL)) {
-    set_floor_enable_srv_ = node_->create_service<SetBool>(
-        "set_floor_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+    set_flood_enable_srv_ = node_->create_service<SetBool>(
+        "set_flood_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                    const std::shared_ptr<SetBool::Request> request,
                                    std::shared_ptr<SetBool::Response> response) {
-          setFloorEnableCallback(request_header, request, response);
+          setFloodEnableCallback(request_header, request, response);
         });
   }
   if (isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT) ||
@@ -1530,15 +1530,15 @@ void OBCameraNode::setFanWorkModeCallback(const std::shared_ptr<SetInt32::Reques
   }
 }
 
-void OBCameraNode::setFloorEnableCallback(
+void OBCameraNode::setFloodEnableCallback(
     const std::shared_ptr<rmw_request_id_t>& request_header,
     const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
     std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
   (void)request_header;
   (void)response;
-  bool floor_enable = request->data;
+  bool flood_enable = request->data;
   try {
-    device_->setBoolProperty(OB_PROP_FLOOD_BOOL, floor_enable);
+    device_->setBoolProperty(OB_PROP_FLOOD_BOOL, flood_enable);
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;
