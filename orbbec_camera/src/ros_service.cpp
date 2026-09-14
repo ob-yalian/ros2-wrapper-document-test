@@ -903,6 +903,8 @@ void OBCameraNode::setImageRegistrationModeCallback(
 
   auto rollback_after_error = [&](const std::string& error_message) {
     try {
+      stopColorFrameThreads();
+      clearColorFrameQueues();
       restore_old_mode();
       if (was_running && !pipeline_started_.load()) {
         startStreams();
@@ -924,6 +926,8 @@ void OBCameraNode::setImageRegistrationModeCallback(
     if (was_running) {
       stopStreams();
     }
+    stopColorFrameThreads();
+    clearColorFrameQueues();
 
     apply_image_registration_mode(mode);
 
