@@ -650,7 +650,9 @@ void OBCameraNode::publishDepthFiltersStatus() {
   if (disp_outliers_filter_supported) {
     append_unique_filter_name("DispOutliersFilter");
   }
-  append_unique_filter_name("EnhancedDepthFilter");
+  if (isGemini330SeriesPID(pid_)) {
+    append_unique_filter_name("EnhancedDepthFilter");
+  }
 
   msg.filters.reserve(ordered_filter_names.size());
   for (const auto &filter_name : ordered_filter_names) {
@@ -3220,7 +3222,7 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  if (isGemini335PID(pid_)) {
+  if (isGemini330SeriesPID(pid_)) {
     auto left_ir_sensor = device_->getSensor(OB_SENSOR_IR_LEFT);
     left_ir_filter_list_ = left_ir_sensor->createRecommendedFilters();
     if (left_ir_filter_list_.empty()) {
@@ -3261,7 +3263,7 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  if (isGemini335PID(pid_)) {
+  if (isGemini330SeriesPID(pid_)) {
     auto right_ir_sensor = device_->getSensor(OB_SENSOR_IR_RIGHT);
     right_ir_filter_list_ = right_ir_sensor->createRecommendedFilters();
     if (right_ir_filter_list_.empty()) {
@@ -5273,6 +5275,11 @@ void OBCameraNode::setupPipelineConfig() {
 bool OBCameraNode::validateEnhancedDepthFilterConfig(std::string &message) const {
   constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
   constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
+
+  if (!isGemini330SeriesPID(pid_)) {
+    message = "Enhanced depth filter is only supported by Gemini 330 series devices";
+    return false;
+  }
 
   if (!enable_stream_.count(COLOR) || !enable_stream_.at(COLOR) || !enable_stream_.count(DEPTH) ||
       !enable_stream_.at(DEPTH)) {
@@ -7917,18 +7924,9 @@ bool OBCameraNode::setupFormatConvertType(OBFormat format, ob::FormatConvertFilt
   return true;
 }
 
-bool OBCameraNode::isGemini335PID(uint32_t pid) {
-  return pid == GEMINI_335_PID || pid == GEMINI_330_PID || pid == GEMINI_336_PID ||
-         pid == GEMINI_335L_PID || pid == GEMINI_330L_PID || pid == GEMINI_336L_PID ||
-         pid == GEMINI_335LG_PID || pid == GEMINI_336LG_PID || pid == GEMINI_335LE_PID ||
-         pid == GEMINI_336LE_PID || pid == CUSTOM_ADVANTECH_GEMINI_336_PID ||
-         pid == CUSTOM_ADVANTECH_GEMINI_336L_PID || pid == GEMINI_338_PID ||
-         pid == GEMINI_338L_PID || pid == GEMINI_338LE_PID || pid == GEMINI_338LG_PID;
-}
-
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 bool OBCameraNode::isPublishMetaData(uint32_t pid) {
-  return isGemini335PID(pid) || isGemini435LePID(pid) || isGemini305SeriesPID(pid);
+  return isGemini330SeriesPID(pid) || isGemini435LePID(pid) || isGemini305SeriesPID(pid);
 }
 
 bool OBCameraNode::isDabaiASeriesForHwD2C(uint32_t pid) {
@@ -8265,6 +8263,11 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
     bool enabled, const std::vector<float> &positional_params,
     const std::vector<orbbec_camera_msgs::msg::DepthFilterParam> &named_params,
     std::string &message) {
+  if (!isGemini330SeriesPID(pid_)) {
+    message = "Enhanced depth filter is only supported by Gemini 330 series devices";
+    return false;
+  }
+
   if (positional_params.size() > 1) {
     message = "EnhancedDepthFilter only supports one positional parameter";
     return false;
