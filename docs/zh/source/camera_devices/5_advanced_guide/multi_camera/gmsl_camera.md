@@ -26,7 +26,18 @@ ros2 run orbbec_camera list_devices_node
 
 ## 同步配置
 
-GMSL 多相机同步不需要 Multi-Camera Sync Hub Pro。两台相机均使用 `secondary_synced` 模式。接收触发信号的相机先启动，启用主机端 GMSL 触发的相机在两秒后启动。
+GMSL 多相机同步不需要 Multi-Camera Sync Hub Pro。当前示例中两台相机均使用 `secondary_synced` 模式。接收触发信号的相机先启动，启用主机端 GMSL 触发的相机在两秒后启动。
+
+### GMSL 链路触发模式
+
+当前示例通过 GMSL 链路使用主机 SoC 产生的 PWM 触发源进行同步，支持以下两种触发模式。具体可用模式以相机型号、固件和 SDK 版本为准。同一组相机中仅需在一台相机上将 `enable_gmsl_trigger` 设置为 `true`，其他相机接收相同的触发信号。
+
+| 模式 | 配置及行为 |
+| --- | --- |
+| `secondary_synced` | 所有相机设置为 `secondary_synced`。相机启动数据流后立即采集，并根据 PWM 触发信号调整采集时刻；触发信号停止后仍继续采集。PWM 触发频率应与数据流帧率一致。当前示例使用此模式。 |
+| `hardware_triggering` | 所有相机设置为 `hardware_triggering`。相机仅在收到 PWM 硬件触发信号后采集图像，每次触发的帧数由 `frames_per_trigger` 设置。对于 GMSL 链路，PWM 触发频率不应超过数据流帧率的一半；例如数据流为 30 FPS 时，触发频率不应超过 15 FPS。 |
+
+> 注意：通过 GMSL 相机的 8 针同步接口进行同步时，支持的同步模式与 USB 相机相同，请参考[多相机同步](./multi_camera_synced.md)。本节的 `gmsl_trigger_fps` 和 `/dev/camsync` 适用于 GMSL 链路触发方式。
 
 **额外的参数设置**
 

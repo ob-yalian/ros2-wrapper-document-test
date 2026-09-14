@@ -26,7 +26,18 @@ Update the `usb_port` values in [multi_gmsl_camera_synced.launch.py](https://git
 
 ## Synchronization setup
 
-GMSL multi-camera synchronization does not require Multi-Camera Sync Hub Pro. Both cameras use `secondary_synced` mode. The receiving camera starts first; the camera that enables the host-side GMSL trigger starts two seconds later.
+GMSL multi-camera synchronization does not require Multi-Camera Sync Hub Pro. In the current example, both cameras use `secondary_synced` mode. The receiving camera starts first; the camera that enables the host-side GMSL trigger starts two seconds later.
+
+### GMSL Link Triggering Modes
+
+The current example uses a host-side SoC PWM trigger source over the GMSL link. The two triggering modes below are available; the exact availability depends on the camera model, firmware, and SDK version. In one camera group, set `enable_gmsl_trigger` to `true` on only one camera; the other cameras receive the same trigger signal.
+
+| Mode | Configuration and behavior |
+| --- | --- |
+| `secondary_synced` | Set all cameras to `secondary_synced`. Cameras start capturing as soon as the streams start and adjust the capture timing according to the PWM trigger signal; they continue capturing if the trigger signal stops. The PWM trigger frequency should match the stream frame rate. This is the mode used by the current example. |
+| `hardware_triggering` | Set all cameras to `hardware_triggering`. Cameras capture images only after receiving a PWM hardware trigger signal; the number of frames captured per trigger is set by `frames_per_trigger`. For the GMSL link, the PWM trigger frequency should not exceed half of the stream frame rate; for example, it should not exceed 15 FPS when the stream runs at 30 FPS. |
+
+> Note: When synchronizing GMSL cameras through the 8-pin synchronization interface, the supported synchronization modes are the same as for USB cameras. See [Multi-Camera Synchronization](./multi_camera_synced.md). The `gmsl_trigger_fps` parameter and `/dev/camsync` in this section apply to GMSL link triggering.
 
 **Additional Parameter Settings**
 
