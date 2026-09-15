@@ -76,8 +76,6 @@ ros2 launch orbbec_camera gemini_301_series.launch.py config_file_path:=gemini30
 
 配置文件位于 `orbbec_camera/config/gemini305_dual_color.yaml`，其中已启用 `left_color` 和 `right_color` 流；其他参数沿用 `gemini_301_series.launch.py` 的默认配置。
 
-Gemini 301 系列也支持通过 `color_preset` 参数选择彩色 preset。请按名称设置，例如 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，可用名称以设备返回为准。
-
 ## 扩展预设
 
 ### G33X Close Range High Accuracy（Gemini 330 / Gemini 335 / Gemini 336）
