@@ -3708,6 +3708,13 @@ void OBCameraNode::setupProfiles() {
       }
     }
   }
+
+  std::string stream_fps_message;
+  if (!validate301SeriesStreamFrameRates(fps_, stream_fps_message)) {
+    RCLCPP_ERROR_STREAM(logger_, stream_fps_message);
+    throw std::runtime_error(stream_fps_message);
+  }
+
   // IMU
   for (const auto &stream_index : HID_STREAMS) {
     if (!enable_stream_[stream_index]) {
@@ -3750,6 +3757,55 @@ void OBCameraNode::setupProfiles() {
       stream_profile_[stream_index] = nullptr;
     }
   }
+}
+
+bool OBCameraNode::validate301SeriesStreamFrameRates(const std::map<stream_index_pair, int> &fps,
+                                                     std::string &message) const {
+  if (!isGemini305SeriesPID(pid_)) {
+    return true;
+  }
+
+  int active_fps = 0;
+  bool fps_mismatch = false;
+  std::string active_streams;
+  for (const auto &stream_index : IMAGE_STREAMS) {
+    if (stream_index.first == OB_STREAM_LIDAR) {
+      continue;
+    }
+    const auto enable_it = enable_stream_.find(stream_index);
+    const auto fps_it = fps.find(stream_index);
+    if (enable_it == enable_stream_.end() || !enable_it->second || fps_it == fps.end() ||
+        fps_it->second <= 0) {
+      continue;
+    }
+
+    if (!active_streams.empty()) {
+      active_streams += ", ";
+    }
+    const auto name_it = stream_name_.find(stream_index);
+    if (name_it != stream_name_.end()) {
+      active_streams += name_it->second;
+    } else {
+      active_streams += std::string(magic_enum::enum_name(stream_index.first));
+    }
+    active_streams += "=" + std::to_string(fps_it->second);
+
+    if (active_fps == 0) {
+      active_fps = fps_it->second;
+    } else if (active_fps != fps_it->second) {
+      fps_mismatch = true;
+    }
+  }
+
+  if (!fps_mismatch) {
+    return true;
+  }
+
+  message =
+      "Gemini 301 series requires the same FPS for all enabled image streams. "
+      "Active stream FPS: " +
+      active_streams + ". Set all enabled image streams to the same FPS or disable unused streams.";
+  return false;
 }
 
 std::shared_ptr<ob::VideoStreamProfile> OBCameraNode::selectVideoStreamProfile(
@@ -3906,6 +3962,16 @@ bool OBCameraNode::validateStreamProfileRequest(
       return false;
     }
   }
+
+  auto requested_fps = fps_;
+  for (const auto &pending_profile : pending_profiles) {
+    requested_fps[pending_profile.stream_index] =
+        static_cast<int>(pending_profile.profile->getFps());
+  }
+  if (!validate301SeriesStreamFrameRates(requested_fps, message)) {
+    return false;
+  }
+
   if (!has_changes) {
     message = "requested stream profiles are already active";
     return false;
