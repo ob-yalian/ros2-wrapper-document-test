@@ -9,7 +9,7 @@ Topics are organized by stream and function. By default, all topics are publishe
 These topics provide the raw image data and corresponding calibration information for each enabled camera stream. The pattern is consistent for `color`, `depth`, `ir`, `left_ir`, and `right_ir` streams.
 
 *   `/camera/color/image_raw`
-    *   Raw image data from the color stream. Subscribe to this topic for non-MJPG color formats such as RGB or YUYV.
+    *   ROS image data from the color stream. When this topic is subscribed, color images with input formats `YUYV`, `UYVY`, `I420`, `NV12`, `NV21`, or `MJPG` are converted or decoded to `rgb8` on the host before publishing; `RGB` and `RGB888` are published with `rgb8`, while `BGR`, `RGBA`, and `BGRA` retain the corresponding `bgr8`, `rgba8`, and `bgra8` encodings.
 *   `/camera/color/image_raw/compressed`
     *   Compressed image data from the MJPG color stream. When `color_format:=MJPG` is used, subscribe to this topic to avoid extra decoding in the ROS wrapper and reduce CPU usage.
 *   `/camera/color/camera_info`
