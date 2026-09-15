@@ -237,10 +237,14 @@ class OBCameraNode {
   }
   void getColorStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg) {
     fps_delay_status_color_->fillColorStatus(status_msg);
+    fps_delay_status_left_color_->fillLeftColorStatus(status_msg);
+    fps_delay_status_right_color_->fillRightColorStatus(status_msg);
   }
 
   void getDepthStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg) {
     fps_delay_status_depth_->fillDepthStatus(status_msg);
+    fps_delay_status_left_ir_->fillLeftIrStatus(status_msg);
+    fps_delay_status_right_ir_->fillRightIrStatus(status_msg);
   }
 
   bool checkUserCalibrationReady() {
@@ -1186,12 +1190,18 @@ class OBCameraNode {
   bool show_fps_enable_ = false;
   bool enable_publish_extrinsic_ = false;
   std::unique_ptr<FpsCounter> fps_counter_color_{nullptr};
+  std::unique_ptr<FpsCounter> fps_counter_left_color_{nullptr};
+  std::unique_ptr<FpsCounter> fps_counter_right_color_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_depth_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_left_ir_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_right_ir_{nullptr};
 
   std::unique_ptr<FpsDelayStatus> fps_delay_status_color_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_left_color_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_right_color_{nullptr};
   std::unique_ptr<FpsDelayStatus> fps_delay_status_depth_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_left_ir_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_right_ir_{nullptr};
 
   std::string intra_camera_sync_reference_ = "";
   std::string ae_reference_stream_;
