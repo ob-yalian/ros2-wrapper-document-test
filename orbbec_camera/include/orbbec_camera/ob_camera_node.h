@@ -470,7 +470,7 @@ class OBCameraNode {
                               const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
-  void setFloorEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
+  void setFloodEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
                               const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
@@ -804,7 +804,7 @@ class OBCameraNode {
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_laser_status_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ptp_config_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ptp_config_srv_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_floor_enable_srv_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_flood_enable_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_fan_work_mode_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr toggle_sensors_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_lrm_measure_distance_srv_;
