@@ -3249,7 +3249,7 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  if (isGemini330SeriesPID(pid_) || isGemini305SeriesPID(pid_)) {
+  if (isGemini330SeriesPID(pid_) || isGemini301SeriesPID(pid_)) {
     auto left_ir_sensor = device_->getSensor(OB_SENSOR_IR_LEFT);
     left_ir_filter_list_ = left_ir_sensor->createRecommendedFilters();
     if (left_ir_filter_list_.empty()) {
@@ -3290,7 +3290,7 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
   }
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info);
-  if (isGemini330SeriesPID(pid_) || isGemini305SeriesPID(pid_)) {
+  if (isGemini330SeriesPID(pid_) || isGemini301SeriesPID(pid_)) {
     auto right_ir_sensor = device_->getSensor(OB_SENSOR_IR_RIGHT);
     right_ir_filter_list_ = right_ir_sensor->createRecommendedFilters();
     if (right_ir_filter_list_.empty()) {
@@ -3620,19 +3620,19 @@ void OBCameraNode::setupProfiles() {
                    format_[elem] == OB_FORMAT_UNKNOWN) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
-          if (isGemini305SeriesPID(pid_) && elem == DEPTH) {
+          if (isGemini301SeriesPID(pid_) && elem == DEPTH) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.factor = depth_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
-          } else if (isGemini305SeriesPID(pid_) && elem == INFRA1) {
+          } else if (isGemini301SeriesPID(pid_) && elem == INFRA1) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
             conf.factor = left_ir_decimation_factor_;
             selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
-          } else if (isGemini305SeriesPID(pid_) && elem == INFRA2) {
+          } else if (isGemini301SeriesPID(pid_) && elem == INFRA2) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
             conf.originHeight = height_[elem];
@@ -3708,6 +3708,13 @@ void OBCameraNode::setupProfiles() {
       }
     }
   }
+
+  std::string stream_fps_message;
+  if (!validate301SeriesStreamFrameRates(fps_, stream_fps_message)) {
+    RCLCPP_ERROR_STREAM(logger_, stream_fps_message);
+    throw std::runtime_error(stream_fps_message);
+  }
+
   // IMU
   for (const auto &stream_index : HID_STREAMS) {
     if (!enable_stream_[stream_index]) {
@@ -3752,6 +3759,55 @@ void OBCameraNode::setupProfiles() {
   }
 }
 
+bool OBCameraNode::validate301SeriesStreamFrameRates(const std::map<stream_index_pair, int> &fps,
+                                                     std::string &message) const {
+  if (!isGemini301SeriesPID(pid_)) {
+    return true;
+  }
+
+  int active_fps = 0;
+  bool fps_mismatch = false;
+  std::string active_streams;
+  for (const auto &stream_index : IMAGE_STREAMS) {
+    if (stream_index.first == OB_STREAM_LIDAR) {
+      continue;
+    }
+    const auto enable_it = enable_stream_.find(stream_index);
+    const auto fps_it = fps.find(stream_index);
+    if (enable_it == enable_stream_.end() || !enable_it->second || fps_it == fps.end() ||
+        fps_it->second <= 0) {
+      continue;
+    }
+
+    if (!active_streams.empty()) {
+      active_streams += ", ";
+    }
+    const auto name_it = stream_name_.find(stream_index);
+    if (name_it != stream_name_.end()) {
+      active_streams += name_it->second;
+    } else {
+      active_streams += std::string(magic_enum::enum_name(stream_index.first));
+    }
+    active_streams += "=" + std::to_string(fps_it->second);
+
+    if (active_fps == 0) {
+      active_fps = fps_it->second;
+    } else if (active_fps != fps_it->second) {
+      fps_mismatch = true;
+    }
+  }
+
+  if (!fps_mismatch) {
+    return true;
+  }
+
+  message =
+      "Gemini 301 series requires the same FPS for all enabled image streams. "
+      "Active stream FPS: " +
+      active_streams + ". Set all enabled image streams to the same FPS or disable unused streams.";
+  return false;
+}
+
 std::shared_ptr<ob::VideoStreamProfile> OBCameraNode::selectVideoStreamProfile(
     const stream_index_pair &stream_index, int width, int height, int fps, OBFormat format) {
   auto sensor_it = sensors_.find(stream_index);
@@ -3767,19 +3823,19 @@ std::shared_ptr<ob::VideoStreamProfile> OBCameraNode::selectVideoStreamProfile(
   std::shared_ptr<ob::VideoStreamProfile> selected_profile;
   if (width == 0 && height == 0 && fps == 0) {
     selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
-  } else if (!is_playback_device_ && isGemini305SeriesPID(pid_) && stream_index == DEPTH) {
+  } else if (!is_playback_device_ && isGemini301SeriesPID(pid_) && stream_index == DEPTH) {
     OBHardwareDecimationConfig conf;
     conf.originWidth = width;
     conf.originHeight = height;
     conf.factor = depth_decimation_factor_;
     selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
-  } else if (!is_playback_device_ && isGemini305SeriesPID(pid_) && stream_index == INFRA1) {
+  } else if (!is_playback_device_ && isGemini301SeriesPID(pid_) && stream_index == INFRA1) {
     OBHardwareDecimationConfig conf;
     conf.originWidth = width;
     conf.originHeight = height;
     conf.factor = left_ir_decimation_factor_;
     selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
-  } else if (!is_playback_device_ && isGemini305SeriesPID(pid_) && stream_index == INFRA2) {
+  } else if (!is_playback_device_ && isGemini301SeriesPID(pid_) && stream_index == INFRA2) {
     OBHardwareDecimationConfig conf;
     conf.originWidth = width;
     conf.originHeight = height;
@@ -3906,6 +3962,16 @@ bool OBCameraNode::validateStreamProfileRequest(
       return false;
     }
   }
+
+  auto requested_fps = fps_;
+  for (const auto &pending_profile : pending_profiles) {
+    requested_fps[pending_profile.stream_index] =
+        static_cast<int>(pending_profile.profile->getFps());
+  }
+  if (!validate301SeriesStreamFrameRates(requested_fps, message)) {
+    return false;
+  }
+
   if (!has_changes) {
     message = "requested stream profiles are already active";
     return false;
@@ -5959,7 +6025,7 @@ cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image,
   cv::Mat depth_16u;
   depth_image.convertTo(depth_16u, CV_16UC1);
 
-  const uint16_t min_depth = isGemini305SeriesPID(pid_) ? kViewerColorizerG305MinDistanceMm
+  const uint16_t min_depth = isGemini301SeriesPID(pid_) ? kViewerColorizerG305MinDistanceMm
                                                         : kViewerColorizerDefaultMinDistanceMm;
   const uint16_t max_depth = kViewerColorizerMaxDistanceMm;
   const uint32_t value_range = static_cast<uint32_t>(max_depth) - min_depth + 1;
@@ -6422,7 +6488,7 @@ void OBCameraNode::setDepthAutoExposureROI() {
   if (depth_roi_has_run) {
     return;
   }
-  if (isGemini305SeriesPID(pid_) && ae_reference_stream_ == "color") {
+  if (isGemini301SeriesPID(pid_) && ae_reference_stream_ == "color") {
     RCLCPP_WARN_STREAM(logger_, "Skip setting depth AE ROI because AE Reference Stream is color");
     depth_roi_has_run = true;
     return;
@@ -6467,7 +6533,7 @@ void OBCameraNode::setColorAutoExposureROI() {
   if (color_roi_has_run) {
     return;
   }
-  if (isGemini305SeriesPID(pid_) && ae_reference_stream_ == "depth") {
+  if (isGemini301SeriesPID(pid_) && ae_reference_stream_ == "depth") {
     RCLCPP_WARN_STREAM(logger_, "Skip setting color AE ROI because AE Reference Stream is depth");
     color_roi_has_run = true;
     return;
@@ -8025,7 +8091,7 @@ bool OBCameraNode::setupFormatConvertType(OBFormat format, ob::FormatConvertFilt
 
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 bool OBCameraNode::isPublishMetaData(uint32_t pid) {
-  return isGemini330SeriesPID(pid) || isGemini435LePID(pid) || isGemini305SeriesPID(pid);
+  return isGemini330SeriesPID(pid) || isGemini435LePID(pid) || isGemini301SeriesPID(pid);
 }
 
 bool OBCameraNode::isDabaiASeriesForHwD2C(uint32_t pid) {
@@ -8035,7 +8101,7 @@ bool OBCameraNode::isDabaiASeriesForHwD2C(uint32_t pid) {
 
 bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 
-bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return isGemini305SeriesPID(pid); }
+bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return isGemini301SeriesPID(pid); }
 
 orbbec_camera_msgs::msg::IMUInfo OBCameraNode::createIMUInfo(
     const stream_index_pair &stream_index) {

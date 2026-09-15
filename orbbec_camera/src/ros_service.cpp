@@ -1128,13 +1128,13 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
                                     std::shared_ptr<SetArrays::Response>& response,
                                     const stream_index_pair& stream_index) {
   auto stream = stream_index.first;
-  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
+  if (isGemini301SeriesPID(device_->getDeviceInfo()->getPid()) &&
       (stream != OB_STREAM_COLOR && ae_reference_stream_ == "color")) {
     response->success = false;
     response->message = "AE Reference Stream is color, other sensors setting is not supported";
     return;
   }
-  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
+  if (isGemini301SeriesPID(device_->getDeviceInfo()->getPid()) &&
       (stream != OB_STREAM_DEPTH && ae_reference_stream_ == "depth")) {
     response->success = false;
     response->message =

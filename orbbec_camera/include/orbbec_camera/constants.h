@@ -143,6 +143,7 @@ const int32_t GEMINI_435Le_PID = 0x815;                   // Gemini 435Le
 const int32_t GEMINI_305_PID = 0x0840;                    // Gemini 305
 const int32_t GEMINI_305_PID2 = 0x0841;                   // Gemini 305
 const int32_t GEMINI_305G_PID = 0x0842;                   // Gemini 305g
+const int32_t GEMINI_301G_PID = 0x0843;                   // Gemini 301g
 const int32_t GEMINI_309G_PID = 0x0845;                   // Gemini 309g
 const int32_t GEMINI_338LG_PID = 0x081A;                  // Gemini 338Lg
 const int32_t GEMINI_338LE_PID = 0x081B;                  // Gemini 338Le
@@ -159,9 +160,9 @@ inline bool isGemini330SeriesPID(uint32_t pid) {
          pid == GEMINI_331L_PID;
 }
 
-inline bool isGemini305SeriesPID(uint32_t pid) {
+inline bool isGemini301SeriesPID(uint32_t pid) {
   return pid == GEMINI_305_PID || pid == GEMINI_305_PID2 || pid == GEMINI_305G_PID ||
-         pid == GEMINI_309G_PID;
+         pid == GEMINI_301G_PID || pid == GEMINI_309G_PID;
 }
 
 inline bool isGmslCameraPID(uint32_t pid) {

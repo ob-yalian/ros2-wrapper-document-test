@@ -145,8 +145,8 @@ void listSensorProfiles(const std::shared_ptr<ob::Device>& device) {
       auto origin_profile = profile_list->getProfile(j);
       if ((sensor->getType() == OB_SENSOR_DEPTH || sensor->getType() == OB_SENSOR_IR_LEFT ||
            sensor->getType() == OB_SENSOR_IR_RIGHT) &&
-          isGemini305SeriesPID(pid)) {
-        // Gemini 305 series
+          isGemini301SeriesPID(pid)) {
+        // Gemini 301 series
         auto profile = origin_profile->as<ob::VideoStreamProfile>();
         std::cout << magic_enum::enum_name(sensor->getType()) << " profile: " << profile->getWidth()
                   << "x" << profile->getHeight() << " " << profile->getFps() << "fps "

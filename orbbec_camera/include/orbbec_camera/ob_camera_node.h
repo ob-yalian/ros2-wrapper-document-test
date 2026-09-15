@@ -309,6 +309,9 @@ class OBCameraNode {
 
   void setupProfiles();
 
+  bool validate301SeriesStreamFrameRates(const std::map<stream_index_pair, int>& fps,
+                                         std::string& message) const;
+
   std::shared_ptr<ob::VideoStreamProfile> selectVideoStreamProfile(
       const stream_index_pair& stream_index, int width, int height, int fps, OBFormat format);
 
