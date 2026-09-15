@@ -1372,7 +1372,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   }
 
   const bool should_delay_stream_start = delay_stream_start_after_reconnect_.exchange(false) &&
-                                         isGemini305SeriesPID(device_info_->getPid());
+                                         isGemini301SeriesPID(device_info_->getPid());
   if (should_delay_stream_start) {
     std::this_thread::sleep_for(kStreamStartDelayAfterReconnect);
   }
@@ -1604,8 +1604,8 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     if (isGmslCameraPID(pid)) {
       ob_camera_node_->startGmslTrigger();
     }
-    // if (isGemini305SeriesPID(pid)) {
-    //   // Fixing 305 series hot-swap not outputting power
+    // if (isGemini301SeriesPID(pid)) {
+    //   // Fixing 301 series hot-swap not outputting power
     //   ob_camera_node_->startStreams();
     // }
   } catch (ob::Error &e) {
