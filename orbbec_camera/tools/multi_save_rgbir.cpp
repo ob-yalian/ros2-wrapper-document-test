@@ -317,7 +317,7 @@ class MultiCameraSubscriber : public rclcpp::Node {
     return path;
   }
 
-  std::string receiveTimestamp() const {
+  std::string receiveTimestamp() {
     const auto now = this->get_clock()->now();
     const int64_t seconds = now.seconds();
     const int64_t milliseconds = now.nanoseconds() % 1000000000 / 1000000;
