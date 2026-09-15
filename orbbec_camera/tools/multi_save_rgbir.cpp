@@ -46,7 +46,7 @@ class MultiCameraSubscriber : public rclcpp::Node {
         std::string uid = device_info->uid();
         auto usb_port = parseUsbPort(uid);
         serial_numbers_[usb_port] = serial;
-        is_gemini330_ = isGemini335PID(pid);
+        is_gemini330_ = isGemini330SeriesPID(pid);
       }
     } catch (ob::Error &e) {
       RCLCPP_ERROR_STREAM(get_logger(), orbbec_camera::formatObErrorWithStatus(e));
@@ -76,15 +76,6 @@ class MultiCameraSubscriber : public rclcpp::Node {
  private:
   std::mutex image_mutex_;
   std::mutex meta_mutex_;
-  bool isGemini335PID(uint32_t pid) {
-    return pid == GEMINI_335_PID || pid == GEMINI_330_PID || pid == GEMINI_336_PID ||
-           pid == GEMINI_335L_PID || pid == GEMINI_330L_PID || pid == GEMINI_336L_PID ||
-           pid == GEMINI_335LG_PID || pid == GEMINI_336LG_PID || pid == GEMINI_335LE_PID ||
-           pid == GEMINI_336LE_PID || pid == CUSTOM_ADVANTECH_GEMINI_336_PID ||
-           pid == CUSTOM_ADVANTECH_GEMINI_336L_PID || pid == GEMINI_338_PID ||
-           pid == GEMINI_338LG_PID || pid == GEMINI_338LE_PID || pid == GEMINI_338L_PID ||
-           pid == GEMINI_331L_PID;
-  }
   void params_init() {
     std::ifstream file(
         "install/orbbec_camera/share/orbbec_camera/config/tools/multisavergbir/"

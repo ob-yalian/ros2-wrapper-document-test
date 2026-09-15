@@ -666,8 +666,6 @@ class OBCameraNode {
 
   orbbec_camera_msgs::msg::IMUInfo createIMUInfo(const stream_index_pair& stream_index);
 
-  static bool isGemini335PID(uint32_t pid);
-
   static bool isGemini435LePID(uint32_t pid);
   static bool isPublishMetaData(uint32_t pid);
   static bool isDabaiASeriesForHwD2C(uint32_t pid);
