@@ -59,12 +59,16 @@
     ```bash
     ros2 run orbbec_camera list_devices_node
     ```
+* **`preset_resolution_config`**
+    * 摄像头设备的预设分辨率配置。格式："width,height,ir_decimation_factor,depth_decimation_factor"。例如："1280,720,4,4"。留空禁用。
 *   **`[color|depth|left_ir|right_ir|ir]_[width|height|fps|format]`**
     *   传感器流的分辨率和帧率。
     *   Femto Mega / Femto Bolt 的深度 NFOV、WFOV 模式通过深度和 IR 分辨率组合配置，参考 [深度 NFOV 和 WFOV 模式配置](../5_advanced_guide/configuration/configuration_of_depth_NFOV_and_WFOV_modes.md)。
     *   如需降低 CPU 使用率，可参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md) 中的 `color_format` 建议。
 *   **`enable_[color|depth|left_ir|right_ir|ir]`**
     *   启用或关闭对应图像流。
+* **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
+    * 设置下采样倍数。可用 `ros2 run orbbec_camera list_camera_profile_mode_node` 查看可设置分辨率。**默认值：** `1`。
 *   **`color_frame_queue_max_frames`**、**`left_color_frame_queue_max_frames`**、**`right_color_frame_queue_max_frames`**
     *   设置对应彩色帧线程缓存的最大帧数，默认值为 `10`。队列满时会丢弃最旧帧，并增加溢出计数；当前队列长度和溢出统计可通过 `/camera/get_color_queue_stats` 查询。
 *   **`[color|depth|left_ir|right_ir|ir]_rotation`**
@@ -103,6 +107,8 @@
   * 使用 SDK 回放指定 `.bag` 文件。设置后节点从 bag 文件创建回放设备，而不是连接真实相机。
 * **`bag_loop`**
   * SDK bag 回放结束后是否循环播放。默认值：`false`。仅在设置 `bag_filename` 时生效。
+* **`enable_fps_boost`**
+  * 启用设备 FPS Boost。默认值为 `false`；仅在设备支持 `FPS Boost` 属性时生效。
 
 ## 传感器控制
 
@@ -123,12 +129,20 @@
     *   设置彩色自动曝光的最大曝光值。
 *   **`color_ae_max_gain`**
     *   设置彩色自动曝光的最大增益。Gemini 2 固件 `1.5.04` 及以上、Gemini 2L 固件 `1.5.09` 及以上支持。范围通常为 `16–112`，具体范围以设备属性为准。
+* **`ae_reference_stream`**
+    * 设置自动曝光参考流。可选值：`depth`、`color`，默认值为 `depth`。
+    * 该参数替代旧参数 `ae_mode`，旧值 `depthbased/colorbased` 对应新值 `depth/color`。
+* **`ae_strategy`**
+    * 设置自动曝光策略。可选值：`default`、`motion`，默认值为 `motion`。
+    * 该参数替代旧参数 `enable_sports_mode`。
 *   **`color_brightness`**、**`color_sharpness`**、**`color_gamma`**、**`color_saturation`**、**`color_contrast`**、**`color_hue`**
     *   设置彩色亮度、锐度、伽马、饱和度、对比度和色调。
 *   **`color_backlight_compensation`**
     *   设置彩色相机的背光补偿等级。可设置范围为 `0–6`；launch 默认值为 `-1`，表示不修改设备当前值。
 *   **`color_powerline_freq`**
     *   设置电源线频率。可能的值为 `disable`、`50hz`、`60hz`、`auto`。
+* **`color_mjpeg_quality`**
+    * 设置彩色 MJPEG 编码质量。**范围：** `1–100`，**默认值：** `-1`（不修改设备当前值）。需要固件版本大于等于 `1.8.11`。
 *   **`color_preset`**
     *   通过名称设置彩色 preset。Gemini 330 系列和 Gemini 301 系列设备支持。常见可选值包括 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，具体列表以设备返回为准。名称匹配大小写不敏感。
 *   **`color_anti_flicker`**
@@ -183,6 +197,8 @@
 ### 多相机同步
 *   **`sync_mode`**
     *   设置同步模式。具体默认值由所使用的 launch 文件决定。多相机连接、同步模式和触发配置参考 [多相机同步](../5_advanced_guide/multi_camera/multi_camera_synced.md)。
+*   **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
+    *   启用 GMSL 触发输出信号 / 设置 GMSL 触发帧率。具体配置参考 [GMSL 相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
 *   **`depth_delay_us`** / **`color_delay_us`**
     *   接收捕获命令或触发信号后深度/彩色图像捕获的延迟时间（微秒）。
 *   **`trigger2image_delay_us`**
@@ -197,7 +213,6 @@
     *   触发模式下每次触发后每个流的帧数。
 *   **`sync_io_voltage_level`**
     *   设置同步 IO 电压等级。默认值为 `-1`，表示不设置。仅支持具备该属性的设备；可通过 `/camera/set_sync_io_voltage_level` 服务在运行时修改。
-    > **支持模组**：Gemini 301 系列。
 
 ### 网络相机
 * **`enumerate_net_device`**
@@ -247,54 +262,6 @@
 - **`intra_camera_sync_reference`**
   - 设置支持的 Gemini 330/335 系列设备的相机内同步参考点。**选项：** `Start`、`Middle`、`End`。参数为空时，节点不修改设备当前设置。
 
-## 设备特定参数
-*   **`enable_gmsl_trigger`** / **`gmsl_trigger_fps`**
-    *   启用 GMSL 触发输出信号 / 设置 GMSL 触发帧率。支持 Gemini 335Lg、338Lg、345Lg 和 305g，具体参考 [GMSL 相机](../5_advanced_guide/multi_camera/gmsl_camera.md)。
-* **`enable_ptp_config`**
-  * 启用PTP时间同步。仅适用于Gemini 335Le。需要 `enable_sync_host_time` 设置为 `false`。
-  > **支持模组**：Gemini 335Le。
-* **`preset_resolution_config`**
-  * 摄像头设备的预设分辨率配置。格式: "width,height,ir_decimation_factor,depth_decimation_factor". Example: "1280,720,4,4". 留空禁用。
-  > **支持模组**：Gemini 435Le。
-* **`ae_reference_stream`**
-  * 设置自动曝光参考流。可选值：`depth`、`color`，默认值为 `depth`。
-  > **支持模组**：Gemini 301 系列。
-  > **兼容说明**：该参数替代旧参数 `ae_mode`，旧值 `depthbased/colorbased` 对应新值 `depth/color`。
-* **`ae_strategy`**
-  * 设置自动曝光策略。可选值：`default`、`motion`，默认值为 `motion`。
-  > **支持模组**：Gemini 301 系列。
-  > **兼容说明**：该参数替代旧参数 `enable_sports_mode`。
-* **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
-  * 设置下采样倍数。可用`ros2 run orbbec_camera list_camera_profile_mode_node`查看可设置分辨率。**默认值：** `1`
-  > **支持模组**：Gemini 301 系列。
-* **`color_mjpeg_quality`**
-  * 设置彩色 MJPEG 编码质量。**范围：** `1–100`，**默认值：** `-1`（不修改设备当前值）。需要固件版本大于等于 `1.8.11`。
-  > **支持模组**：Gemini 330 系列。
-* **`enable_false_positive_filter`**
-  * 启用鬼影滤波。可减少重影噪声，使用示例和运行时调参方法请参考 [Gemini 330 系列 FalsePositiveFilter 使用说明](../5_advanced_guide/configuration/false_positive_filter.md)。
-  > **支持模组**：Gemini 330 系列 / Gemini 340 系列。
-* **`enable_enhanced_depth`**
-  * 启用 LingBot 增强深度滤波，默认值为 `false`。该功能需要同时启用 Color 和 Depth，并配置 D2C/C2D 对齐。完整环境、启动和图像要求请参考 [Gemini 330 系列 EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
-  > **支持模组**：Gemini 330 系列。
-* **`enhanced_depth_model_path`**
-  * LingBot `model.sm4` 文件路径，默认值为空。启用增强深度滤波时必须设置，建议使用绝对路径；运行时不能更换模型文件。
-  > **支持模组**：Gemini 330 系列。
-* **`enhanced_depth_confidence_threshold`**
-  * 增强深度滤波的置信度阈值，必须是 `0` 到 `255` 之间的整数，默认值为 `51`。
-  > **支持模组**：Gemini 330 系列。
-* **`enable_fps_boost`**
-  * 启用设备 FPS Boost。默认值为 `false`；仅在设备支持 `FPS Boost` 属性时生效。
-  > **支持模组：** Gemini 305 / Gemini 330 系列。
-* **`enable_edge_noise_removal_filter`**
-  * 启用 EdgeNoiseRemovalFilter，用于减少深度图边缘噪声。
-  > **支持模组**：DaBai Max Pro。
-* **`enable_disp_outliers_filter`**
-  * 启用 DispOutliersFilter，用于移除深度图中的视差离群点。
-  > **支持模组**：DaBai Max Pro。
-* **`disp_outliers_filter_search_mode`**
-  * 设置 DispOutliersFilter 的搜索模式。留空表示使用 SDK 默认值。可选值：`FULL`、`OFFSET_80`，大小写不敏感。
-  > **支持模组**：DaBai Max Pro。
-
 ## 基础与通用参数
 
 ### 固件与后端
@@ -325,6 +292,8 @@
 *   **`time_domain`**
     *   选择时间戳类型：`device`、`global` 和 `system`。
     *   该参数大小写不敏感；请使用上述有效值。
+* **`enable_ptp_config`**
+  * 启用 PTP 时间同步。需要 `enable_sync_host_time` 设置为 `false`。
 *   **`timestamp_clock_type`**
     *   设置 SDK 时间戳时钟类型。可选值：`realtime`、`monotonic`。launch 参数为空时不显式设置 SDK 时钟类型。
 * **`time_sync_period`**
@@ -399,6 +368,8 @@
     *   启用深度硬件降噪滤波器。Gemini 330 系列设备中，参数为空表示使用 SDK 默认值。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
 *   **`enable_noise_removal_filter`**
     *   启用深度软件降噪滤波器。Gemini 330 系列设备中，参数为空表示使用 SDK 默认值。使用 `noise_removal_filter_min_diff` 等参数设置。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
+* **`enable_false_positive_filter`**
+  * 启用鬼影滤波。可减少重影噪声，使用示例和运行时调参方法请参考 [Gemini 330 系列 FalsePositiveFilter 使用说明](../5_advanced_guide/configuration/false_positive_filter.md)。
 *   **`enable_spatial_filter`**
     *   启用深度空间滤波器。使用 `spatial_filter_alpha` 等设置。低 CPU 配置建议参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md)。
 *   **`enable_temporal_filter`**
@@ -413,6 +384,18 @@
     *   启用 MGC 降噪滤波器。适配机型包括 Astra Mini (S) Pro、DaBai Pro Max、DaBai DCW2。
 *   **`enable_lut_noise_removal_filter`**
     *   启用 LUT 降噪滤波器。适配机型包括 Astra Mini (S) Pro、DaBai Pro Max、DaBai DCW2。
+* **`enable_enhanced_depth`**
+  * 启用 LingBot 增强深度滤波，默认值为 `false`。该功能需要同时启用 Color 和 Depth，并配置 D2C/C2D 对齐。完整环境、启动和图像要求请参考 [Gemini 330 系列 EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
+* **`enhanced_depth_model_path`**
+  * LingBot `model.sm4` 文件路径，默认值为空。启用增强深度滤波时必须设置，建议使用绝对路径；运行时不能更换模型文件。
+* **`enhanced_depth_confidence_threshold`**
+  * 增强深度滤波的置信度阈值，必须是 `0` 到 `255` 之间的整数，默认值为 `51`。
+* **`enable_edge_noise_removal_filter`**
+  * 启用 EdgeNoiseRemovalFilter，用于减少深度图边缘噪声。
+* **`enable_disp_outliers_filter`**
+  * 启用 DispOutliersFilter，用于移除深度图中的视差离群点。
+* **`disp_outliers_filter_search_mode`**
+  * 设置 DispOutliersFilter 的搜索模式。留空表示使用 SDK 默认值。可选值：`FULL`、`OFFSET_80`，大小写不敏感。
 
 ---
 
