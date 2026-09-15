@@ -1652,24 +1652,38 @@ void OBCameraNode::setupDevices() {
         "Current color anti-flicker to "
             << (device_->getBoolProperty(OB_PROP_COLOR_ANTI_FLICKER_BOOL) ? "ON" : "OFF")));
   }
-  if (!color_powerline_freq_.empty() &&
-      device_->isPropertySupported(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, OB_PERMISSION_WRITE)) {
-    if (color_powerline_freq_ == "disable") {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, 0);
-    } else if (color_powerline_freq_ == "50hz") {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, 1);
-    } else if (color_powerline_freq_ == "60hz") {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, 2);
-    } else if (color_powerline_freq_ == "auto") {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, 3);
+  if (!color_powerline_freq_.empty()) {
+    const auto normalized_color_powerline_freq = lowerParameterValue(color_powerline_freq_);
+    int color_powerline_freq_value = -1;
+    if (normalized_color_powerline_freq == "disable") {
+      color_powerline_freq_value = 0;
+    } else if (normalized_color_powerline_freq == "50hz") {
+      color_powerline_freq_value = 1;
+    } else if (normalized_color_powerline_freq == "60hz") {
+      color_powerline_freq_value = 2;
+    } else if (normalized_color_powerline_freq == "auto") {
+      color_powerline_freq_value = 3;
+    } else {
+      RCLCPP_WARN_STREAM(logger_,
+                         "Invalid parameter color_powerline_freq "
+                             << formatParameterValue(color_powerline_freq_) << ". Valid values: "
+                             << formatValidParameterValues({"disable", "50hz", "60hz", "auto"})
+                             << ". Skip setting.");
+      color_powerline_freq_.clear();
     }
-    TRY_EXECUTE_BLOCK({
-      const auto current_color_powerline_freq =
-          device_->getIntProperty(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT);
-      RCLCPP_INFO_STREAM(logger_,
-                         "Current color powerline freq: "
-                             << colorPowerLineFrequencyToString(current_color_powerline_freq));
-    });
+    if (color_powerline_freq_value >= 0 &&
+        device_->isPropertySupported(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT, OB_PERMISSION_WRITE)) {
+      color_powerline_freq_ = normalized_color_powerline_freq;
+      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT,
+                          color_powerline_freq_value);
+      TRY_EXECUTE_BLOCK({
+        const auto current_color_powerline_freq =
+            device_->getIntProperty(OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT);
+        RCLCPP_INFO_STREAM(logger_,
+                           "Current color powerline freq: "
+                               << colorPowerLineFrequencyToString(current_color_powerline_freq));
+      });
+    }
   }
   if (depth_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_DEPTH_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
@@ -1707,7 +1721,8 @@ void OBCameraNode::setupDevices() {
         "Current depth auto exposure priority: "
             << (device_->getIntProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF")));
   }
-  if (should_apply_launch_config("enable_ir_auto_exposure") &&
+  if ((should_apply_launch_config("enable_auto_exposure") ||
+       should_apply_launch_config("enable_ir_auto_exposure")) &&
       device_->isPropertySupported(OB_PROP_IR_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_IR_AUTO_EXPOSURE_BOOL, enable_ir_auto_exposure_);
     TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
@@ -4753,7 +4768,11 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(mean_intensity_set_point_, "mean_intensity_set_point",
                               depth_brightness_);
   setAndGetNodeParameter<std::string>(depth_precision_str_, "depth_precision", "");
-  setAndGetNodeParameter<bool>(enable_ir_auto_exposure_, "enable_ir_auto_exposure", true);
+  setAndGetNodeParameter<bool>(enable_ir_auto_exposure_,
+                               isLaunchParamProvided("enable_auto_exposure")
+                                   ? "enable_auto_exposure"
+                                   : "enable_ir_auto_exposure",
+                               true);
   setAndGetNodeParameter<int>(ir_exposure_, "ir_exposure", -1);
   setAndGetNodeParameter<int>(ir_gain_, "ir_gain", -1);
   setAndGetNodeParameter<int>(ir_ae_max_exposure_, "ir_ae_max_exposure", -1);
