@@ -3614,8 +3614,10 @@ void OBCameraNode::setupProfiles() {
       std::shared_ptr<ob::VideoStreamProfile> selected_profile;
       std::shared_ptr<ob::VideoStreamProfile> default_profile;
       try {
-        if (width_[elem] == 0 && height_[elem] == 0 && fps_[elem] == 0 &&
-            format_[elem] == OB_FORMAT_UNKNOWN) {
+        if (is_playback_device_) {
+          selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
+        } else if (width_[elem] == 0 && height_[elem] == 0 && fps_[elem] == 0 &&
+                   format_[elem] == OB_FORMAT_UNKNOWN) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
           if (isGemini305SeriesPID(pid_) && elem == DEPTH) {
@@ -3684,6 +3686,13 @@ void OBCameraNode::setupProfiles() {
       width_[elem] = static_cast<int>(selected_profile->getWidth());
       fps_[elem] = static_cast<int>(selected_profile->getFps());
       format_[elem] = selected_profile->getFormat();
+      if (is_playback_device_) {
+        format_str_[elem] = OBFormatToString(format_[elem]);
+        RCLCPP_INFO_STREAM(logger_, "Bag playback: using recorded "
+                                        << stream_name_[elem] << " profile " << width_[elem] << "x"
+                                        << height_[elem] << " " << fps_[elem] << "fps "
+                                        << format_str_[elem]);
+      }
       updateImageConfig(elem);
       if (selected_profile->format() == OB_FORMAT_BGRA) {
         images_[elem] = cv::Mat(height_[elem], width_[elem], CV_8UC4, cv::Scalar(0, 0, 0, 0));
@@ -3706,7 +3715,20 @@ void OBCameraNode::setupProfiles() {
     }
     try {
       auto profile_list = sensors_[stream_index]->getStreamProfileList();
-      if (stream_index == ACCEL) {
+      if (is_playback_device_) {
+        stream_profile_[stream_index] = profile_list->getProfile(0);
+        if (stream_index == ACCEL) {
+          auto profile = stream_profile_[stream_index]->as<ob::AccelStreamProfile>();
+          CHECK_NOTNULL(profile.get());
+          imu_range_[stream_index] = fullAccelScaleRangeToString(profile->getFullScaleRange());
+          imu_rate_[stream_index] = sampleRateToString(profile->getSampleRate());
+        } else if (stream_index == GYRO) {
+          auto profile = stream_profile_[stream_index]->as<ob::GyroStreamProfile>();
+          CHECK_NOTNULL(profile.get());
+          imu_range_[stream_index] = fullGyroScaleRangeToString(profile->getFullScaleRange());
+          imu_rate_[stream_index] = sampleRateToString(profile->getSampleRate());
+        }
+      } else if (stream_index == ACCEL) {
         auto full_scale_range = fullAccelScaleRangeFromString(imu_range_[stream_index]);
         auto sample_rate = sampleRateFromString(imu_rate_[stream_index]);
         auto profile = profile_list->getAccelStreamProfile(full_scale_range, sample_rate);
@@ -3745,19 +3767,19 @@ std::shared_ptr<ob::VideoStreamProfile> OBCameraNode::selectVideoStreamProfile(
   std::shared_ptr<ob::VideoStreamProfile> selected_profile;
   if (width == 0 && height == 0 && fps == 0) {
     selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
-  } else if (isGemini305SeriesPID(pid_) && stream_index == DEPTH) {
+  } else if (!is_playback_device_ && isGemini305SeriesPID(pid_) && stream_index == DEPTH) {
     OBHardwareDecimationConfig conf;
     conf.originWidth = width;
     conf.originHeight = height;
     conf.factor = depth_decimation_factor_;
     selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
-  } else if (isGemini305SeriesPID(pid_) && stream_index == INFRA1) {
+  } else if (!is_playback_device_ && isGemini305SeriesPID(pid_) && stream_index == INFRA1) {
     OBHardwareDecimationConfig conf;
     conf.originWidth = width;
     conf.originHeight = height;
     conf.factor = left_ir_decimation_factor_;
     selected_profile = profiles->getVideoStreamProfile(conf, format, fps);
-  } else if (isGemini305SeriesPID(pid_) && stream_index == INFRA2) {
+  } else if (!is_playback_device_ && isGemini305SeriesPID(pid_) && stream_index == INFRA2) {
     OBHardwareDecimationConfig conf;
     conf.originWidth = width;
     conf.originHeight = height;
