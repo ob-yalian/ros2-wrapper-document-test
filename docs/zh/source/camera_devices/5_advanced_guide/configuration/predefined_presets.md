@@ -64,8 +64,17 @@ ros2 launch orbbec_camera gemini2L.launch.py config_file_path:=gemini2L_dual_ir.
 | Dual Color Streams |  支持左右彩色同时出流，无深度IR信息<br> 左右路输出效果一致 |
 | Custom |  自定义修改，例如后处理管道的新配置、深度AE功能的修改 |
 
-> 由于 `Dual Color Streams` 模式的参数配置与 `Default` 模式差异较大，我们提供了对应的 YAML 配置文件。
-请将 `config_file_path` 设置为 `gemini305_dual_color.yaml`，该配置文件位于 config 目录下。
+### 双彩色模式
+
+`Dual Color Streams` 模式支持左右彩色同时出流，无深度 IR 信息，左右路输出效果一致。
+
+由于该模式的参数配置与 `Default` 模式差异较大，请使用对应的 YAML 配置文件启动：
+
+```bash
+ros2 launch orbbec_camera gemini_301_series.launch.py config_file_path:=gemini305_dual_color.yaml
+```
+
+配置文件位于 `orbbec_camera/config/gemini305_dual_color.yaml`，其中已启用 `left_color` 和 `right_color` 流；其他参数沿用 `gemini_301_series.launch.py` 的默认配置。
 
 Gemini 301 系列也支持通过 `color_preset` 参数选择彩色 preset。请按名称设置，例如 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，可用名称以设备返回为准。
 

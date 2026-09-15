@@ -64,8 +64,17 @@ The configuration file is located at `orbbec_camera/config/gemini2L_dual_ir.yaml
 | Dual Color Streams | Supports left and right color streams at the same time, no depth IR information<br> The left and right output effects are consistent |
 | Custom | Custom modifications, such as new configurations of post-processing pipelines and modifications to deep AE functions |
 
-> Since the parameter configuration of `Dual Color Streams` mode is quite different from that of `Default` mode, we provide the corresponding YAML configuration file.
-Please set `config_file_path` to `gemini305_dual_color.yaml`, the configuration file is located in the config directory.
+### Dual Color Mode
+
+The `Dual Color Streams` mode supports left and right color streams at the same time. It does not provide depth or IR information, and the left and right outputs have consistent effects.
+
+Because this mode uses a parameter configuration that differs significantly from `Default`, start it with the corresponding YAML configuration file:
+
+```bash
+ros2 launch orbbec_camera gemini_301_series.launch.py config_file_path:=gemini305_dual_color.yaml
+```
+
+The configuration file is located at `orbbec_camera/config/gemini305_dual_color.yaml`. It enables the `left_color` and `right_color` streams; other parameters inherit the defaults from `gemini_301_series.launch.py`.
 
 The Gemini 301 series also supports Color preset selection with the `color_preset` parameter. Set the preset by name, for example `Default`, `Warm Biased AWB`, or `Cold Biased AWB`. The available names are reported by the device.
 
