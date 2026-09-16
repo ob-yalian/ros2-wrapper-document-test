@@ -4,7 +4,7 @@
 
 ## 帧丢失日志与时间戳 CSV 记录
 
-开启 `enable_frame_drop_log` 后，相机节点会在日志中输出彩色和深度帧丢失统计，用于定位 SDK 接收阶段和 ROS 发布阶段的丢帧。设置 `frame_timestamp_csv_file` 后，节点会将彩色、深度以及已启用 IMU 流的时间戳记录到 CSV 文件，用于分析帧连续性、发布延迟和时间戳异常。启用帧同步（`enable_frame_sync:=true`）时，彩色和深度时间戳会汇聚到同一个 CSV 文件中；未启用时分别写入 `<stem>_color.csv` 和 `<stem>_depth.csv`。同步加速度计和陀螺仪数据写入 `<stem>_imu.csv`，独立加速度计和陀螺仪数据分别写入 `<stem>_accel.csv` 和 `<stem>_gyro.csv`。所有 CSV 文件遵循相同的分片规则。
+开启 `enable_frame_drop_log` 后，相机节点会在日志中输出彩色、深度、左右彩色和左右 IR 帧丢失统计，用于定位 SDK 接收阶段和 ROS 发布阶段的丢帧。设置 `frame_timestamp_csv_file` 后，节点会将 `color`、`depth`、`left_color`、`right_color`、`left_ir`、`right_ir` 以及已启用 IMU 流的时间戳记录到 CSV 文件，用于分析帧连续性、发布延迟和时间戳异常。启用帧同步（`enable_frame_sync:=true`）时，`color` 和 `depth` 时间戳会汇聚到同一个 CSV 文件中；未启用时分别写入 `<stem>_color.csv` 和 `<stem>_depth.csv`，左右彩色和左右 IR 始终分别写入带对应流名称后缀的文件。同步加速度计和陀螺仪数据写入 `<stem>_imu.csv`，独立加速度计和陀螺仪数据分别写入 `<stem>_accel.csv` 和 `<stem>_gyro.csv`。所有 CSV 文件遵循相同的分片规则。
 
 ```bash
 ros2 launch orbbec_camera gemini_330_series.launch.py \
@@ -20,7 +20,7 @@ CSV 中包含 SDK frame index、hardware frame number、sensor timestamp、devic
 
 ### 字段说明
 
-当前 CSV 中包含两组同构字段，分别以 `color_` 和 `depth_` 为前缀，例如 `color_sdk_frame_index` 和 `depth_sdk_frame_index`。两组字段定义完全一致，仅数据来源不同。
+当前 CSV 按图像流包含同构字段组。同步记录中的 `color` 和 `depth` 字段分别以 `color_` 和 `depth_` 为前缀；独立记录还会使用 `left_color_`、`right_color_`、`left_ir_` 和 `right_ir_` 等流名称前缀。每组字段定义一致，仅数据来源不同。
 
 | 字段后缀 | 描述 | 单位/说明 |
 | --- | --- | --- |
@@ -62,7 +62,7 @@ CSV 中包含 SDK frame index、hardware frame number、sensor timestamp、devic
 
 #### 同步说明
 
-当前这份 CSV 主要用于分析单路彩色或深度流的连续性和延迟，不能直接用于统计彩色与深度之间的同步效果。
+当前这份 CSV 主要用于分析各图像流的连续性和延迟，不能直接用于统计彩色与深度之间的同步效果。
 
 ## topic_statistics_node
 
