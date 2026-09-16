@@ -209,9 +209,9 @@ On Gemini 330 series devices with firmware `1.8.21` or later, the following serv
     ```bash
     ros2 service call /camera/set_fan_work_mode orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
     ```
-*   `/camera/set_floor_enable`
+*   `/camera/set_flood_enable`
     ```bash
-    ros2 service call /camera/set_floor_enable std_srvs/srv/SetBool '{data: true}'
+    ros2 service call /camera/set_flood_enable std_srvs/srv/SetBool '{data: true}'
     ```
 
 ### Device Information & Management

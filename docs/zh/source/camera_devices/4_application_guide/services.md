@@ -209,9 +209,9 @@ Gemini 330 系列设备使用固件 `1.8.21` 及以上版本时，如果设备�
     ```bash
     ros2 service call /camera/set_fan_work_mode orbbec_camera_msgs/srv/SetInt32 '{data: 0}'
     ```
-*   `/camera/set_floor_enable`
+*   `/camera/set_flood_enable`
     ```bash
-    ros2 service call /camera/set_floor_enable std_srvs/srv/SetBool '{data: true}'
+    ros2 service call /camera/set_flood_enable std_srvs/srv/SetBool '{data: true}'
     ```
 
 ### 设备信息与管理
