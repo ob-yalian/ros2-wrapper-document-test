@@ -67,6 +67,9 @@
     *   如需降低 CPU 使用率，可参考 [降低 CPU 使用率](../5_advanced_guide/performance/lower_cpu_usage.md) 中的 `color_format` 建议。
 *   **`enable_[color|depth|left_ir|right_ir|ir]`**
     *   启用或关闭对应图像流。
+
+> **Gemini 301 系列限制：** 启用且 FPS 大于 `0` 的所有图像流必须使用相同的 FPS。节点启动和通过 `/camera/set_stream_profile` 运行时切换 profile 时都会校验此限制。
+
 * **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
     * 设置下采样倍数。可用 `ros2 run orbbec_camera list_camera_profile_mode_node` 查看可设置分辨率。**默认值：** `1`。
 *   **`color_frame_queue_max_frames`**、**`left_color_frame_queue_max_frames`**、**`right_color_frame_queue_max_frames`**

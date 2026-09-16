@@ -67,6 +67,9 @@ The following are the launch parameters available:
     *   For lower CPU usage, see the `color_format` recommendations in [Lower CPU Usage](../5_advanced_guide/performance/lower_cpu_usage.md).
 *   **`enable_[color|depth|left_ir|right_ir|ir]`**
     *   Enable or disable the corresponding image stream.
+
+> **Gemini 301 series limitation:** All enabled image streams with an FPS greater than `0` must use the same FPS. The node validates this requirement at startup and when profiles are switched at runtime through `/camera/set_stream_profile`.
+
 * **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
   * Set the downsampling multiple. You can use `ros2 run orbbec_camera list_camera_profile_mode_node` to view the settable resolution. **Default value:** `1`.
 *   **`color_frame_queue_max_frames`**, **`left_color_frame_queue_max_frames`**, **`right_color_frame_queue_max_frames`**
