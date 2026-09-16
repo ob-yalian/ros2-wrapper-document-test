@@ -108,6 +108,7 @@ The following are the launch parameters available:
   * Record device data to the specified SDK `.bag` file after startup. Leave empty to disable automatic recording. When recording starts, a JSON preset file with the same base name is also exported, for example `record.bag` creates `record.json`.
 * **`bag_filename`**
   * Play back the specified SDK `.bag` file. When set, the node creates a playback device from the bag file instead of connecting to a physical camera.
+  * During playback, image and IMU streams use the profiles recorded in the bag file. The launch parameters do not select new image resolution, frame rate, format, or IMU range/sample rate profiles.
 * **`bag_loop`**
   * Loop SDK bag playback after the file reaches the end. Default: `false`. This only takes effect when `bag_filename` is set.
 * **`enable_fps_boost`**

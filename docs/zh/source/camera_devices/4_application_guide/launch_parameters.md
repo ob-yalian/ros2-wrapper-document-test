@@ -108,6 +108,7 @@
   * 启动后使用 SDK 录制设备数据到指定 `.bag` 文件。为空时不自动录制。开始录制时会同时导出同名 JSON preset 文件，例如 `record.bag` 对应 `record.json`。
 * **`bag_filename`**
   * 使用 SDK 回放指定 `.bag` 文件。设置后节点从 bag 文件创建回放设备，而不是连接真实相机。
+  * 回放时图像和 IMU 流使用 bag 文件中录制的 profile，不会根据启动参数重新选择图像分辨率、帧率、格式或 IMU 的量程/采样率。
 * **`bag_loop`**
   * SDK bag 回放结束后是否循环播放。默认值：`false`。仅在设置 `bag_filename` 时生效。
 * **`enable_fps_boost`**
