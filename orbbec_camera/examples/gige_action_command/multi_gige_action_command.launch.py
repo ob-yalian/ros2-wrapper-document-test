@@ -21,6 +21,7 @@ def generate_launch_description():
             "net_device_ip": "192.168.1.10",
             "net_device_port": "8090",
             "sync_mode": "group_actions",
+            "enable_ptp_config": "true",
             "log_file_name": "camera_01.log",
         }.items(),
     )
@@ -33,6 +34,7 @@ def generate_launch_description():
             "net_device_ip": "192.168.1.11",
             "net_device_port": "8090",
             "sync_mode": "group_actions",
+            "enable_ptp_config": "true",
             "log_file_name": "camera_02.log",
         }.items(),
     )
