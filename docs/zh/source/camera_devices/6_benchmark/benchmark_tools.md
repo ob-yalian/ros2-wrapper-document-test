@@ -4,17 +4,18 @@
 
 ## common_benchmark_node.py
 
-`common_benchmark_node.py` 是一个用于监控在 ROS 环境中运行的 Orbbec 相机性能的工具。它实时收集和记录关键相机指标，如帧率、延迟、系统资源使用和丢包率，帮助用户评估相机节点的稳定性和性能（每秒更新一次）。
+`common_benchmark_node.py` 是一个用于监控在 ROS 环境中运行的 Orbbec 相机性能的工具。它在订阅端实时收集和记录关键相机指标，如图像帧率、延迟、系统资源使用和估算丢帧率，帮助用户评估相机节点的稳定性和性能（每秒更新一次）。
 
 功能：
 
-- 测量发布的图像帧率和延迟（当前、最小、最大、平均）。
+- 测量订阅端接收的图像帧率和延迟（当前、最小、最大、平均）。
 - 监控相机节点的 CPU/ARM 使用率（当前、最小、最大、平均）。
-- 跟踪丢帧率（发布者）和丢包率（订阅者）。
+- 根据图像消息时间戳估算订阅端丢帧率。
+- 支持 `color`、`left_color`、`right_color`、`depth`、`ir`、`left_ir` 和 `right_ir` 图像流，也支持压缩图像和点云 topic。
 - 将实时统计信息（1 Hz）打印到终端并将结果保存到 CSV 文件。
 - 支持可配置的运行时长和 CSV 输出路径。
 
-在 ROS1 中，可以测量丢帧率和丢包率，而在 ROS2 中，header 缺少 `seq` 字段，因此仅计算发布者端的丢帧率。
+在 ROS2 中，节点根据相邻图像消息的时间戳估算订阅端丢帧率。设置 `--ideal_fps` 时使用指定的理想帧率；未设置时根据收到的图像时间戳学习名义帧间隔。
 
 ![common_benchmark_ros1](../image/benchmark_images/common_benchmark_ros1.png "ROS1")
 
@@ -32,6 +33,9 @@ ros2 run orbbec_camera common_benchmark_node.py \
 
 - `--run_time`：监控持续时间，指定为时间字符串，如 `"10s"`、`"5m"`、`"1h"`、`"2d"`。默认为 10 秒。
 - `--csv_file`：输出 CSV 文件的路径。默认情况下，它保存在工作空间目录中，名称为 `camera_monitor_log.csv`。
+- `--ideal_fps`：订阅端丢帧估算使用的理想帧率。大于 `0` 时覆盖根据图像时间戳学习的帧间隔。
+- `--camera_names`：要监控的相机命名空间，多个名称用逗号分隔。
+- `--topics`：要监控的 topic，多个值用逗号分隔。可以填写原始流名称（例如 `color,left_color,right_color`），也可以填写完整的原始/压缩图像或点云 topic。自动发现只选择原始图像 topic；压缩图像和点云需要填写完整 topic 名称。
 
 多相机监控示例：
 
@@ -39,7 +43,8 @@ ros2 run orbbec_camera common_benchmark_node.py \
 ros2 run orbbec_camera common_benchmark_node.py \
 --run_time 1h \
 --csv_file /tmp/cam_log.csv \
---camera_names camera_01,camera_02
+--camera_names camera_01,camera_02 \
+--topics color,left_color,right_color
 ```
 
 ## service_benchmark_node.py
@@ -207,7 +212,7 @@ ros2 run orbbec_camera ob_benchmark_node
 
 ## start_benchmark_node
 
-`start_benchmark_node` 是 benchmark 流程中的订阅端，会按 `start_benchmark_params.json` 中的 `camera_name` 订阅多相机 color、depth、IR 和 point cloud topic。它通常与 benchmark launch 配合使用。
+`start_benchmark_node` 是 benchmark 流程中的订阅端，会按 `start_benchmark_params.json` 中的 `camera_name` 订阅多相机 `color`、`left_color`、`right_color`、`depth`、`left_ir`、`right_ir` 和 point cloud topic。它通常与 benchmark launch 配合使用。
 
 ```bash
 ros2 run orbbec_camera start_benchmark_node

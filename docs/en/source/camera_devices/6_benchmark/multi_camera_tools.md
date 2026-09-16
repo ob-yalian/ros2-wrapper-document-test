@@ -4,7 +4,7 @@ This section describes multi-camera image saving, synchronization verification, 
 
 ## multi_save_rgbir_node
 
-`multi_save_rgbir_node` subscribes to multi-camera RGB/IR images and metadata according to `multi_save_rgbir_params.json`, and uses the `start_capture` service to trigger saving. Start the corresponding multi-camera nodes before using it.
+`multi_save_rgbir_node` subscribes to multi-camera RGB/IR images and metadata according to `multi_save_rgbir_params.json`, and uses the `start_capture` service to trigger saving. Supported stream names are `color`, `left_color`, `right_color`, `ir`, `left_ir`, and `right_ir`. Start the corresponding multi-camera nodes before using it.
 
 ```bash
 ros2 run orbbec_camera multi_save_rgbir_node
@@ -16,6 +16,14 @@ The configuration file is:
 orbbec_camera/config/tools/multisavergbir/multi_save_rgbir_params.json
 ```
 
+Set the streams to save in `stream_names`, for example:
+
+```json
+"stream_names": ["color", "left_color", "right_color"]
+```
+
+When `stream_names` is an empty array, the node automatically discovers stable available streams after startup. When streams are configured explicitly, every selected stream must receive the requested number of frames before capture completes.
+
 Trigger saving 10 frames:
 
 ```bash
@@ -26,7 +34,7 @@ ros2 service call /start_capture orbbec_camera_msgs/srv/SetInt32 "{data: 10}"
 
 `image_sync_example_node` verifies multi-image timestamp synchronization online. It subscribes to 1 to 8 image topics, displays synchronized images, and prints timestamp difference and FPS statistics. Start the camera node before using it.
 
-If `sync_topics` is not set, the node automatically discovers color/depth image topics:
+If `sync_topics` is not set, the node automatically discovers image topics for `left_color`, `right_color`, `left_ir`, `right_ir`, `color`, `depth`, and `ir`. The node supports synchronizing up to 8 image topics:
 
 ```bash
 ros2 run orbbec_camera image_sync_example_node

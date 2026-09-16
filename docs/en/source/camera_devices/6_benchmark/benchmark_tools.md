@@ -4,17 +4,18 @@ This section introduces the performance benchmark tools, their purpose, and the 
 
 ## common_benchmark_node.py
 
-`common_benchmark_node.py` monitors Orbbec camera performance in a ROS environment. It collects and records key camera metrics such as frame rate, latency, system resource usage, and packet/drop rate to help evaluate camera node stability and performance. Statistics are updated once per second.
+`common_benchmark_node.py` monitors Orbbec camera performance in a ROS environment. It collects and records subscriber-side metrics such as image frame rate, latency, system resource usage, and estimated frame loss to help evaluate camera node stability and performance. Statistics are updated once per second.
 
 Features:
 
-- Measures published image frame rate and latency (current, minimum, maximum, and average).
+- Measures the frame rate and latency of images received by the subscriber (current, minimum, maximum, and average).
 - Monitors camera node CPU/ARM usage (current, minimum, maximum, and average).
-- Tracks frame drop rate (publisher) and packet loss rate (subscriber).
+- Estimates subscriber-side frame loss from image message timestamps.
+- Supports `color`, `left_color`, `right_color`, `depth`, `ir`, `left_ir`, and `right_ir` image streams, as well as compressed image and point cloud topics.
 - Prints real-time statistics at 1 Hz and saves results to a CSV file.
 - Supports configurable runtime and CSV output path.
 
-In ROS 1, both frame drop rate and packet loss rate can be measured. In ROS 2, the header does not contain the `seq` field, so only publisher-side frame drop rate is calculated.
+In ROS 2, the node estimates subscriber-side frame loss from adjacent image message timestamps. When `--ideal_fps` is set, it uses the specified ideal frame rate; otherwise, it learns the nominal frame interval from received image timestamps.
 
 ![common_benchmark_ros1](../image/benchmark_images/common_benchmark_ros1.png "ROS1")
 
@@ -32,6 +33,9 @@ Parameters:
 
 - `--run_time`: Monitoring duration, specified as a time string such as `"10s"`, `"5m"`, `"1h"`, or `"2d"`. The default is 10 seconds.
 - `--csv_file`: Output CSV file path. By default, it is saved in the workspace directory as `camera_monitor_log.csv`.
+- `--ideal_fps`: Ideal frame rate used for subscriber-side frame-loss estimation. A value greater than `0` overrides the interval learned from image timestamps.
+- `--camera_names`: Camera namespaces to monitor, separated by commas.
+- `--topics`: Topics to monitor, separated by commas. Use raw stream names such as `color,left_color,right_color`, or full raw/compressed image and point cloud topics. Automatic discovery selects only raw image topics; compressed images and point clouds require full topic names.
 
 Multi-camera monitoring example:
 
@@ -39,7 +43,8 @@ Multi-camera monitoring example:
 ros2 run orbbec_camera common_benchmark_node.py \
 --run_time 1h \
 --csv_file /tmp/cam_log.csv \
---camera_names camera_01,camera_02
+--camera_names camera_01,camera_02 \
+--topics color,left_color,right_color
 ```
 
 ## service_benchmark_node.py
@@ -205,7 +210,7 @@ Output data files are stored in the `ob_benchmark` folder with names such as `0.
 
 ## start_benchmark_node
 
-`start_benchmark_node` is the subscriber used in the benchmark workflow. It subscribes to multi-camera color, depth, IR, and point cloud topics according to `camera_name` in `start_benchmark_params.json`. It is usually used together with benchmark launch files.
+`start_benchmark_node` is the subscriber used in the benchmark workflow. It subscribes to multi-camera `color`, `left_color`, `right_color`, `depth`, `left_ir`, `right_ir`, and point cloud topics according to `camera_name` in `start_benchmark_params.json`. It is usually used together with benchmark launch files.
 
 ```bash
 ros2 run orbbec_camera start_benchmark_node

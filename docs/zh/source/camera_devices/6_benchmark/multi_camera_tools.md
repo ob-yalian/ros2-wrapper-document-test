@@ -4,7 +4,7 @@
 
 ## multi_save_rgbir_node
 
-`multi_save_rgbir_node` 根据 `multi_save_rgbir_params.json` 配置订阅多相机 RGB/IR 图像和 metadata，并通过 `start_capture` 服务触发保存。使用前需要先启动对应的多相机节点。
+`multi_save_rgbir_node` 根据 `multi_save_rgbir_params.json` 配置订阅多相机 RGB/IR 图像和 metadata，并通过 `start_capture` 服务触发保存。支持的流名称为 `color`、`left_color`、`right_color`、`ir`、`left_ir` 和 `right_ir`。使用前需要先启动对应的多相机节点。
 
 ```bash
 ros2 run orbbec_camera multi_save_rgbir_node
@@ -16,6 +16,14 @@ ros2 run orbbec_camera multi_save_rgbir_node
 orbbec_camera/config/tools/multisavergbir/multi_save_rgbir_params.json
 ```
 
+在配置文件的 `stream_names` 中填写要保存的流名称，例如：
+
+```json
+"stream_names": ["color", "left_color", "right_color"]
+```
+
+`stream_names` 为空数组时，节点会在启动后自动发现稳定可用的流。配置流名称后，触发保存时需要每个指定流都收到所需帧数。
+
 触发保存 10 帧：
 
 ```bash
@@ -26,7 +34,7 @@ ros2 service call /start_capture orbbec_camera_msgs/srv/SetInt32 "{data: 10}"
 
 `image_sync_example_node` 用于在线验证多路图像时间戳同步情况。它会订阅 1 到 8 路图像 topic，显示同步图像，并输出时间戳差和 FPS 统计。使用前需要先启动相机节点。
 
-未设置 `sync_topics` 时，节点会自动发现 color/depth 图像 topic：
+未设置 `sync_topics` 时，节点会自动发现以下图像流的 topic：`left_color`、`right_color`、`left_ir`、`right_ir`、`color`、`depth` 和 `ir`。节点最多同步 8 路图像：
 
 ```bash
 ros2 run orbbec_camera image_sync_example_node
