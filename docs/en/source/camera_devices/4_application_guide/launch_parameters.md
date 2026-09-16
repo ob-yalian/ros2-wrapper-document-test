@@ -182,6 +182,10 @@ The following are the launch parameters available:
     *   Set the maximum exposure value for IR auto exposure.
 *   **`ir_brightness`**
     *   Set the target average intensity of the ir image when auto-exposure is turned on.
+*   **`enable_left_ir_sequence_id_filter`** / **`left_ir_sequence_id_filter_id`**
+    *   Enable the Left IR SequenceIdFilter and select a sequence ID.
+*   **`enable_right_ir_sequence_id_filter`** / **`right_ir_sequence_id_filter_id`**
+    *   Enable the Right IR SequenceIdFilter and select a sequence ID.
 ### Laser / LDP
 *   **`enable_laser`**
     *   Enable the laser. The default value is `true`.

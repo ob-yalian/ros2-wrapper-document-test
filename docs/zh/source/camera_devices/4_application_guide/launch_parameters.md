@@ -182,6 +182,10 @@
     *   设置红外自动曝光的最大曝光值。
 *   **`ir_brightness`**
     *   设置开启自动曝光时ir图像的目标平均强度。
+*   **`enable_left_ir_sequence_id_filter`** / **`left_ir_sequence_id_filter_id`**
+    *   启用左 IR SequenceIdFilter，并设置要选择的序列 ID。
+*   **`enable_right_ir_sequence_id_filter`** / **`right_ir_sequence_id_filter_id`**
+    *   启用右 IR SequenceIdFilter，并设置要选择的序列 ID。
 
 ### 激光 / LDP
 *   **`enable_laser`**
