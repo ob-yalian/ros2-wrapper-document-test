@@ -104,7 +104,8 @@ The following topics publish stream-to-stream extrinsics with type `orbbec_camer
 ### Device Status & Diagnostics
 
 *   `/camera/device_status`
-    *   Reports the current status of the camera device.
+    *   Reports the current camera device status. The message type is `orbbec_camera_msgs/msg/DeviceStatus`.
+    *   The message contains the device online status and connection type, as well as current, average, minimum, and maximum FPS and latency for the `color`, `depth`, `left_color`, `right_color`, `left_ir`, and `right_ir` streams.
 
 *   `/camera/depth_filters/status`
     *   Reports the structured status of the depth sensor's post-processing filters. The type is `orbbec_camera_msgs/msg/DepthFiltersStatus`.

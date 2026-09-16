@@ -103,7 +103,8 @@
 ### 设备状态与诊断
 
 *   `/camera/device_status`
-    *   报告相机设备的当前状态。
+    *   报告相机设备的当前状态，消息类型为 `orbbec_camera_msgs/msg/DeviceStatus`。
+    *   消息包含设备在线状态和连接类型，以及 `color`、`depth`、`left_color`、`right_color`、`left_ir` 和 `right_ir` 流的当前、平均、最小和最大 FPS 与延迟。
 
 *   `/camera/depth_filters/status`
     *   报告深度传感器后处理滤波器的结构化状态，类型为 `orbbec_camera_msgs/msg/DepthFiltersStatus`。
