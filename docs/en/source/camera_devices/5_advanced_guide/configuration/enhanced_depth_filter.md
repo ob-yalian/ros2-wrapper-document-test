@@ -106,7 +106,7 @@ The following topic names assume the default `camera_name:=camera`. If `camera_n
 | Topic | Description |
 | --- | --- |
 | `/camera/depth/image_raw` | Publishes the enhanced aligned depth image when filtering succeeds. If filtering fails at runtime, the driver continues to publish the current unenhanced aligned depth image. |
-| `/camera/depth/image_unaligned` | Publishes the depth image before software alignment. This topic is not published in hardware D2C mode. |
+| `/camera/depth/image_unaligned` | Publishes the depth image before alignment only for software D2C (`align_mode:=SW` and `align_target_stream:=COLOR`). It is not published for software C2D or hardware D2C. |
 | `/camera/confidence/image_raw` | Publishes the confidence image with `mono8` encoding when filtering succeeds. |
 
 ## Check the Runtime Status

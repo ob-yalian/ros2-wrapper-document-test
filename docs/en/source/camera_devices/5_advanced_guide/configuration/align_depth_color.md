@@ -34,6 +34,8 @@ After the camera node starts, use `/camera/set_image_registration_mode` to switc
 
 Both color and depth streams must be enabled for every mode except `OFF`. The service stops and restarts streams automatically during the switch and restores the previous mode if the operation fails.
 
+When `depth_registration` is enabled, only `SW_D2C` publishes `/camera/depth/image_unaligned`; `SW_C2D` does not publish this topic.
+
 ```bash
 ros2 service call /camera/set_image_registration_mode orbbec_camera_msgs/srv/SetString "{data: SW_D2C}"
 ```

@@ -106,7 +106,7 @@ RGB、YUYV、UYVY、MJPG、BGR、RGBA、Y16、Y8
 | 话题 | 说明 |
 | --- | --- |
 | `/camera/depth/image_raw` | 滤波成功时发布增强后的对齐深度图像。运行中滤波失败时，驱动继续发布当前未增强的对齐深度图像。 |
-| `/camera/depth/image_unaligned` | 软件对齐时发布对齐前的深度图像。硬件 D2C 模式不发布该话题。 |
+| `/camera/depth/image_unaligned` | 仅在软件 D2C（`align_mode:=SW` 且 `align_target_stream:=COLOR`）时发布对齐前的深度图像；软件 C2D 和硬件 D2C 模式不发布该话题。 |
 | `/camera/confidence/image_raw` | 滤波成功时发布 `mono8` 编码的置信度图像。 |
 
 ## 确认运行状态

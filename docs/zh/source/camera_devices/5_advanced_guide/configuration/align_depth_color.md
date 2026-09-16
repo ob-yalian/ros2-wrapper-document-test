@@ -35,6 +35,8 @@
 
 除 `OFF` 外，彩色流和深度流必须同时启用。服务会在切换过程中自动停止并重新启动数据流；切换失败时恢复原模式。
 
+启用 `depth_registration` 时，只有 `SW_D2C` 会发布 `/camera/depth/image_unaligned`；`SW_C2D` 不发布该话题。
+
 ```bash
 ros2 service call /camera/set_image_registration_mode orbbec_camera_msgs/srv/SetString "{data: SW_D2C}"
 ```

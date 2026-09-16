@@ -26,7 +26,7 @@
     *   来自深度流固件的底层元数据。
 *   `/camera/depth/image_unaligned`
     *   软件对齐前的深度图像。
-    *   **条件：** 在 `depth_registration` 为 `true` 且 `align_mode` 为 `SW` 时发布；硬件对齐时不发布。
+    *   **条件：** 仅在 `depth_registration` 为 `true`、`align_mode` 为 `SW` 且对齐目标为 `COLOR`（SW D2C）时发布；SW C2D 和硬件对齐时不发布。
 *   `/camera/confidence/image_raw`
     *   `EnhancedDepthFilter` 生成的置信度图像，根据置信度帧格式编码为 `mono8` 或 `mono16`。
     *   **条件：** 增强深度滤波成功且该话题有订阅者时发布。
