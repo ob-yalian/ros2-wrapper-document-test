@@ -6,7 +6,7 @@ Topics are organized by stream and function. By default, all topics are publishe
 
 ### Image Streams
 
-These topics provide the raw image data and corresponding calibration information for each enabled camera stream. The pattern is consistent for `color`, `depth`, `ir`, `left_ir`, and `right_ir` streams.
+These topics provide the raw image data and corresponding calibration information for each enabled camera stream. The pattern is consistent for `color`, `left_color`, `right_color`, `depth`, `ir`, `left_ir`, and `right_ir` streams.
 
 *   `/camera/color/image_raw`
     *   ROS image data from the color stream. When this topic is subscribed, color images with input formats `YUYV`, `UYVY`, `I420`, `NV12`, `NV21`, or `MJPG` are converted or decoded to `rgb8` on the host before publishing; `RGB` and `RGB888` are published with `rgb8`, while `BGR`, `RGBA`, and `BGRA` retain the corresponding `bgr8`, `rgba8`, and `bgra8` encodings.
@@ -16,6 +16,11 @@ These topics provide the raw image data and corresponding calibration informatio
     *   Camera calibration data and metadata for the color stream.
 *   `/camera/color/metadata`
     *   Low-level metadata from the color stream firmware.
+
+*   `/camera/left_color/image_raw`
+    *   ROS image data from the left color stream.
+*   `/camera/right_color/image_raw`
+    *   ROS image data from the right color stream.
 
 *   `/camera/depth/image_raw`
     *   Raw image data from the depth stream.
@@ -37,6 +42,10 @@ These topics provide the raw image data and corresponding calibration informatio
     *   Camera calibration data and metadata for the IR stream.
 *   `/camera/ir/metadata`
     *   Low-level metadata from the IR stream firmware.
+*   `/camera/left_ir/image_raw`
+    *   Raw image data from the left IR stream.
+*   `/camera/right_ir/image_raw`
+    *   Raw image data from the right IR stream.
 
 ### LRM Obstacle Distance
 

@@ -6,7 +6,7 @@
 
 ### 图像流
 
-这些话题提供每个启用的相机数据流的原始图像数据和相应的校准信息。对于 `color`、`depth`、`ir`、`left_ir` 和 `right_ir` 数据流，模式是一致的。
+这些话题提供每个启用的相机数据流的原始图像数据和相应的校准信息。对于 `color`、`left_color`、`right_color`、`depth`、`ir`、`left_ir` 和 `right_ir` 数据流，模式是一致的。
 
 *   `/camera/color/image_raw`
     *   彩色流的 ROS 图像数据。订阅该话题时，输入格式为 `YUYV`、`UYVY`、`I420`、`NV12`、`NV21` 或 `MJPG` 的彩色图像会在主机侧转换或解码为 `rgb8` 后发布；输入为 `RGB` 或 `RGB888` 时发布编码为 `rgb8`，输入为 `BGR`、`RGBA` 或 `BGRA` 时分别保留为 `bgr8`、`rgba8` 或 `bgra8`。
@@ -16,6 +16,11 @@
     *   彩色流的相机校准数据和元数据。
 *   `/camera/color/metadata`
     *   来自彩色流固件的底层元数据。
+
+*   `/camera/left_color/image_raw`
+    *   左彩色流的 ROS 图像数据。
+*   `/camera/right_color/image_raw`
+    *   右彩色流的 ROS 图像数据。
 
 *   `/camera/depth/image_raw`
     *   深度流的原始图像数据。
@@ -36,6 +41,10 @@
     *   IR流的相机校准数据和元数据。
 *   `/camera/ir/metadata`
     *   来自IR流固件的底层元数据。
+*   `/camera/left_ir/image_raw`
+    *   左红外流的原始图像数据。
+*   `/camera/right_ir/image_raw`
+    *   右红外流的原始图像数据。
 
 ### LRM 障碍物距离
 
