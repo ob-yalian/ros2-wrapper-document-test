@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <vector>
 
 #include "orbbec_camera/utils.h"
@@ -30,6 +31,14 @@ OBCameraDistortion makeDistortion(OBCameraDistortionModel model) {
   distortion.p2 = 0.02F;
   distortion.model = model;
   return distortion;
+}
+
+std::shared_ptr<ob::ColorFrame> makeMjpegFrame(const std::vector<uint8_t>& data) {
+  auto frame = ob::FrameFactory::createFrame(OB_FRAME_COLOR, OB_FORMAT_MJPG,
+                                             static_cast<uint32_t>(data.size()));
+  auto color_frame = frame->as<ob::ColorFrame>();
+  std::memcpy(color_frame->getData(), data.data(), data.size());
+  return color_frame;
 }
 
 TEST(CameraInfoDistortionTest, ConvertsBrownConradyToPlumbBob) {
@@ -67,6 +76,18 @@ TEST(CameraInfoDistortionTest, ConvertsKannalaBrandtToEquidistant) {
   EXPECT_EQ(info.distortion_model, sensor_msgs::distortion_models::EQUIDISTANT);
   EXPECT_EQ(info.d,
             std::vector<double>({distortion.k1, distortion.k2, distortion.k3, distortion.k4}));
+}
+
+TEST(JpegValidationTest, AcceptsEoiBeforeZeroPadding) {
+  const auto frame = makeMjpegFrame({0xFF, 0xD8, 0x01, 0x02, 0xFF, 0xD9, 0x00, 0x00});
+
+  EXPECT_TRUE(isValidJPEG(frame));
+}
+
+TEST(JpegValidationTest, RejectsMjpegWithoutEoi) {
+  const auto frame = makeMjpegFrame({0xFF, 0xD8, 0x01, 0x02, 0x00, 0x00});
+
+  EXPECT_FALSE(isValidJPEG(frame));
 }
 
 }  // namespace

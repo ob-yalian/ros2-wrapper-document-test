@@ -31,6 +31,47 @@ int64_t getExpectedIntervalUs(const std::shared_ptr<ob::Frame> &frame) {
   return static_cast<int64_t>(1000000.0 / static_cast<double>(fps));
 }
 
+std::optional<FrameTimestampCsvLogger::OutputMode> outputModeForStream(OBStreamType stream_type) {
+  using OutputMode = FrameTimestampCsvLogger::OutputMode;
+  switch (stream_type) {
+    case OB_STREAM_COLOR:
+      return OutputMode::COLOR;
+    case OB_STREAM_COLOR_LEFT:
+      return OutputMode::LEFT_COLOR;
+    case OB_STREAM_COLOR_RIGHT:
+      return OutputMode::RIGHT_COLOR;
+    case OB_STREAM_DEPTH:
+      return OutputMode::DEPTH;
+    case OB_STREAM_IR_LEFT:
+      return OutputMode::LEFT_IR;
+    case OB_STREAM_IR_RIGHT:
+      return OutputMode::RIGHT_IR;
+    default:
+      return std::nullopt;
+  }
+}
+
+const char *outputModeName(FrameTimestampCsvLogger::OutputMode output_mode) {
+  using OutputMode = FrameTimestampCsvLogger::OutputMode;
+  switch (output_mode) {
+    case OutputMode::COLOR:
+      return "color";
+    case OutputMode::LEFT_COLOR:
+      return "left_color";
+    case OutputMode::RIGHT_COLOR:
+      return "right_color";
+    case OutputMode::DEPTH:
+      return "depth";
+    case OutputMode::LEFT_IR:
+      return "left_ir";
+    case OutputMode::RIGHT_IR:
+      return "right_ir";
+    case OutputMode::SYNCED:
+      return "synced";
+  }
+  return "unknown";
+}
+
 }  // namespace
 
 FrameTimestampCsvLogger::FrameTimestampCsvLogger(bool drop_log_enabled,
@@ -104,9 +145,8 @@ void FrameTimestampCsvLogger::recordStandaloneFrameArrival(OBStreamType stream_t
                                                            int64_t arrival_system_us,
                                                            int64_t arrival_steady_us,
                                                            bool image_publish_expected) {
-  if (!enabled_ || !frame || !isTrackedStream(stream_type) ||
-      (stream_type == OB_STREAM_COLOR && output_mode_ != OutputMode::COLOR) ||
-      (stream_type == OB_STREAM_DEPTH && output_mode_ != OutputMode::DEPTH)) {
+  const auto expected_output_mode = outputModeForStream(stream_type);
+  if (!enabled_ || !frame || !expected_output_mode || output_mode_ != *expected_output_mode) {
     return;
   }
   recordStandaloneFrameArrivalInternal(stream_type, frame, arrival_system_us, arrival_steady_us,
@@ -163,14 +203,11 @@ void FrameTimestampCsvLogger::shutdown() {
 
 FrameTimestampCsvLogger::TrackedStream FrameTimestampCsvLogger::toTrackedStream(
     OBStreamType stream_type) const {
-  if (stream_type == OB_STREAM_COLOR) {
-    return TrackedStream::COLOR;
-  }
-  return TrackedStream::DEPTH;
+  return stream_type == OB_STREAM_DEPTH ? TrackedStream::DEPTH : TrackedStream::COLOR;
 }
 
 bool FrameTimestampCsvLogger::isTrackedStream(OBStreamType stream_type) const {
-  return stream_type == OB_STREAM_COLOR || stream_type == OB_STREAM_DEPTH;
+  return outputModeForStream(stream_type).has_value();
 }
 
 void FrameTimestampCsvLogger::recordFrameSetInternal(
@@ -294,10 +331,12 @@ void FrameTimestampCsvLogger::completeImagePublishInternal(
     auto row_id_it = row_map.find(frame_index);
     if (row_id_it == row_map.end()) {
       if (publish_system_us.has_value()) {
-        RCLCPP_WARN_STREAM(logger_,
-                           "Frame timestamp CSV logger missed row mapping for stream "
-                               << (tracked_stream == TrackedStream::COLOR ? "color" : "depth")
-                               << " frame index " << frame_index);
+        RCLCPP_WARN_STREAM(
+            logger_, "Frame timestamp CSV logger missed row mapping for stream "
+                         << (output_mode_ == OutputMode::SYNCED
+                                 ? (tracked_stream == TrackedStream::COLOR ? "color" : "depth")
+                                 : outputModeName(output_mode_))
+                         << " frame index " << frame_index);
       }
       return;
     }
@@ -357,7 +396,10 @@ void FrameTimestampCsvLogger::populateArrivalData(StreamState &state, TrackedStr
         previous.dropped_frames += lost_frames;
         RCLCPP_WARN_STREAM(logger_,
                            "Frame drop detected: stage=SDK_RECEIVE"
-                               << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
+                               << " stream="
+                               << (output_mode_ == OutputMode::SYNCED
+                                       ? (stream == TrackedStream::COLOR ? "color" : "depth")
+                                       : outputModeName(output_mode_))
                                << " frame_index=" << state.frame_index
                                << " dropped=" << previous.dropped_frames);
       }
@@ -408,7 +450,10 @@ void FrameTimestampCsvLogger::populatePublishData(StreamState &state, TrackedStr
         previous.publish_dropped_frames += lost_frames;
         RCLCPP_WARN_STREAM(logger_,
                            "Frame drop detected: stage=ROS_PUBLISH"
-                               << " stream=" << (stream == TrackedStream::COLOR ? "color" : "depth")
+                               << " stream="
+                               << (output_mode_ == OutputMode::SYNCED
+                                       ? (stream == TrackedStream::COLOR ? "color" : "depth")
+                                       : outputModeName(output_mode_))
                                << " frame_index=" << state.frame_index
                                << " dropped=" << previous.publish_dropped_frames);
       }
@@ -485,11 +530,11 @@ void FrameTimestampCsvLogger::eraseFrameIndexMappingLocked(const PendingRow &row
 }
 
 std::string FrameTimestampCsvLogger::serializeRow(const PendingRow &row) const {
-  if (output_mode_ == OutputMode::COLOR) {
-    return serializeStreamColumns(row.color);
-  }
   if (output_mode_ == OutputMode::DEPTH) {
     return serializeStreamColumns(row.depth);
+  }
+  if (output_mode_ != OutputMode::SYNCED) {
+    return serializeStreamColumns(row.color);
   }
   std::ostringstream ss;
   ss << serializeStreamColumns(row.color) << "," << serializeStreamColumns(row.depth);
@@ -560,14 +605,12 @@ std::string FrameTimestampCsvLogger::csvHeader() const {
     ss << prefix << "_sdk_delay_from_global_us,";
     ss << prefix << "_sdk_delay_from_system_us";
   };
-  if (output_mode_ == OutputMode::SYNCED || output_mode_ == OutputMode::COLOR) {
-    append_stream_header("color");
-  }
   if (output_mode_ == OutputMode::SYNCED) {
+    append_stream_header("color");
     ss << ",";
-  }
-  if (output_mode_ == OutputMode::SYNCED || output_mode_ == OutputMode::DEPTH) {
     append_stream_header("depth");
+  } else {
+    append_stream_header(outputModeName(output_mode_));
   }
   return ss.str();
 }
@@ -641,10 +684,8 @@ void FrameTimestampCsvLogger::writerThreadMain() {
 std::string FrameTimestampCsvLogger::csvFilePathForIndex(uint64_t file_index) const {
   const std::filesystem::path original_path(csv_file_path_);
   std::string suffix;
-  if (output_mode_ == OutputMode::COLOR) {
-    suffix = "_color";
-  } else if (output_mode_ == OutputMode::DEPTH) {
-    suffix = "_depth";
+  if (output_mode_ != OutputMode::SYNCED) {
+    suffix = "_" + std::string(outputModeName(output_mode_));
   }
 
   auto indexed_filename = original_path.stem().string() + suffix;

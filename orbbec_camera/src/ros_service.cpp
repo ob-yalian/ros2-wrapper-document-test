@@ -217,11 +217,11 @@ void OBCameraNode::setupCameraCtrlServices() {
         });
   }
   if (isPropertyWritable(device_, OB_PROP_FLOOD_BOOL)) {
-    set_floor_enable_srv_ = node_->create_service<SetBool>(
-        "set_floor_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+    set_flood_enable_srv_ = node_->create_service<SetBool>(
+        "set_flood_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                    const std::shared_ptr<SetBool::Request> request,
                                    std::shared_ptr<SetBool::Response> response) {
-          setFloorEnableCallback(request_header, request, response);
+          setFloodEnableCallback(request_header, request, response);
         });
   }
   if (isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT) ||
@@ -903,6 +903,8 @@ void OBCameraNode::setImageRegistrationModeCallback(
 
   auto rollback_after_error = [&](const std::string& error_message) {
     try {
+      stopColorFrameThreads();
+      clearColorFrameQueues();
       restore_old_mode();
       if (was_running && !pipeline_started_.load()) {
         startStreams();
@@ -924,6 +926,8 @@ void OBCameraNode::setImageRegistrationModeCallback(
     if (was_running) {
       stopStreams();
     }
+    stopColorFrameThreads();
+    clearColorFrameQueues();
 
     apply_image_registration_mode(mode);
 
@@ -1124,13 +1128,13 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
                                     std::shared_ptr<SetArrays::Response>& response,
                                     const stream_index_pair& stream_index) {
   auto stream = stream_index.first;
-  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
+  if (isGemini301SeriesPID(device_->getDeviceInfo()->getPid()) &&
       (stream != OB_STREAM_COLOR && ae_reference_stream_ == "color")) {
     response->success = false;
     response->message = "AE Reference Stream is color, other sensors setting is not supported";
     return;
   }
-  if (isGemini305SeriesPID(device_->getDeviceInfo()->getPid()) &&
+  if (isGemini301SeriesPID(device_->getDeviceInfo()->getPid()) &&
       (stream != OB_STREAM_DEPTH && ae_reference_stream_ == "depth")) {
     response->success = false;
     response->message =
@@ -1530,15 +1534,15 @@ void OBCameraNode::setFanWorkModeCallback(const std::shared_ptr<SetInt32::Reques
   }
 }
 
-void OBCameraNode::setFloorEnableCallback(
+void OBCameraNode::setFloodEnableCallback(
     const std::shared_ptr<rmw_request_id_t>& request_header,
     const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
     std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
   (void)request_header;
   (void)response;
-  bool floor_enable = request->data;
+  bool flood_enable = request->data;
   try {
-    device_->setBoolProperty(OB_PROP_FLOOD_BOOL, floor_enable);
+    device_->setBoolProperty(OB_PROP_FLOOD_BOOL, flood_enable);
     response->success = true;
   } catch (const ob::Error& e) {
     response->success = false;

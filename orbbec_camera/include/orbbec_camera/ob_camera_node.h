@@ -237,10 +237,14 @@ class OBCameraNode {
   }
   void getColorStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg) {
     fps_delay_status_color_->fillColorStatus(status_msg);
+    fps_delay_status_left_color_->fillLeftColorStatus(status_msg);
+    fps_delay_status_right_color_->fillRightColorStatus(status_msg);
   }
 
   void getDepthStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg) {
     fps_delay_status_depth_->fillDepthStatus(status_msg);
+    fps_delay_status_left_ir_->fillLeftIrStatus(status_msg);
+    fps_delay_status_right_ir_->fillRightIrStatus(status_msg);
   }
 
   bool checkUserCalibrationReady() {
@@ -304,6 +308,9 @@ class OBCameraNode {
                                     const std::string& sensor_name);
 
   void setupProfiles();
+
+  bool validate301SeriesStreamFrameRates(const std::map<stream_index_pair, int>& fps,
+                                         std::string& message) const;
 
   std::shared_ptr<ob::VideoStreamProfile> selectVideoStreamProfile(
       const stream_index_pair& stream_index, int width, int height, int fps, OBFormat format);
@@ -470,7 +477,7 @@ class OBCameraNode {
                               const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
-  void setFloorEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
+  void setFloodEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
                               const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
@@ -666,8 +673,6 @@ class OBCameraNode {
 
   orbbec_camera_msgs::msg::IMUInfo createIMUInfo(const stream_index_pair& stream_index);
 
-  static bool isGemini335PID(uint32_t pid);
-
   static bool isGemini435LePID(uint32_t pid);
   static bool isPublishMetaData(uint32_t pid);
   static bool isDabaiASeriesForHwD2C(uint32_t pid);
@@ -804,7 +809,7 @@ class OBCameraNode {
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_laser_status_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_ptp_config_srv_;
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ptp_config_srv_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_floor_enable_srv_;
+  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_flood_enable_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_fan_work_mode_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr toggle_sensors_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_lrm_measure_distance_srv_;
@@ -1188,12 +1193,18 @@ class OBCameraNode {
   bool show_fps_enable_ = false;
   bool enable_publish_extrinsic_ = false;
   std::unique_ptr<FpsCounter> fps_counter_color_{nullptr};
+  std::unique_ptr<FpsCounter> fps_counter_left_color_{nullptr};
+  std::unique_ptr<FpsCounter> fps_counter_right_color_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_depth_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_left_ir_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_right_ir_{nullptr};
 
   std::unique_ptr<FpsDelayStatus> fps_delay_status_color_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_left_color_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_right_color_{nullptr};
   std::unique_ptr<FpsDelayStatus> fps_delay_status_depth_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_left_ir_{nullptr};
+  std::unique_ptr<FpsDelayStatus> fps_delay_status_right_ir_{nullptr};
 
   std::string intra_camera_sync_reference_ = "";
   std::string ae_reference_stream_;

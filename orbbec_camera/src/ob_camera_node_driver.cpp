@@ -1232,10 +1232,9 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   CHECK_NOTNULL(device_info_.get());
   device_unique_id_ = device_info_->getUid();
 
-  if (enable_sync_host_time_ && !isOpenNIDevice(device_info_->pid()) && device_type_ == "camera" &&
-      !playback_device_) {
+  if (!isOpenNIDevice(device_info_->pid()) && device_type_ == "camera" && !playback_device_) {
     TRY_EXECUTE_BLOCK(device_->timerSyncWithHost());
-    if (g_time_domain != "global") {
+    if (enable_sync_host_time_ && g_time_domain != "global") {
       device_->enableGlobalTimestamp(false);
       sync_host_time_timer_ = this->create_wall_timer(time_sync_period_, [this]() {
         // Multiple safety checks before attempting time sync
@@ -1373,7 +1372,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   }
 
   const bool should_delay_stream_start = delay_stream_start_after_reconnect_.exchange(false) &&
-                                         isGemini305SeriesPID(device_info_->getPid());
+                                         isGemini301SeriesPID(device_info_->getPid());
   if (should_delay_stream_start) {
     std::this_thread::sleep_for(kStreamStartDelayAfterReconnect);
   }
@@ -1605,8 +1604,8 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     if (isGmslCameraPID(pid)) {
       ob_camera_node_->startGmslTrigger();
     }
-    // if (isGemini305SeriesPID(pid)) {
-    //   // Fixing 305 series hot-swap not outputting power
+    // if (isGemini301SeriesPID(pid)) {
+    //   // Fixing 301 series hot-swap not outputting power
     //   ob_camera_node_->startStreams();
     // }
   } catch (ob::Error &e) {
