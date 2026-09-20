@@ -1473,7 +1473,9 @@ void OBCameraNode::setupDevices() {
           logger_, "Current color gain: " << device_->getIntProperty(OB_PROP_COLOR_GAIN_INT)));
     }
   }
-  if (color_mjpeg_quality_ != -1) {
+  if (color_mjpeg_quality_ != -1 &&
+      (format_[COLOR] == OB_FORMAT_UNKNOWN || format_[COLOR] == OB_FORMAT_MJPG ||
+       format_[COLOR] == OB_FORMAT_MJPEG)) {
     if (!device_->isPropertySupported(OB_PROP_MJPEG_QUALITY_INT, OB_PERMISSION_WRITE)) {
       RCLCPP_WARN_STREAM(logger_, "color_mjpeg_quality is not supported by this device");
     } else {
@@ -1489,6 +1491,9 @@ void OBCameraNode::setupDevices() {
             "Current color MJPEG quality: " << device_->getIntProperty(OB_PROP_MJPEG_QUALITY_INT)));
       }
     }
+  } else if (color_mjpeg_quality_ != -1) {
+    RCLCPP_WARN_STREAM(logger_, "color_mjpeg_quality is ignored because color format is "
+                                    << format_str_[COLOR] << "; MJPG/MJPEG is required");
   }
   if (should_apply_launch_config("enable_color_auto_exposure_priority") &&
       device_->isPropertySupported(OB_PROP_COLOR_AUTO_EXPOSURE_PRIORITY_INT, OB_PERMISSION_WRITE)) {
