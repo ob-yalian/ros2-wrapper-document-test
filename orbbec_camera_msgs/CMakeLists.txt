@@ -18,6 +18,7 @@ find_package(std_msgs REQUIRED)
 rosidl_generate_interfaces(
     ${PROJECT_NAME}
     "msg/DeviceInfo.msg"
+    "msg/StreamStatus.msg"
     "msg/DeviceStatus.msg"
     "msg/DepthFilterParam.msg"
     "msg/DepthFilterState.msg"

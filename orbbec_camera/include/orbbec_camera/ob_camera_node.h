@@ -51,6 +51,7 @@
 #include "libobsensor/ObSensor.hpp"
 
 #include "orbbec_camera_msgs/msg/device_info.hpp"
+#include "orbbec_camera_msgs/msg/device_status.hpp"
 #include "orbbec_camera_msgs/msg/depth_filter_state.hpp"
 #include "orbbec_camera_msgs/msg/depth_filters_status.hpp"
 #include "orbbec_camera_msgs/srv/get_device_config.hpp"
@@ -77,7 +78,7 @@
 #include "orbbec_camera/d2c_viewer.h"
 #include "orbbec_camera/image_publisher.h"
 #include "orbbec_camera/fps_counter.hpp"
-#include "orbbec_camera/fps_delay_status.hpp"
+#include "orbbec_camera/stream_status.hpp"
 #include "orbbec_camera/timestamp_csv_logger.h"
 #include "jpeg_decoder.h"
 #include <std_msgs/msg/header.hpp>
@@ -241,17 +242,7 @@ class OBCameraNode {
     return (color_info_manager_ && color_info_manager_->isCalibrated() && ir_info_manager_ &&
             ir_info_manager_->isCalibrated());
   }
-  void getColorStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg) {
-    fps_delay_status_color_->fillColorStatus(status_msg);
-    fps_delay_status_left_color_->fillLeftColorStatus(status_msg);
-    fps_delay_status_right_color_->fillRightColorStatus(status_msg);
-  }
-
-  void getDepthStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg) {
-    fps_delay_status_depth_->fillDepthStatus(status_msg);
-    fps_delay_status_left_ir_->fillLeftIrStatus(status_msg);
-    fps_delay_status_right_ir_->fillRightIrStatus(status_msg);
-  }
+  void fillStreamStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg);
 
   bool checkUserCalibrationReady() {
     static bool first_check = true;
@@ -368,6 +359,14 @@ class OBCameraNode {
   void setupDefaultImageFormat();
 
   void setupPublishers();
+
+  void registerStreamStatus(const std::string& topic_name,
+                            StreamStatusTracker::SubscriberCountFn subscriber_count);
+  void removeStreamStatus(const std::string& topic_name);
+  void recordStreamStatus(const std::string& topic_name,
+                          const builtin_interfaces::msg::Time& stamp);
+  std::string resolveStreamStatusTopic(const std::string& topic_name) const;
+  std::string compressedStreamStatusTopic(const stream_index_pair& stream_index) const;
 
   void syncSoftwareAlignment();
 
@@ -1205,12 +1204,8 @@ class OBCameraNode {
   std::unique_ptr<FpsCounter> fps_counter_left_ir_{nullptr};
   std::unique_ptr<FpsCounter> fps_counter_right_ir_{nullptr};
 
-  std::unique_ptr<FpsDelayStatus> fps_delay_status_color_{nullptr};
-  std::unique_ptr<FpsDelayStatus> fps_delay_status_left_color_{nullptr};
-  std::unique_ptr<FpsDelayStatus> fps_delay_status_right_color_{nullptr};
-  std::unique_ptr<FpsDelayStatus> fps_delay_status_depth_{nullptr};
-  std::unique_ptr<FpsDelayStatus> fps_delay_status_left_ir_{nullptr};
-  std::unique_ptr<FpsDelayStatus> fps_delay_status_right_ir_{nullptr};
+  std::map<std::string, std::shared_ptr<StreamStatusTracker>> stream_status_trackers_;
+  mutable std::mutex stream_status_mutex_;
 
   std::string intra_camera_sync_reference_ = "";
   std::string ae_reference_stream_;
