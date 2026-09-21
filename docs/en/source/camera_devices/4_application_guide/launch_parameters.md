@@ -184,7 +184,7 @@ The following are the launch parameters available:
 *   **`ir_ae_max_exposure`**
     *   Set the maximum exposure value for IR auto exposure.
 *   **`ir_brightness`**
-    *   Set the target average intensity of the ir image when auto-exposure is turned on.
+    *   Set the target average intensity of the ir image when auto-exposure is turned on. Some device launch files no longer declare this launch argument.
 *   **`enable_left_ir_sequence_id_filter`** / **`left_ir_sequence_id_filter_id`**
     *   Enable the Left IR SequenceIdFilter and select a sequence ID.
 *   **`enable_right_ir_sequence_id_filter`** / **`right_ir_sequence_id_filter_id`**
