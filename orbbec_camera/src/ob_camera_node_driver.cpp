@@ -442,8 +442,7 @@ void OBCameraNodeDriver::init() {
   CHECK_NOTNULL(check_connect_timer_);
   if (device_type_ == "camera") {
     device_status_timer_ =
-        this->create_wall_timer(std::chrono::milliseconds(1000 / device_status_interval_hz),
-                                [this]() { deviceStatusTimer(); });
+        this->create_wall_timer(std::chrono::seconds(1), [this]() { deviceStatusTimer(); });
     auto qos = rclcpp::QoS(1).transient_local();
     if (node_options_.use_intra_process_comms()) {
       qos = rclcpp::QoS(1);
@@ -714,6 +713,10 @@ void OBCameraNodeDriver::deviceStatusTimer() {
   status_msg.calibration_from_launch_param = false;
   status_msg.customer_calibration_ready = false;
 
+  if (ob_camera_node_) {
+    ob_camera_node_->fillStreamStatus(status_msg);
+  }
+
   // Flag to track if device communication error occurs
   bool device_communication_error = false;
 
@@ -725,30 +728,6 @@ void OBCameraNodeDriver::deviceStatusTimer() {
     if (reset_lock.owns_lock() && !reset_device_flag_) {
       // Only get device-specific info if we have a valid camera node and device
       if (ob_camera_node_) {
-        // Safely get color and depth status - these may access device
-        try {
-          ob_camera_node_->getColorStatus(status_msg);
-          ob_camera_node_->getDepthStatus(status_msg);
-        } catch (const ob::Error &e) {
-          std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
-          if (error_msg.find("Device is deactivated") != std::string::npos ||
-              error_msg.find("disconnected") != std::string::npos ||
-              error_msg.find("Send control transfer failed") != std::string::npos) {
-            RCLCPP_WARN(
-                logger_,
-                "Device communication error in %s at line %d: %s - Device may be disconnected",
-                __FUNCTION__, __LINE__, error_msg.c_str());
-            device_communication_error = true;
-          } else {
-            RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
-                         error_msg.c_str());
-          }
-        } catch (const std::exception &e) {
-          RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
-        } catch (...) {
-          RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
-        }
-
         // These should be safe as they don't directly access hardware
         status_msg.calibration_from_launch_param = ob_camera_node_->isParamCalibrated();
       }
