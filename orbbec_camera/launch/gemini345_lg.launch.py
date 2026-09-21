@@ -148,7 +148,6 @@ def generate_launch_description():
         DeclareLaunchArgument('ir_exposure', default_value='-1'),
         DeclareLaunchArgument('ir_gain', default_value='-1'),
         DeclareLaunchArgument('ir_ae_max_exposure', default_value='-1'),
-        DeclareLaunchArgument('ir_brightness', default_value='-1'),
         DeclareLaunchArgument('enable_sync_output_accel_gyro', default_value='false'),
         DeclareLaunchArgument('enable_accel', default_value='false'),
         DeclareLaunchArgument('enable_accel_data_correction', default_value='true'),
