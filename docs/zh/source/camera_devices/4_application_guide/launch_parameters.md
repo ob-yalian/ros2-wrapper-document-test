@@ -69,8 +69,6 @@
     *   启用或关闭对应图像流。
 
 > **Gemini 301 系列限制：** 启用且 FPS 大于 `0` 的所有图像流必须使用相同的 FPS。节点启动和通过 `/camera/set_stream_profile` 运行时切换 profile 时都会校验此限制。
->
-> **Gemini 301 系列 AE 参数：** 使用 `enable_ir_auto_exposure`、`ir_exposure`、`ir_gain` 和 `ir_ae_max_exposure`。启动文件不再声明 `enable_auto_exposure` 及彩色流专用的自动曝光/曝光/增益参数。迁移 YAML 时，彩色曝光和最大曝光值需要乘以 `100`；IR 参数单位不变。
 
 * **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
     * 设置下采样倍数。可用 `ros2 run orbbec_camera list_camera_profile_mode_node` 查看可设置分辨率。**默认值：** `1`。
