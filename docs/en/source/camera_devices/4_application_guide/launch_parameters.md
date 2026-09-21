@@ -148,7 +148,7 @@ The following are the launch parameters available:
 *   **`color_powerline_freq`**
     *   Set the power line freq. The possible values are `disable`, `50hz`, `60hz`, `auto`.
 * **`color_mjpeg_quality`**
-  * Set the color MJPEG encoding quality. **Range:** `1–100`; **Default:** `-1` (leave the current device value unchanged). Firmware version `1.8.11` or later is required.
+  * Set the color MJPEG encoding quality. **Range:** `1–100`; **Default:** `-1` (leave the current device value unchanged). Firmware version `1.8.11` or later is required. This parameter is applied only when the color format is `MJPG` or `MJPEG`; otherwise it is ignored.
 *   **`color_preset`**
     *   Set the Color preset by name. Supported on Gemini 330 series and Gemini 301 series devices. Common options include `Default`, `Warm Biased AWB`, and `Cold Biased AWB`; the exact list is reported by the device. The name comparison is case-insensitive.
 *   **`color_anti_flicker`**

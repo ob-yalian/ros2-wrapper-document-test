@@ -148,7 +148,7 @@
 *   **`color_powerline_freq`**
     *   设置电源线频率。可能的值为 `disable`、`50hz`、`60hz`、`auto`。
 * **`color_mjpeg_quality`**
-    * 设置彩色 MJPEG 编码质量。**范围：** `1–100`，**默认值：** `-1`（不修改设备当前值）。需要固件版本大于等于 `1.8.11`。
+    * 设置彩色 MJPEG 编码质量。**范围：** `1–100`，**默认值：** `-1`（不修改设备当前值）。需要固件版本大于等于 `1.8.11`。仅当彩色格式为 `MJPG` 或 `MJPEG` 时生效，其他格式会忽略该参数。
 *   **`color_preset`**
     *   通过名称设置彩色 preset。Gemini 330 系列和 Gemini 301 系列设备支持。常见可选值包括 `Default`、`Warm Biased AWB`、`Cold Biased AWB`，具体列表以设备返回为准。名称匹配大小写不敏感。
 *   **`color_anti_flicker`**
