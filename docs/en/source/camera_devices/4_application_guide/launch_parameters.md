@@ -69,6 +69,8 @@ The following are the launch parameters available:
     *   Enable or disable the corresponding image stream.
 
 > **Gemini 301 series limitation:** All enabled image streams with an FPS greater than `0` must use the same FPS. The node validates this requirement at startup and when profiles are switched at runtime through `/camera/set_stream_profile`.
+>
+> **Gemini 301 series AE controls:** Use `enable_ir_auto_exposure`, `ir_exposure`, `ir_gain`, and `ir_ae_max_exposure`. The launch file no longer declares `enable_auto_exposure` or the color-specific AE/exposure/gain arguments. When migrating YAML, multiply color exposure/max-exposure values by `100`; IR units are unchanged.
 
 * **`depth_decimation_factor`** / **`left_ir_decimation_factor`** / **`right_ir_decimation_factor`**
   * Set the downsampling multiple. You can use `ros2 run orbbec_camera list_camera_profile_mode_node` to view the settable resolution. **Default value:** `1`.
