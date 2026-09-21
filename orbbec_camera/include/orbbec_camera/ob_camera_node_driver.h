@@ -114,6 +114,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::atomic_bool is_alive_{false};
   std::atomic_bool device_connected_{false};
   std::atomic_bool device_connecting_{false};
+  std::atomic_bool stream_configuration_error_{false};
   std::string serial_number_;
   std::string device_unique_id_;
   std::string usb_port_;
@@ -157,7 +158,6 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::atomic<bool> is_reupdating_{false};  // Flag to track if we're in reupdate process
   std::atomic<bool> delay_stream_start_after_reconnect_{false};
   rclcpp::TimerBase::SharedPtr device_status_timer_ = nullptr;
-  int device_status_interval_hz = 2;  // 2Hz
   rclcpp::Publisher<orbbec_camera_msgs::msg::DeviceStatus>::SharedPtr device_status_pub_ = nullptr;
   std::string node_name_;
   bool force_ip_enable_{false};

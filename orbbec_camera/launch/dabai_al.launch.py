@@ -43,7 +43,7 @@ def load_parameters(context, args):
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
     skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
-                    'depth_colorizer_mode'}
+                    'enhanced_depth_model_path', 'depth_colorizer_mode'}
 
     result = {}
     for key, value in default_params.items():
@@ -148,7 +148,6 @@ def generate_launch_description():
         DeclareLaunchArgument('ir_exposure', default_value='-1'),
         DeclareLaunchArgument('ir_gain', default_value='-1'),
         DeclareLaunchArgument('ir_ae_max_exposure', default_value='-1'),
-        DeclareLaunchArgument('ir_brightness', default_value='-1'),
         DeclareLaunchArgument('enable_sync_output_accel_gyro', default_value='false'),
         DeclareLaunchArgument('enable_accel', default_value='false'),
         DeclareLaunchArgument('enable_accel_data_correction', default_value='true'),
@@ -194,6 +193,9 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_disparity_to_depth', default_value='true'),
         DeclareLaunchArgument('enable_hole_filling_filter', default_value='false'),
         DeclareLaunchArgument('enable_false_positive_filter', default_value='false'),
+        DeclareLaunchArgument('enable_enhanced_depth', default_value='false'),
+        DeclareLaunchArgument('enhanced_depth_model_path', default_value=''),
+        DeclareLaunchArgument('enhanced_depth_confidence_threshold', default_value='51'),
         DeclareLaunchArgument('decimation_filter_scale', default_value='-1'),
         DeclareLaunchArgument('sequence_id_filter_id', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),
@@ -214,6 +216,7 @@ def generate_launch_description():
         DeclareLaunchArgument('hdr_merge_gain_2', default_value='-1'),
         DeclareLaunchArgument('align_mode', default_value='HW'),
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
+        DeclareLaunchArgument('frame_aggregate_mode', default_value='ANY'), # full_frame, color_frame, ANY or disable
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'),
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_precision', default_value=''),

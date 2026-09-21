@@ -420,8 +420,10 @@ DeviceIdentity getDeviceIdentity(const std::shared_ptr<ob::DeviceInfo> &device_i
   DeviceIdentity identity;
   identity.serial_number = safeString(device_info->getSerialNumber());
   identity.uid = safeString(device_info->getUid());
-  identity.ip_address = safeString(device_info->getIpAddress());
   identity.is_network = safeString(device_info->getConnectionType()) == "Ethernet";
+  if (identity.is_network) {
+    identity.ip_address = safeString(device_info->getIpAddress());
+  }
   return identity;
 }
 

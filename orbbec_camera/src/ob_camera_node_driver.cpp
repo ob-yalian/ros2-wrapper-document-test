@@ -442,8 +442,7 @@ void OBCameraNodeDriver::init() {
   CHECK_NOTNULL(check_connect_timer_);
   if (device_type_ == "camera") {
     device_status_timer_ =
-        this->create_wall_timer(std::chrono::milliseconds(1000 / device_status_interval_hz),
-                                [this]() { deviceStatusTimer(); });
+        this->create_wall_timer(std::chrono::seconds(1), [this]() { deviceStatusTimer(); });
     auto qos = rclcpp::QoS(1).transient_local();
     if (node_options_.use_intra_process_comms()) {
       qos = rclcpp::QoS(1);
@@ -477,6 +476,10 @@ void OBCameraNodeDriver::onDeviceConnected(const std::shared_ptr<ob::DeviceList>
   // Check if device is already connected or connecting
   if (device_connected_.load() || device_connecting_.load()) {
     RCLCPP_DEBUG_STREAM(logger_, "onDeviceConnected: device already connected or connecting");
+    return;
+  }
+
+  if (stream_configuration_error_.load()) {
     return;
   }
 
@@ -552,6 +555,10 @@ void OBCameraNodeDriver::checkConnectTimer() {
 
 void OBCameraNodeDriver::queryDevice() {
   while (is_alive_ && rclcpp::ok()) {
+    if (stream_configuration_error_.load()) {
+      return;
+    }
+
     // Check if device reset is in progress before attempting to connect
     {
       std::unique_lock<decltype(reset_device_mutex_)> reset_lock(reset_device_mutex_);
@@ -714,6 +721,10 @@ void OBCameraNodeDriver::deviceStatusTimer() {
   status_msg.calibration_from_launch_param = false;
   status_msg.customer_calibration_ready = false;
 
+  if (ob_camera_node_) {
+    ob_camera_node_->fillStreamStatus(status_msg);
+  }
+
   // Flag to track if device communication error occurs
   bool device_communication_error = false;
 
@@ -725,30 +736,6 @@ void OBCameraNodeDriver::deviceStatusTimer() {
     if (reset_lock.owns_lock() && !reset_device_flag_) {
       // Only get device-specific info if we have a valid camera node and device
       if (ob_camera_node_) {
-        // Safely get color and depth status - these may access device
-        try {
-          ob_camera_node_->getColorStatus(status_msg);
-          ob_camera_node_->getDepthStatus(status_msg);
-        } catch (const ob::Error &e) {
-          std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
-          if (error_msg.find("Device is deactivated") != std::string::npos ||
-              error_msg.find("disconnected") != std::string::npos ||
-              error_msg.find("Send control transfer failed") != std::string::npos) {
-            RCLCPP_WARN(
-                logger_,
-                "Device communication error in %s at line %d: %s - Device may be disconnected",
-                __FUNCTION__, __LINE__, error_msg.c_str());
-            device_communication_error = true;
-          } else {
-            RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
-                         error_msg.c_str());
-          }
-        } catch (const std::exception &e) {
-          RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
-        } catch (...) {
-          RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
-        }
-
         // These should be safe as they don't directly access hardware
         status_msg.calibration_from_launch_param = ob_camera_node_->isParamCalibrated();
       }
@@ -1204,6 +1191,12 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
       }
 
       initialized = true;
+    } catch (const StreamConfigurationError &e) {
+      if (!stream_configuration_error_.exchange(true)) {
+        RCLCPP_ERROR_STREAM(logger_, "Invalid stream configuration; shutting down: " << e.what());
+        rclcpp::shutdown();
+      }
+      throw;
     } catch (const ob::Error &e) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to initialize device (Attempt "
                                        << retry_count + 1 << " of " << max_retries
@@ -1507,6 +1500,8 @@ void OBCameraNodeDriver::connectNetDevice(const std::string &net_device_ip, int 
     if (!device_connected_) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to initialize net device " << net_device_ip);
     }
+  } catch (const StreamConfigurationError &) {
+    device_connected_ = false;
   } catch (const std::exception &e) {
     RCLCPP_ERROR_STREAM(logger_, "Exception during net device initialization: " << e.what());
     device_connected_ = false;
@@ -1517,7 +1512,7 @@ void OBCameraNodeDriver::connectNetDevice(const std::string &net_device_ip, int 
 }
 
 void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list) {
-  if (device_connected_.load()) {
+  if (device_connected_.load() || stream_configuration_error_.load()) {
     return;
   }
 
@@ -1608,6 +1603,8 @@ void OBCameraNodeDriver::startDevice(const std::shared_ptr<ob::DeviceList> &list
     //   // Fixing 301 series hot-swap not outputting power
     //   ob_camera_node_->startStreams();
     // }
+  } catch (const StreamConfigurationError &) {
+    device_connected_ = false;
   } catch (ob::Error &e) {
     RCLCPP_ERROR_STREAM(
         logger_, "Failed to initialize device " << orbbec_camera::formatObErrorWithStatus(e));

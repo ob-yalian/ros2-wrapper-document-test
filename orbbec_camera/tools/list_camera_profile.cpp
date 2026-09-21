@@ -22,15 +22,18 @@ constexpr char kDocumentationUrl[] =
 struct CliArgs {
   bool help = false;
   std::string serial_number;
+  std::string device_preset;
   std::string sdk_log_level = "off";
 };
 
 void printUsage() {
   std::cout << "Usage:\n"
             << "ros2 run orbbec_camera list_camera_profile_mode_node --\\\n"
-            << "      [--serial_number SN]\n\n"
+            << "      [--serial_number SN] [--device_preset PRESET]\n\n"
             << "Parameters:\n"
             << "  --serial_number SN  Select a specific camera by serial number.\n"
+            << "  --device_preset PRESET\n"
+            << "                      Load a device preset before listing profiles.\n"
             << "  --sdk_log_level LEVEL\n"
             << "                      SDK file log level: debug/info/warn/error/fatal/off "
                "(default: off).\n"
@@ -64,6 +67,28 @@ bool parseArgs(int argc, char** argv, CliArgs& args, std::string& error) {
         return false;
       }
       args.serial_number = argv[i];
+      continue;
+    }
+
+    if (current.rfind("--device_preset=", 0) == 0) {
+      args.device_preset = current.substr(std::strlen("--device_preset="));
+      if (args.device_preset.empty()) {
+        error = "--device_preset requires a value";
+        return false;
+      }
+      continue;
+    }
+
+    if (current == "--device_preset") {
+      if (++i >= argc) {
+        error = "--device_preset requires a value";
+        return false;
+      }
+      args.device_preset = argv[i];
+      if (args.device_preset.empty()) {
+        error = "--device_preset requires a value";
+        return false;
+      }
       continue;
     }
 
@@ -220,6 +245,23 @@ void printPreset(const std::shared_ptr<ob::Device>& device) {
   }
 }
 
+bool loadDevicePreset(const std::shared_ptr<ob::Device>& device, const std::string& device_preset) {
+  if (device_preset.empty()) {
+    return true;
+  }
+
+  try {
+    device->loadPreset(device_preset.c_str());
+    std::cout << "Loaded device preset: " << device_preset << std::endl;
+    return true;
+  } catch (const ob::Error& e) {
+    std::cerr << "Failed to load device preset: " << formatObErrorWithStatus(e) << std::endl;
+  } catch (const std::exception& e) {
+    std::cerr << "Failed to load device preset: " << e.what() << std::endl;
+  }
+  return false;
+}
+
 int main(int argc, char** argv) {
   CliArgs args;
   std::string parse_error;
@@ -246,6 +288,9 @@ int main(int argc, char** argv) {
   bool firmware_log_enabled = false;
   if (isSdkLogEnabled(args.sdk_log_level)) {
     firmware_log_enabled = enableFirmwareLog(device);
+  }
+  if (!loadDevicePreset(device, args.device_preset)) {
+    return -1;
   }
   listSensorProfiles(device);
   printDeviceProperties(device);
