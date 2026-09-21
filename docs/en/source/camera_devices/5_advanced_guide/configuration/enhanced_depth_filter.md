@@ -1,4 +1,4 @@
-# Gemini 330 Series EnhancedDepthFilter Usage Guide
+# EnhancedDepthFilter Usage Guide
 
 The LingBot Enhanced Depth Filter (`EnhancedDepthFilter`) uses both color and depth information to improve depth image quality by reducing noise, filling depth holes, and refining object edges.
 
@@ -7,7 +7,7 @@ The LingBot Enhanced Depth Filter (`EnhancedDepthFilter`) uses both color and de
 EnhancedDepthFilter requires:
 
 * an NVIDIA Jetson running Linux ARM64;
-* a supported Gemini 330 series camera;
+* a supported Gemini 330 or Gemini 340 series camera;
 * CUDA Runtime 12;
 * TensorRT 10 Runtime;
 * a valid LingBot-Depth License;

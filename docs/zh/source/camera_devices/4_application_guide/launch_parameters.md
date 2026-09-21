@@ -393,7 +393,7 @@
 *   **`enable_lut_noise_removal_filter`**
     *   启用 LUT 降噪滤波器。适配机型包括 Astra Mini (S) Pro、DaBai Pro Max、DaBai DCW2。
 * **`enable_enhanced_depth`**
-  * 启用 LingBot 增强深度滤波，默认值为 `false`。该功能需要同时启用 Color 和 Depth，并配置 D2C/C2D 对齐。完整环境、启动和图像要求请参考 [Gemini 330 系列 EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
+  * 启用 LingBot 增强深度滤波，默认值为 `false`。该功能需要同时启用 Color 和 Depth，并配置 D2C/C2D 对齐。完整环境、启动和图像要求请参考 [EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
 * **`enhanced_depth_model_path`**
   * LingBot `model.sm4` 文件路径，默认值为空。启用增强深度滤波时必须设置，建议使用绝对路径；运行时不能更换模型文件。
 * **`enhanced_depth_confidence_threshold`**

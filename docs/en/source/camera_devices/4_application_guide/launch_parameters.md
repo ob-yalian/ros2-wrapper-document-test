@@ -393,7 +393,7 @@ The following are the launch parameters available:
 *   **`enable_lut_noise_removal_filter`**
     *   Enable the LUT noise removal filter. This parameter is available for Astra Mini (S) Pro, DaBai Pro Max, and DaBai DCW2.
 * **`enable_enhanced_depth`**
-  * Enable LingBot enhanced depth filtering. The default is `false`. Both Color and Depth must be enabled, and D2C/C2D alignment must be configured. For complete environment, startup, and image requirements, see the [Gemini 330 Series EnhancedDepthFilter Usage Guide](../5_advanced_guide/configuration/enhanced_depth_filter.md).
+  * Enable LingBot enhanced depth filtering. The default is `false`. Both Color and Depth must be enabled, and D2C/C2D alignment must be configured. For complete environment, startup, and image requirements, see the [EnhancedDepthFilter Usage Guide](../5_advanced_guide/configuration/enhanced_depth_filter.md).
 * **`enhanced_depth_model_path`**
   * Path to the LingBot `model.sm4` file. The default is empty. This parameter is required when enhanced depth filtering is enabled; an absolute path is recommended. The model file cannot be changed at runtime.
 * **`enhanced_depth_confidence_threshold`**

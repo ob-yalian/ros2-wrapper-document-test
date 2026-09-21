@@ -276,7 +276,7 @@ Gemini 330 系列设备使用固件 `1.8.21` 及以上版本时，如果设备�
 ### 深度滤波器配置
 
 *   `/camera/set_filter`
-    `FalsePositiveFilter` 的启动参数、状态确认和命名参数调参示例可参考 [Gemini 330 系列 FalsePositiveFilter 使用说明](../5_advanced_guide/configuration/false_positive_filter.md)。`EnhancedDepthFilter` 的环境要求、启动参数和状态确认方法可参考 [Gemini 330 系列 EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
+    `FalsePositiveFilter` 的启动参数、状态确认和命名参数调参示例可参考 [Gemini 330 系列 FalsePositiveFilter 使用说明](../5_advanced_guide/configuration/false_positive_filter.md)。`EnhancedDepthFilter` 的环境要求、启动参数和状态确认方法可参考 [EnhancedDepthFilter 使用说明](../5_advanced_guide/configuration/enhanced_depth_filter.md)。
     ```bash
     # filter_name 为滤波器名称，filter_enable 表示是否开启滤波器开关。
     # filter_param 为旧的按位置传参方式；filter_config 为新的命名参数方式。
