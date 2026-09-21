@@ -46,6 +46,12 @@ Query by serial number:
 ros2 run orbbec_camera list_camera_profile_mode_node -- --serial_number <SN>
 ```
 
+Load a device preset before listing profiles:
+
+```bash
+ros2 run orbbec_camera list_camera_profile_mode_node -- --device_preset <PRESET>
+```
+
 Enable SDK file logs:
 
 ```bash

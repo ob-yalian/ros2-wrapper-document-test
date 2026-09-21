@@ -46,6 +46,12 @@ ros2 run orbbec_camera list_camera_profile_mode_node
 ros2 run orbbec_camera list_camera_profile_mode_node -- --serial_number <SN>
 ```
 
+在查询 profile 前加载指定设备 preset：
+
+```bash
+ros2 run orbbec_camera list_camera_profile_mode_node -- --device_preset <PRESET>
+```
+
 如需开启 SDK 文件日志：
 
 ```bash

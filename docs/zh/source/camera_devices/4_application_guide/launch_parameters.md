@@ -57,7 +57,7 @@
 *   **`device_preset`**
     *   深度预设。可选预设和推荐场景请参考 [设备预设](../5_advanced_guide/configuration/predefined_presets.md)。可以使用下面命令查看可设置模式；该工具会同时打印 preset 列表和 preset 版本信息。
     ```bash
-    ros2 run orbbec_camera list_devices_node
+    ros2 run orbbec_camera list_camera_profile_mode_node -- --device_preset <PRESET>
     ```
 * **`preset_resolution_config`**
     * 摄像头设备的预设分辨率配置。格式："width,height,ir_decimation_factor,depth_decimation_factor"。例如："1280,720,4,4"。留空禁用。

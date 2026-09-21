@@ -57,7 +57,7 @@ The following are the launch parameters available:
 * **`device_preset`**
     * Depth preset. See [predefined presets](../5_advanced_guide/configuration/predefined_presets.md) for available presets and recommended scenarios. You can use the following command to view the configurable modes; the tool also prints the preset list and preset version information.
     ```bash
-    ros2 run orbbec_camera list_devices_node
+    ros2 run orbbec_camera list_camera_profile_mode_node -- --device_preset <PRESET>
     ```
 * **`preset_resolution_config`**
   * Preset resolution configuration for the camera device. Format: "width,height,ir_decimation_factor,depth_decimation_factor". Example: "1280,720,4,4". Leave empty to disable.
