@@ -3622,15 +3622,33 @@ void OBCameraNode::setupProfiles() {
         if (is_playback_device_) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else if (width_[elem] == 0 && height_[elem] == 0 && fps_[elem] == 0 &&
-                   format_[elem] == OB_FORMAT_UNKNOWN) {
+                   format_[elem] == OB_FORMAT_UNKNOWN &&
+                   !(isGemini301SeriesPID(pid_) && elem == DEPTH &&
+                     depth_decimation_factor_ != 1)) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
         } else {
           if (isGemini301SeriesPID(pid_) && elem == DEPTH) {
-            OBHardwareDecimationConfig conf;
-            conf.originWidth = width_[elem];
-            conf.originHeight = height_[elem];
-            conf.factor = depth_decimation_factor_;
-            selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
+            if (width_[elem] == 0 || height_[elem] == 0) {
+              // The SDK decimation lookup requires exact origin dimensions, not wildcards.
+              for (const auto &profile : supported_profiles_[elem]) {
+                const auto conf = profile->getDecimationConfig();
+                if ((width_[elem] == 0 || static_cast<int64_t>(conf.originWidth) == width_[elem]) &&
+                    (height_[elem] == 0 ||
+                     static_cast<int64_t>(conf.originHeight) == height_[elem]) &&
+                    static_cast<int64_t>(conf.factor) == depth_decimation_factor_ &&
+                    (format_[elem] == OB_FORMAT_ANY || profile->getFormat() == format_[elem]) &&
+                    (fps_[elem] == 0 || static_cast<int64_t>(profile->getFps()) == fps_[elem])) {
+                  selected_profile = profile;
+                  break;
+                }
+              }
+            } else {
+              OBHardwareDecimationConfig conf;
+              conf.originWidth = width_[elem];
+              conf.originHeight = height_[elem];
+              conf.factor = depth_decimation_factor_;
+              selected_profile = profiles->getVideoStreamProfile(conf, format_[elem], fps_[elem]);
+            }
           } else if (isGemini301SeriesPID(pid_) && elem == INFRA1) {
             OBHardwareDecimationConfig conf;
             conf.originWidth = width_[elem];
