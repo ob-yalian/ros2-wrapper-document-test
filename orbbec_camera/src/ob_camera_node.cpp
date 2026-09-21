@@ -650,7 +650,7 @@ void OBCameraNode::publishDepthFiltersStatus() {
   if (disp_outliers_filter_supported) {
     append_unique_filter_name("DispOutliersFilter");
   }
-  if (isGemini330SeriesPID(pid_)) {
+  if (isLingBotSupportedPID(pid_)) {
     append_unique_filter_name("EnhancedDepthFilter");
   }
 
@@ -3130,6 +3130,12 @@ void OBCameraNode::setupIrPostProcessFilter() {
 }
 
 void OBCameraNode::setupUndistortionFilters() {
+  // LingBot requires color undistortion before D2C alignment on Dabai A series devices.
+  if (enable_enhanced_depth_.load() && isDabaiASeriesForHwD2C(pid_)) {
+    enable_undistortion_[COLOR] = true;
+    RCLCPP_INFO(logger_, "Enable color undistortion for LingBot enhanced depth filter");
+  }
+
   auto remove_undistortion_filter = [](std::vector<std::shared_ptr<ob::Filter>> &filters) {
     filters.erase(std::remove_if(filters.begin(), filters.end(),
                                  [](const std::shared_ptr<ob::Filter> &filter) {
@@ -5391,8 +5397,8 @@ bool OBCameraNode::validateEnhancedDepthFilterConfig(std::string &message) const
   constexpr char kEnhancedDepthSupportedTargetResolutions[] = "640x480/1280x720/1280x800";
   constexpr char kEnhancedDepthSupportedDepthFormats[] = "Y10/Y11/Y12/Y14/Y16/Z16";
 
-  if (!isGemini330SeriesPID(pid_)) {
-    message = "Enhanced depth filter is only supported by Gemini 330 series devices";
+  if (!isLingBotSupportedPID(pid_)) {
+    message = "Enhanced depth filter is only supported by Gemini 330 and Dabai A series devices";
     return false;
   }
 
@@ -8196,6 +8202,10 @@ bool OBCameraNode::isDabaiASeriesForHwD2C(uint32_t pid) {
          pid == GEMINI_345LG_PID;
 }
 
+bool OBCameraNode::isLingBotSupportedPID(uint32_t pid) {
+  return isGemini330SeriesPID(pid) || isDabaiASeriesForHwD2C(pid);
+}
+
 bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 
 bool OBCameraNode::isnotLaserDevices(uint32_t pid) { return isGemini301SeriesPID(pid); }
@@ -8525,8 +8535,8 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
     bool enabled, const std::vector<float> &positional_params,
     const std::vector<orbbec_camera_msgs::msg::DepthFilterParam> &named_params,
     std::string &message) {
-  if (!isGemini330SeriesPID(pid_)) {
-    message = "Enhanced depth filter is only supported by Gemini 330 series devices";
+  if (!isLingBotSupportedPID(pid_)) {
+    message = "Enhanced depth filter is only supported by Gemini 330 and Dabai A series devices";
     return false;
   }
 
