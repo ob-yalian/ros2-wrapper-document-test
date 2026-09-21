@@ -130,7 +130,6 @@ def generate_launch_description():
         DeclareLaunchArgument('right_color_qos_history', default_value='default'),
         DeclareLaunchArgument('right_color_qos_depth', default_value='-1'),
         DeclareLaunchArgument('color_camera_info_qos', default_value='default'),
-        DeclareLaunchArgument('enable_color_auto_exposure_priority', default_value='false'),
         DeclareLaunchArgument('color_rotation', default_value='-1'),#color rotation degree : 0, 90, 180, 270
         DeclareLaunchArgument('color_flip', default_value='false'),
         DeclareLaunchArgument('color_mirror', default_value='false'),
@@ -138,11 +137,8 @@ def generate_launch_description():
         DeclareLaunchArgument('color_ae_roi_right', default_value='-1'),
         DeclareLaunchArgument('color_ae_roi_top', default_value='-1'),
         DeclareLaunchArgument('color_ae_roi_bottom', default_value='-1'),
-        DeclareLaunchArgument('color_exposure', default_value='-1'),
-        DeclareLaunchArgument('color_gain', default_value='-1'),
         DeclareLaunchArgument('enable_color_auto_white_balance', default_value='true'),
         DeclareLaunchArgument('color_white_balance', default_value='-1'),
-        DeclareLaunchArgument('color_ae_max_exposure', default_value='-1'),
         DeclareLaunchArgument('color_brightness', default_value='-1'),
         DeclareLaunchArgument('color_sharpness', default_value='-1'),
         DeclareLaunchArgument('color_gamma', default_value='-1'),
@@ -207,12 +203,13 @@ def generate_launch_description():
         DeclareLaunchArgument('right_ir_mirror', default_value='false'),
         DeclareLaunchArgument('enable_right_ir_sequence_id_filter', default_value='false'),
         DeclareLaunchArgument('right_ir_sequence_id_filter_id', default_value='-1'),
-        # Gemini 301 color, depth, and IR streams share one auto-exposure switch.
+        # Gemini 301 color/depth/IR share these AE, exposure and gain controls.
+        # Use only these entries in YAML too; color exposure/max exposure values
+        # must be multiplied by 100 when migrating. Existing IR units are unchanged.
         DeclareLaunchArgument('enable_auto_exposure', default_value='true'),
         DeclareLaunchArgument('ir_exposure', default_value='-1'),
         DeclareLaunchArgument('ir_gain', default_value='-1'),
         DeclareLaunchArgument('ir_ae_max_exposure', default_value='-1'),
-        DeclareLaunchArgument('ir_brightness', default_value='-1'),
         DeclareLaunchArgument('publish_tf', default_value='true'),
         DeclareLaunchArgument('tf_publish_rate', default_value='0.0'),
         DeclareLaunchArgument('ir_info_url', default_value=''),
