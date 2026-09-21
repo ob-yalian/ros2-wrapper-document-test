@@ -681,6 +681,7 @@ class OBCameraNode {
   static bool isGemini435LePID(uint32_t pid);
   static bool isPublishMetaData(uint32_t pid);
   static bool isDabaiASeriesForHwD2C(uint32_t pid);
+  static bool isLingBotSupportedPID(uint32_t pid);
 
   static bool isDepthWorkModeDevices(uint32_t pid);
   static bool isnotLaserDevices(uint32_t pid);
