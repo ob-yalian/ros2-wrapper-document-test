@@ -156,7 +156,7 @@ With an open-source SDK, developers can directly submit issues and pull requests
 
 | **Topic**             | **main** | **v2-main** | **Description**                                              |
 | --------------------- | -------- | ----------- | ------------------------------------------------------------ |
-| /camera/device_status | -        | Added       | Publishes device status (frame rate delay, device connection status, etc.) |
+| /camera/device_status | -        | Added       | Publishes device status; fixed per-stream FPS/delay fields are replaced by `DeviceStatus.streams[]` with topic, subscriber, publish-rate, and average-delay metrics |
 
 ### **Service Differences**
 
