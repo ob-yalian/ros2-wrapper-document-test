@@ -26,6 +26,7 @@
 #include <queue>
 #include <rclcpp/rclcpp.hpp>
 #include <string>
+#include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -136,6 +137,11 @@
 #define DEVICE_PATH "/dev/camsync"
 
 namespace orbbec_camera {
+class StreamConfigurationError : public std::runtime_error {
+ public:
+  explicit StreamConfigurationError(const std::string& message) : std::runtime_error(message) {}
+};
+
 using GetDeviceConfig = orbbec_camera_msgs::srv::GetDeviceConfig;
 using GetActionConfig = orbbec_camera_msgs::srv::GetActionConfig;
 using GetDeviceInfo = orbbec_camera_msgs::srv::GetDeviceInfo;

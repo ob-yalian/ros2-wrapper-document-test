@@ -1011,21 +1011,24 @@ void OBCameraNode::setupDevices() {
     std::string token;
     std::vector<int> values;
     values.reserve(4);
-    while (std::getline(iss, token, ',')) {
-      values.push_back(std::stoi(token));
+    try {
+      while (std::getline(iss, token, ',')) {
+        values.push_back(std::stoi(token));
+      }
+    } catch (const std::exception &e) {
+      throw StreamConfigurationError("Invalid preset_resolution_config '" +
+                                     preset_resolution_config_ + "': " + e.what());
     }
 
-    if (values.size() >= 4) {
-      presetResolutionConfig.width = values[0];
-      presetResolutionConfig.height = values[1];
-      presetResolutionConfig.irDecimationFactor = values[2];
-      presetResolutionConfig.depthDecimationFactor = values[3];
-    } else {
-      RCLCPP_WARN_STREAM(
-          logger_,
-          "Invalid preset_resolution_config parameter. "
-          "Expected format: width,height,ir_decimation_factor,depth_decimation_factor");
+    if (values.size() < 4) {
+      throw StreamConfigurationError(
+          "Invalid preset_resolution_config '" + preset_resolution_config_ +
+          "'. Expected format: width,height,ir_decimation_factor,depth_decimation_factor");
     }
+    presetResolutionConfig.width = values[0];
+    presetResolutionConfig.height = values[1];
+    presetResolutionConfig.irDecimationFactor = values[2];
+    presetResolutionConfig.depthDecimationFactor = values[3];
 
     RCLCPP_INFO_STREAM(
         logger_, "Set preset resolution config: "
@@ -3617,7 +3620,6 @@ void OBCameraNode::setupProfiles() {
         supported_profiles_[elem].emplace_back(profile);
       }
       std::shared_ptr<ob::VideoStreamProfile> selected_profile;
-      std::shared_ptr<ob::VideoStreamProfile> default_profile;
       try {
         if (is_playback_device_) {
           selected_profile = profiles->getProfile(0)->as<ob::VideoStreamProfile>();
@@ -3659,31 +3661,25 @@ void OBCameraNode::setupProfiles() {
                                 << ", Height: " << height_[elem] << ", FPS: " << fps_[elem]
                                 << ", Format: " << magic_enum::enum_name(format_[elem]));
         RCLCPP_ERROR(logger_,
-                     "Error: The device might be connected via USB 2.0. Please verify your "
-                     "configuration and try again. The current process will now exit.");
+                     "The requested stream profile is invalid. Please correct the stream "
+                     "configuration and restart the node.");
         RCLCPP_INFO_STREAM(logger_, "Available profiles:");
         printSensorProfiles(sensor);
-        RCLCPP_ERROR(logger_, "Failed to configure the requested stream profile, exiting.");
-        exit(-1);
+        throw StreamConfigurationError(
+            "Failed to configure the requested " + stream_name_[elem] +
+            " stream profile: " + orbbec_camera::formatObErrorWithStatus(ex));
       }
 
       if (!selected_profile) {
-        RCLCPP_WARN_STREAM(logger_,
-                           "Requested stream configuration is not supported by the device: "
-                               << "stream=" << magic_enum::enum_name(elem.first)
-                               << ", stream_index=" << elem.second << ", width=" << width_[elem]
-                               << ", height=" << height_[elem] << ", fps=" << fps_[elem]
-                               << ", format=" << magic_enum::enum_name(format_[elem]));
-        if (default_profile) {
-          RCLCPP_WARN_STREAM(logger_, "Using the default profile instead");
-          RCLCPP_WARN_STREAM(logger_, "Default profile FPS: " << default_profile->getFps());
-          selected_profile = default_profile;
-        } else {
-          RCLCPP_ERROR_STREAM(logger_, "No default profile found, disabling stream "
-                                           << magic_enum::enum_name(elem.first));
-          enable_stream_[elem] = false;
-          continue;
-        }
+        const auto message = "Requested " + stream_name_[elem] +
+                             " stream profile is not supported by the device: "
+                             "width=" +
+                             std::to_string(width_[elem]) +
+                             ", height=" + std::to_string(height_[elem]) +
+                             ", fps=" + std::to_string(fps_[elem]) +
+                             ", format=" + std::string(magic_enum::enum_name(format_[elem]));
+        RCLCPP_ERROR_STREAM(logger_, message);
+        throw StreamConfigurationError(message);
       }
       CHECK_NOTNULL(selected_profile);
       stream_profile_[elem] = selected_profile;
@@ -3717,7 +3713,7 @@ void OBCameraNode::setupProfiles() {
   std::string stream_fps_message;
   if (!validate301SeriesStreamFrameRates(fps_, stream_fps_message)) {
     RCLCPP_ERROR_STREAM(logger_, stream_fps_message);
-    throw std::runtime_error(stream_fps_message);
+    throw StreamConfigurationError(stream_fps_message);
   }
 
   // IMU
@@ -4705,7 +4701,7 @@ void OBCameraNode::getParameters() {
                               "right_color_frame_queue_max_frames", 10);
   const auto validate_queue_capacity = [](const char *name, int capacity) {
     if (capacity < 1) {
-      throw std::invalid_argument(std::string(name) + " must be greater than zero");
+      throw StreamConfigurationError(std::string(name) + " must be greater than zero");
     }
   };
   validate_queue_capacity("color_frame_queue_max_frames", color_frame_queue_max_frames_);
@@ -4752,12 +4748,12 @@ void OBCameraNode::getParameters() {
     if (image_qos_history_[stream_index] != "DEFAULT" &&
         image_qos_history_[stream_index] != "KEEP_LAST" &&
         image_qos_history_[stream_index] != "KEEP_ALL") {
-      throw std::invalid_argument(param_name + " must be DEFAULT, KEEP_LAST, or KEEP_ALL");
+      throw StreamConfigurationError(param_name + " must be DEFAULT, KEEP_LAST, or KEEP_ALL");
     }
     param_name = stream_name_[stream_index] + "_qos_depth";
     setAndGetNodeParameter<int>(image_qos_depth_[stream_index], param_name, -1);
     if (image_qos_depth_[stream_index] == 0 || image_qos_depth_[stream_index] < -1) {
-      throw std::invalid_argument(param_name + " must be -1 or greater than zero");
+      throw StreamConfigurationError(param_name + " must be -1 or greater than zero");
     }
     param_name = stream_name_[stream_index] + "_camera_info_qos";
     setAndGetNodeParameter<std::string>(camera_info_qos_[stream_index], param_name, "default");
@@ -5197,7 +5193,7 @@ void OBCameraNode::setupTopics() {
     if (enable_enhanced_depth_.load()) {
       std::string message;
       if (!ensureEnhancedDepthFilter(message)) {
-        throw std::runtime_error(message);
+        throw StreamConfigurationError(message);
       }
     }
     setupCameraInfo();
@@ -5206,6 +5202,8 @@ void OBCameraNode::setupTopics() {
     setupPublishers();
     setupDiagnosticUpdater();
     exportConfigJsonIfRequested();
+  } catch (const StreamConfigurationError &) {
+    throw;
   } catch (const ob::Error &e) {
     RCLCPP_ERROR_STREAM(logger_,
                         "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
