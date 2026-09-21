@@ -114,6 +114,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::atomic_bool is_alive_{false};
   std::atomic_bool device_connected_{false};
   std::atomic_bool device_connecting_{false};
+  std::atomic_bool stream_configuration_error_{false};
   std::string serial_number_;
   std::string device_unique_id_;
   std::string usb_port_;
