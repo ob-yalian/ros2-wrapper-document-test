@@ -1740,8 +1740,7 @@ void OBCameraNode::setupDevices() {
         "Current depth auto exposure priority: "
             << (device_->getIntProperty(OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT) ? "ON" : "OFF")));
   }
-  if ((should_apply_launch_config("enable_auto_exposure") ||
-       should_apply_launch_config("enable_ir_auto_exposure")) &&
+  if (should_apply_launch_config("enable_ir_auto_exposure") &&
       device_->isPropertySupported(OB_PROP_IR_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
     TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_IR_AUTO_EXPOSURE_BOOL, enable_ir_auto_exposure_);
     TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
@@ -4884,11 +4883,7 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<int>(mean_intensity_set_point_, "mean_intensity_set_point",
                               depth_brightness_);
   setAndGetNodeParameter<std::string>(depth_precision_str_, "depth_precision", "");
-  setAndGetNodeParameter<bool>(enable_ir_auto_exposure_,
-                               isLaunchParamProvided("enable_auto_exposure")
-                                   ? "enable_auto_exposure"
-                                   : "enable_ir_auto_exposure",
-                               true);
+  setAndGetNodeParameter<bool>(enable_ir_auto_exposure_, "enable_ir_auto_exposure", true);
   setAndGetNodeParameter<int>(ir_exposure_, "ir_exposure", -1);
   setAndGetNodeParameter<int>(ir_gain_, "ir_gain", -1);
   setAndGetNodeParameter<int>(ir_ae_max_exposure_, "ir_ae_max_exposure", -1);

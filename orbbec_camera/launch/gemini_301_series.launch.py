@@ -206,7 +206,7 @@ def generate_launch_description():
         # Gemini 301 color/depth/IR share these AE, exposure and gain controls.
         # Use only these entries in YAML too; color exposure/max exposure values
         # must be multiplied by 100 when migrating. Existing IR units are unchanged.
-        DeclareLaunchArgument('enable_auto_exposure', default_value='true'),
+        DeclareLaunchArgument('enable_ir_auto_exposure', default_value='true'),
         DeclareLaunchArgument('ir_exposure', default_value='-1'),
         DeclareLaunchArgument('ir_gain', default_value='-1'),
         DeclareLaunchArgument('ir_ae_max_exposure', default_value='-1'),
