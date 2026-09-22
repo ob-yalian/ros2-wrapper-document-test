@@ -204,14 +204,6 @@ void printPresetInfo(const std::shared_ptr<ob::Device> &device) {
         }
       }
     }
-
-    std::string key = "PresetVer";
-    if (device->isExtensionInfoExist(key)) {
-      std::string value = device->getExtensionInfo(key);
-      RCLCPP_INFO_STREAM(logger, "preset version: " << value);
-    } else {
-      RCLCPP_INFO_STREAM(logger, "preset version: not available");
-    }
   } catch (ob::Error &e) {
     RCLCPP_WARN_STREAM(logger,
                        "Failed to get preset info: " << orbbec_camera::formatObErrorWithStatus(e));
