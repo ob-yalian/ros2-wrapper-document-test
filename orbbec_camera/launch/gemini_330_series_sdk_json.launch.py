@@ -77,8 +77,6 @@ def generate_launch_description():
         DeclareLaunchArgument('bag_filename', default_value=''),
         DeclareLaunchArgument('bag_loop', default_value='false'),
         DeclareLaunchArgument('connection_delay', default_value='10'),
-        DeclareLaunchArgument('upgrade_firmware', default_value=''),
-        DeclareLaunchArgument('preset_firmware_path', default_value=''),
         DeclareLaunchArgument('uvc_backend', default_value='libuvc'),
         DeclareLaunchArgument('load_config_json_file_path', default_value=''),
         DeclareLaunchArgument('export_config_json_file_path', default_value=''),
