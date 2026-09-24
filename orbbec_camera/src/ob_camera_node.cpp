@@ -15,6 +15,7 @@
  *******************************************************************************/
 
 #include "orbbec_camera/ob_camera_node.h"
+#include <rclcpp/expand_topic_or_service_name.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <thread>
 #include <geometry_msgs/msg/transform_stamped.hpp>
@@ -64,6 +65,20 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
 }
 
 namespace {
+
+template <typename NodeTopicsInterfaceT>
+auto resolveTopicNameCompat(const NodeTopicsInterfaceT &topics_interface,
+                            const std::string &topic_name, const std::string &, const std::string &,
+                            int) -> decltype(topics_interface.resolve_topic_name(topic_name)) {
+  return topics_interface.resolve_topic_name(topic_name);
+}
+
+template <typename NodeTopicsInterfaceT>
+std::string resolveTopicNameCompat(const NodeTopicsInterfaceT &, const std::string &topic_name,
+                                   const std::string &node_name, const std::string &node_namespace,
+                                   long) {
+  return rclcpp::expand_topic_or_service_name(topic_name, node_name, node_namespace, false);
+}
 
 std::string getDepthFilterStatusName(const std::string &filter_name) {
   if (filter_name == "SpatialAdvancedFilter") {
@@ -5731,7 +5746,9 @@ void OBCameraNode::setupCameraInfo() {
 }
 
 std::string OBCameraNode::resolveStreamStatusTopic(const std::string &topic_name) const {
-  return node_->get_node_topics_interface()->resolve_topic_name(topic_name);
+  const auto topics_interface = node_->get_node_topics_interface();
+  return resolveTopicNameCompat(*topics_interface, topic_name, node_->get_name(),
+                                node_->get_namespace(), 0);
 }
 
 std::string OBCameraNode::compressedStreamStatusTopic(const stream_index_pair &stream_index) const {
