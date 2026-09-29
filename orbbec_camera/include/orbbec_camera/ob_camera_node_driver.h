@@ -59,6 +59,8 @@ class OBCameraNodeDriver : public rclcpp::Node {
 
   void initializeDevice(const std::shared_ptr<ob::Device>& device);
 
+  void setupDiagnosticUpdater();
+
   void initializeBagPlayback();
 
   void exportBagPresetJson(const std::string& bag_path);
@@ -101,6 +103,9 @@ class OBCameraNodeDriver : public rclcpp::Node {
   rclcpp::Logger logger_;
   OBCallbackId device_changed_callback_id_ =
       INVALID_CALLBACK_ID;  // Store callback ID for unregistering
+  // Keep the updater alive across disconnects. Declared before the camera so
+  // the camera unregisters its task before the driver's updater is destroyed.
+  std::shared_ptr<diagnostic_updater::Updater> diagnostic_updater_;
   std::unique_ptr<OBCameraNode> ob_camera_node_ = nullptr;
   std::unique_ptr<orbbec_lidar::OBLidarNode> ob_lidar_node_ = nullptr;
   std::shared_ptr<ob::Device> device_ = nullptr;

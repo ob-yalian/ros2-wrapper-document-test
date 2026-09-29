@@ -840,17 +840,14 @@ void OBCameraNode::clean() noexcept {
   is_running_.store(false);
   is_camera_node_initialized_.store(false);
 
-  // Stop diagnostic timer and updater first BEFORE acquiring device_lock to prevent deadlock
+  // Updater holds its task lock through update(), including publish(). Removing
+  // the task drains any active update and prevents future calls into this camera.
+  // Do this BEFORE taking device_lock_; the temperature callback needs that lock.
+  if (diagnostic_updater_) {
+    diagnostic_updater_->removeByName("Temperatures");
+    diagnostic_updater_.reset();  // The driver keeps the updater and its timer alive.
+  }
   try {
-    if (diagnostic_timer_) {
-      diagnostic_timer_->cancel();
-      // Wait for any currently executing timer callbacks to complete
-      {
-        std::unique_lock<std::mutex> lk(diagnostic_mutex_);
-        diagnostic_cv_.wait(lk, [this]() { return !diagnostic_running_; });
-      }
-      diagnostic_timer_.reset();
-    }
     if (software_trigger_timer_) {
       software_trigger_timer_->cancel();
       software_trigger_timer_.reset();
@@ -859,11 +856,8 @@ void OBCameraNode::clean() noexcept {
       lrm_obstacle_distance_timer_->cancel();
       lrm_obstacle_distance_timer_.reset();
     }
-    if (diagnostic_updater_) {
-      diagnostic_updater_.reset();
-    }
   } catch (...) {
-    // Ignore exceptions during diagnostic cleanup
+    // Ignore exceptions during timer cleanup
   }
 
   // Now acquire the device lock for the rest of the cleanup
@@ -5016,7 +5010,6 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<std::string>(align_mode_, "align_mode", "HW");
   align_mode_ =
       normalizeClosedSetParameterValue(logger_, "align_mode", align_mode_, {"HW", "SW"}, "HW");
-  setAndGetNodeParameter<double>(diagnostic_period_, "diagnostic_period", 0.0);
   setAndGetNodeParameter<bool>(enable_laser_, "enable_laser", true);
   std::string align_target_stream_str_;
   setAndGetNodeParameter<std::string>(align_target_stream_str_, "align_target_stream", "COLOR");
@@ -5220,7 +5213,6 @@ void OBCameraNode::setupTopics() {
     selectBaseStream();
     setupCameraCtrlServices();
     setupPublishers();
-    setupDiagnosticUpdater();
     exportConfigJsonIfRequested();
   } catch (const StreamConfigurationError &) {
     throw;
@@ -5300,78 +5292,28 @@ void OBCameraNode::onTemperatureUpdate(diagnostic_updater::DiagnosticStatusWrapp
   }
 }
 
-void OBCameraNode::setupDiagnosticUpdater() {
-  if (diagnostic_period_ <= 0.0 || is_playback_device_) {
-    // Temperature reporting requires live hardware monitoring that doesn't
-    // exist for a recorded .bag file; skip to avoid repeated SDK errors.
+void OBCameraNode::setupDiagnosticUpdater(
+    const std::shared_ptr<diagnostic_updater::Updater> &updater) {
+  if (!updater || is_playback_device_) {
     return;
   }
   try {
-    RCLCPP_INFO_STREAM(logger_, "Publish diagnostics every " << diagnostic_period_ << " seconds");
-    auto info = device_->getDeviceInfo();
-    std::string serial_number = info->getSerialNumber();
-    diagnostic_updater_ = std::make_unique<diagnostic_updater::Updater>(node_, 10000.0);
-    diagnostic_updater_->setHardwareID(serial_number);
-    diagnostic_updater_->add("Temperatures", this, &OBCameraNode::onTemperatureUpdate);
-    diagnostic_timer_ =
-        node_->create_wall_timer(std::chrono::seconds(int(diagnostic_period_)), [this]() {
-          try {
-            // Check if we're still running and all components are valid
-            if (!is_running_.load() || !diagnostic_updater_ ||
-                !is_camera_node_initialized_.load() || !device_) {
-              return;
-            }
-
-            // Try to acquire device lock with timeout to avoid blocking during shutdown
-            std::unique_lock<decltype(device_lock_)> lock(device_lock_, std::try_to_lock);
-            if (!lock.owns_lock()) {
-              // Device is busy or shutting down, skip this update
-              return;
-            }
-            // Mark diagnostic as running to prevent concurrent reset/publish races
-            {
-              std::lock_guard<std::mutex> lk(diagnostic_mutex_);
-              diagnostic_running_ = true;
-            }
-            try {
-              diagnostic_updater_->force_update();
-            } catch (...) {
-              std::lock_guard<std::mutex> lk(diagnostic_mutex_);
-              diagnostic_running_ = false;
-              diagnostic_cv_.notify_all();
-              throw;
-            }
-            {
-              std::lock_guard<std::mutex> lk(diagnostic_mutex_);
-              diagnostic_running_ = false;
-            }
-            diagnostic_cv_.notify_all();
-          } catch (const ob::Error &e) {
-            RCLCPP_WARN_STREAM(
-                logger_, "Diagnostic update failed: " << orbbec_camera::formatObErrorWithStatus(e)
-                                                      << " - Device may be disconnected");
-            // Stop the diagnostic timer if device is having issues
-            try {
-              if (diagnostic_timer_) {
-                diagnostic_timer_->cancel();
-                diagnostic_timer_.reset();
-              }
-            } catch (...) {
-              // Ignore cleanup exceptions
-            }
-          } catch (const std::exception &e) {
-            RCLCPP_WARN_STREAM(logger_, "Diagnostic update failed: " << e.what());
-          } catch (...) {
-            RCLCPP_WARN(logger_, "Diagnostic update failed: Unknown error");
-          }
+    // Retain the updater before add(): even if its initial publish throws after
+    // adding the task, clean() must still unregister the callback.
+    diagnostic_updater_ = updater;
+    const std::string serial_number = device_->getDeviceInfo()->getSerialNumber();
+    diagnostic_updater_->add(
+        "Temperatures", [this, serial_number](diagnostic_updater::DiagnosticStatusWrapper &status) {
+          status.hardware_id = serial_number;
+          onTemperatureUpdate(status);
         });
   } catch (const ob::Error &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to setup diagnostic updater: "
+    RCLCPP_ERROR_STREAM(logger_, "Failed to register temperature diagnostics: "
                                      << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
-    RCLCPP_ERROR_STREAM(logger_, "Failed to setup diagnostic updater: " << e.what());
+    RCLCPP_ERROR_STREAM(logger_, "Failed to register temperature diagnostics: " << e.what());
   } catch (...) {
-    RCLCPP_ERROR(logger_, "Failed to TemperatureUpdate");
+    RCLCPP_ERROR(logger_, "Failed to register temperature diagnostics");
   }
 }
 
