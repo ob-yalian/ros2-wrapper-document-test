@@ -7015,9 +7015,21 @@ void OBCameraNode::onNewColorFrameCallback() {
                        .count());
     }
 
-    is_color_frame_decoded_ = decodeColorFrameToBuffer(frameSet->colorFrame(), rgb_buffer_);
-    onNewFrameCallback(frameSet->colorFrame(), COLOR);
-    publishPointCloud(frameSet);
+    try {
+      is_color_frame_decoded_ = decodeColorFrameToBuffer(frameSet->colorFrame(), rgb_buffer_);
+      onNewFrameCallback(frameSet->colorFrame(), COLOR);
+      publishPointCloud(frameSet);
+    } catch (const std::exception &e) {
+      if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
+        break;
+      }
+      RCLCPP_ERROR_STREAM(logger_, "onNewColorFrameCallback error: " << e.what());
+    } catch (...) {
+      if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
+        break;
+      }
+      RCLCPP_ERROR_STREAM(logger_, "onNewColorFrameCallback error: unknown error");
+    }
   }
 
   RCLCPP_DEBUG_STREAM(logger_, "Color frame thread exited");
@@ -7047,9 +7059,21 @@ void OBCameraNode::onNewLeftColorFrameCallback() {
                        .count());
     }
 
-    is_left_color_frame_decoded_ =
-        decodeColorFrameToBuffer(frameSet->getFrame(OB_FRAME_COLOR_LEFT), rgb_buffer_left_);
-    onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_LEFT), COLOR_LEFT);
+    try {
+      is_left_color_frame_decoded_ =
+          decodeColorFrameToBuffer(frameSet->getFrame(OB_FRAME_COLOR_LEFT), rgb_buffer_left_);
+      onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_LEFT), COLOR_LEFT);
+    } catch (const std::exception &e) {
+      if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
+        break;
+      }
+      RCLCPP_ERROR_STREAM(logger_, "onNewLeftColorFrameCallback error: " << e.what());
+    } catch (...) {
+      if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
+        break;
+      }
+      RCLCPP_ERROR_STREAM(logger_, "onNewLeftColorFrameCallback error: unknown error");
+    }
   }
   RCLCPP_DEBUG_STREAM(logger_, "Left color frame thread exited");
 }
@@ -7078,9 +7102,21 @@ void OBCameraNode::onNewRightColorFrameCallback() {
                        .count());
     }
 
-    is_right_color_frame_decoded_ =
-        decodeColorFrameToBuffer(frameSet->getFrame(OB_FRAME_COLOR_RIGHT), rgb_buffer_right_);
-    onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_RIGHT), COLOR_RIGHT);
+    try {
+      is_right_color_frame_decoded_ =
+          decodeColorFrameToBuffer(frameSet->getFrame(OB_FRAME_COLOR_RIGHT), rgb_buffer_right_);
+      onNewFrameCallback(frameSet->getFrame(OB_FRAME_COLOR_RIGHT), COLOR_RIGHT);
+    } catch (const std::exception &e) {
+      if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
+        break;
+      }
+      RCLCPP_ERROR_STREAM(logger_, "onNewRightColorFrameCallback error: " << e.what());
+    } catch (...) {
+      if (!rclcpp::ok() || !is_running_.load() || stop_color_frame_threads_.load()) {
+        break;
+      }
+      RCLCPP_ERROR_STREAM(logger_, "onNewRightColorFrameCallback error: unknown error");
+    }
   }
   RCLCPP_DEBUG_STREAM(logger_, "Right color frame thread exited");
 }
