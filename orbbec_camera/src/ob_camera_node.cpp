@@ -6198,17 +6198,32 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     return;
   }
   auto point_size = result_frame->dataSize() / sizeof(OBPoint);
+  if (point_size == 0) {
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000, "No points in SDK depth point cloud");
+    return;
+  }
   auto *points = static_cast<OBPoint *>(result_frame->data());
-  auto width = depth_frame->width() / point_cloud_decimation_filter_factor_;
-  auto height = depth_frame->height() / point_cloud_decimation_filter_factor_;
+  auto width = static_cast<uint32_t>(point_size);
+  uint32_t height = 1;
+  if (ordered_pc_) {
+    auto points_frame = result_frame->as<ob::PointsFrame>();
+    width = points_frame->getWidth();
+    height = points_frame->getHeight();
+    if (static_cast<size_t>(width) * height != point_size) {
+      RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 5000,
+                                   "SDK depth point cloud dimensions "
+                                       << width << " x " << height << " do not match point count "
+                                       << point_size);
+      return;
+    }
+  }
   auto point_cloud_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
   sensor_msgs::PointCloud2Modifier modifier(*point_cloud_msg);
   modifier.setPointCloud2FieldsByString(1, "xyz");
-  modifier.resize(width * height);
+  modifier.resize(point_size);
   point_cloud_msg->width = width;
   point_cloud_msg->height = height;
   point_cloud_msg->row_step = point_cloud_msg->width * point_cloud_msg->point_step;
-  point_cloud_msg->data.resize(point_cloud_msg->height * point_cloud_msg->row_step);
   sensor_msgs::PointCloud2Iterator<float> iter_x(*point_cloud_msg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(*point_cloud_msg, "y");
   sensor_msgs::PointCloud2Iterator<float> iter_z(*point_cloud_msg, "z");
@@ -6226,15 +6241,12 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     }
   }
   if (valid_count == 0) {
-    RCLCPP_WARN(logger_, "No valid point in point cloud");
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000, "No valid point in point cloud");
     return;
   }
   if (!ordered_pc_) {
     point_cloud_msg->is_dense = true;
-    point_cloud_msg->width = valid_count;
-    point_cloud_msg->height = 1;
     modifier.resize(valid_count);
-    point_cloud_msg->row_step = point_cloud_msg->width * point_cloud_msg->point_step;
   }
   auto frame_timestamp = getFrameTimestampUs(depth_frame);
   auto timestamp = fromUsToROSTime(frame_timestamp);
@@ -6321,21 +6333,37 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     return;
   }
   auto point_size = result_frame->dataSize() / sizeof(OBColorPoint);
+  if (point_size == 0) {
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
+                         "No points in SDK colored point cloud");
+    return;
+  }
   auto *point_cloud = static_cast<OBColorPoint *>(result_frame->data());
-  auto width = color_frame->getWidth() / point_cloud_decimation_filter_factor_;
-  auto height = color_frame->getHeight() / point_cloud_decimation_filter_factor_;
+  auto width = static_cast<uint32_t>(point_size);
+  uint32_t height = 1;
+  if (ordered_pc_) {
+    auto points_frame = result_frame->as<ob::PointsFrame>();
+    width = points_frame->getWidth();
+    height = points_frame->getHeight();
+    if (static_cast<size_t>(width) * height != point_size) {
+      RCLCPP_ERROR_STREAM_THROTTLE(logger_, *node_->get_clock(), 5000,
+                                   "SDK colored point cloud dimensions "
+                                       << width << " x " << height << " do not match point count "
+                                       << point_size);
+      return;
+    }
+  }
   auto point_cloud_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
   sensor_msgs::PointCloud2Modifier modifier(*point_cloud_msg);
   modifier.setPointCloud2FieldsByString(1, "xyz");
-  modifier.resize(width * height);
-  point_cloud_msg->width = width;
-  point_cloud_msg->height = height;
   std::string format_str = "rgb";
   point_cloud_msg->point_step =
       addPointField(*point_cloud_msg, format_str, 1, sensor_msgs::msg::PointField::FLOAT32,
                     static_cast<int>(point_cloud_msg->point_step));
+  modifier.resize(point_size);
+  point_cloud_msg->width = width;
+  point_cloud_msg->height = height;
   point_cloud_msg->row_step = point_cloud_msg->width * point_cloud_msg->point_step;
-  point_cloud_msg->data.resize(point_cloud_msg->height * point_cloud_msg->row_step);
   sensor_msgs::PointCloud2Iterator<float> iter_x(*point_cloud_msg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(*point_cloud_msg, "y");
   sensor_msgs::PointCloud2Iterator<float> iter_z(*point_cloud_msg, "z");
@@ -6360,15 +6388,12 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
   }
 
   if (valid_count == 0) {
-    RCLCPP_WARN(logger_, "No valid points in point cloud");
+    RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000, "No valid points in point cloud");
     return;
   }
   if (!ordered_pc_) {
     point_cloud_msg->is_dense = true;
-    point_cloud_msg->width = valid_count;
-    point_cloud_msg->height = 1;
     modifier.resize(valid_count);
-    point_cloud_msg->row_step = point_cloud_msg->width * point_cloud_msg->point_step;
   }
   auto frame_timestamp = getFrameTimestampUs(depth_frame);
   std::string frame_id = optical_frame_id_[COLOR];
