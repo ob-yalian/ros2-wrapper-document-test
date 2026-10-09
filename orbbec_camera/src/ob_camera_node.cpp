@@ -6212,13 +6212,11 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
   sensor_msgs::PointCloud2Iterator<float> iter_x(*point_cloud_msg, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(*point_cloud_msg, "y");
   sensor_msgs::PointCloud2Iterator<float> iter_z(*point_cloud_msg, "z");
-  const static float MIN_DISTANCE = 20.0;     // 2cm
-  const static float MAX_DISTANCE = 10000.0;  // 10m
-  const static float min_depth = MIN_DISTANCE / depth_scale;
-  const static float max_depth = MAX_DISTANCE / depth_scale;
   size_t valid_count = 0;
   for (size_t i = 0; i < point_size; i++) {
-    bool valid_point = points[i].z >= min_depth && points[i].z <= max_depth;
+    // Distance limits are handled by depth filters; only reject invalid points here.
+    bool valid_point = points[i].z > 0.0f && std::isfinite(points[i].x) &&
+                       std::isfinite(points[i].y) && std::isfinite(points[i].z);
     if (valid_point || ordered_pc_) {
       *iter_x = static_cast<float>(points[i].x / 1000.0);
       *iter_y = static_cast<float>(points[i].y / 1000.0);
@@ -6345,12 +6343,10 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
   sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(*point_cloud_msg, "g");
   sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(*point_cloud_msg, "b");
   size_t valid_count = 0;
-  static const float MIN_DISTANCE = 20.0;
-  static const float MAX_DISTANCE = 10000.0;
-  static float min_depth = MIN_DISTANCE / depth_scale;
-  static float max_depth = MAX_DISTANCE / depth_scale;
   for (size_t i = 0; i < point_size; i++) {
-    bool valid_point = point_cloud[i].z >= min_depth && point_cloud[i].z <= max_depth;
+    // Distance limits are handled by depth filters; only reject invalid points here.
+    bool valid_point = point_cloud[i].z > 0.0f && std::isfinite(point_cloud[i].x) &&
+                       std::isfinite(point_cloud[i].y) && std::isfinite(point_cloud[i].z);
     if (valid_point || ordered_pc_) {
       *iter_x = static_cast<float>(point_cloud[i].x / 1000.0);
       *iter_y = static_cast<float>(point_cloud[i].y / 1000.0);
