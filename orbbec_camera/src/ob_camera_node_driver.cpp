@@ -197,6 +197,16 @@ OBCameraNodeDriver::OBCameraNodeDriver(const std::string &node_name, const std::
 OBCameraNodeDriver::~OBCameraNodeDriver() {
   is_alive_.store(false);
 
+  // Stop status queries before tearing down the camera and its publishers.
+  if (device_status_timer_) {
+    try {
+      device_status_timer_->cancel();
+      device_status_timer_.reset();
+    } catch (...) {
+      RCLCPP_WARN_STREAM(logger_, "Exception during device status timer cleanup in destructor");
+    }
+  }
+
   // Finalize bag recording before the pipeline is torn down, otherwise the
   // bag file can end up truncated/corrupted.
   if (record_device_) {
@@ -230,15 +240,6 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
       check_connect_timer_.reset();
     } catch (...) {
       RCLCPP_WARN_STREAM(logger_, "Exception during check connect timer cleanup in destructor");
-    }
-  }
-
-  if (device_status_timer_) {
-    try {
-      device_status_timer_->cancel();
-      device_status_timer_.reset();
-    } catch (...) {
-      RCLCPP_WARN_STREAM(logger_, "Exception during device status timer cleanup in destructor");
     }
   }
 
@@ -706,146 +707,159 @@ void OBCameraNodeDriver::resetDevice() {
 }
 
 void OBCameraNodeDriver::deviceStatusTimer() {
-  // Always publish device status regardless of device connection state
-  orbbec_camera_msgs::msg::DeviceStatus status_msg;
-  status_msg.header.stamp = this->now();
-  status_msg.device_online = device_connected_.load();
-  status_msg.header.frame_id = node_name_;
-
-  // Initialize default values for when device is not connected
-  status_msg.connection_type = "";
-  status_msg.calibration_from_factory = false;
-  status_msg.calibration_from_launch_param = false;
-  status_msg.customer_calibration_ready = false;
-
-  if (ob_camera_node_) {
-    ob_camera_node_->fillStreamStatus(status_msg);
+  const auto context = get_node_base_interface()->get_context();
+  if (!is_alive_.load() || !rclcpp::ok(context)) {
+    return;
   }
 
-  // Flag to track if device communication error occurs
-  bool device_communication_error = false;
+  // The context can become invalid after the check above, including during
+  // subscriber-count queries and publication. Keep those exceptions out of the executor.
+  try {
+    // Always publish device status regardless of device connection state
+    orbbec_camera_msgs::msg::DeviceStatus status_msg;
+    status_msg.header.stamp = this->now();
+    status_msg.device_online = device_connected_.load();
+    status_msg.header.frame_id = node_name_;
 
-  // Only try to get device information if device is connected and stable
-  if (device_connected_.load() && !device_connecting_.load()) {
-    // Check if reset is in progress
-    std::unique_lock<decltype(reset_device_mutex_)> reset_lock(reset_device_mutex_,
-                                                               std::try_to_lock);
-    if (reset_lock.owns_lock() && !reset_device_flag_) {
-      // Only get device-specific info if we have a valid camera node and device
-      if (ob_camera_node_) {
-        // These should be safe as they don't directly access hardware
-        status_msg.calibration_from_launch_param = ob_camera_node_->isParamCalibrated();
-      }
+    // Initialize default values for when device is not connected
+    status_msg.connection_type = "";
+    status_msg.calibration_from_factory = false;
+    status_msg.calibration_from_launch_param = false;
+    status_msg.customer_calibration_ready = false;
 
-      // Safely get connection type
-      try {
-        if (device_info_) {
-          status_msg.connection_type = device_info_->getConnectionType();
-        }
-      } catch (const ob::Error &e) {
-        std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
-        if (error_msg.find("Device is deactivated") != std::string::npos ||
-            error_msg.find("disconnected") != std::string::npos ||
-            error_msg.find("Send control transfer failed") != std::string::npos) {
-          RCLCPP_WARN(
-              logger_,
-              "Device communication error in %s at line %d: %s - Device may be disconnected",
-              __FUNCTION__, __LINE__, error_msg.c_str());
-          device_communication_error = true;
-        } else {
-          RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
-                       error_msg.c_str());
-        }
-      } catch (const std::exception &e) {
-        RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
-      } catch (...) {
-        RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
-      }
+    if (ob_camera_node_) {
+      ob_camera_node_->fillStreamStatus(status_msg);
+    }
 
-      // Safely get calibration info
-      try {
-        if (device_) {
-          auto camera_params = device_->getCalibrationCameraParamList();
-          bool calibration_from_factory = (camera_params != nullptr && camera_params->count() > 0);
-          status_msg.calibration_from_factory = calibration_from_factory;
-        }
-      } catch (const ob::Error &e) {
-        std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
-        if (error_msg.find("Device is deactivated") != std::string::npos ||
-            error_msg.find("disconnected") != std::string::npos ||
-            error_msg.find("Send control transfer failed") != std::string::npos) {
-          RCLCPP_WARN(
-              logger_,
-              "Device communication error in %s at line %d: %s - Device may be disconnected",
-              __FUNCTION__, __LINE__, error_msg.c_str());
-          device_communication_error = true;
-        } else {
-          RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
-                       error_msg.c_str());
-        }
-      } catch (const std::exception &e) {
-        RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
-      } catch (...) {
-        RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
-      }
+    // Flag to track if device communication error occurs
+    bool device_communication_error = false;
 
-      // Safely check user calibration readiness - this may also access device
-      // Only execute for 435LE devices (check by device name for network devices)
-      try {
-        if (device_info_ && ob_camera_node_) {
-          std::string device_name = device_info_->getName();
-          if (device_name.find("435Le") != std::string::npos ||
-              device_name.find("435LE") != std::string::npos) {
-            if (!ob_camera_node_->checkUserCalibrationReady()) {
-              status_msg.customer_calibration_ready = false;
+    // Only try to get device information if device is connected and stable
+    if (device_connected_.load() && !device_connecting_.load()) {
+      // Check if reset is in progress
+      std::unique_lock<decltype(reset_device_mutex_)> reset_lock(reset_device_mutex_,
+                                                                 std::try_to_lock);
+      if (reset_lock.owns_lock() && !reset_device_flag_) {
+        // Only get device-specific info if we have a valid camera node and device
+        if (ob_camera_node_) {
+          // These should be safe as they don't directly access hardware
+          status_msg.calibration_from_launch_param = ob_camera_node_->isParamCalibrated();
+        }
+
+        // Safely get connection type
+        try {
+          if (device_info_) {
+            status_msg.connection_type = device_info_->getConnectionType();
+          }
+        } catch (const ob::Error &e) {
+          std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
+          if (error_msg.find("Device is deactivated") != std::string::npos ||
+              error_msg.find("disconnected") != std::string::npos ||
+              error_msg.find("Send control transfer failed") != std::string::npos) {
+            RCLCPP_WARN(
+                logger_,
+                "Device communication error in %s at line %d: %s - Device may be disconnected",
+                __FUNCTION__, __LINE__, error_msg.c_str());
+            device_communication_error = true;
+          } else {
+            RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
+                         error_msg.c_str());
+          }
+        } catch (const std::exception &e) {
+          RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
+        } catch (...) {
+          RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
+        }
+
+        // Safely get calibration info
+        try {
+          if (device_) {
+            auto camera_params = device_->getCalibrationCameraParamList();
+            bool calibration_from_factory =
+                (camera_params != nullptr && camera_params->count() > 0);
+            status_msg.calibration_from_factory = calibration_from_factory;
+          }
+        } catch (const ob::Error &e) {
+          std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
+          if (error_msg.find("Device is deactivated") != std::string::npos ||
+              error_msg.find("disconnected") != std::string::npos ||
+              error_msg.find("Send control transfer failed") != std::string::npos) {
+            RCLCPP_WARN(
+                logger_,
+                "Device communication error in %s at line %d: %s - Device may be disconnected",
+                __FUNCTION__, __LINE__, error_msg.c_str());
+            device_communication_error = true;
+          } else {
+            RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
+                         error_msg.c_str());
+          }
+        } catch (const std::exception &e) {
+          RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
+        } catch (...) {
+          RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
+        }
+
+        // Safely check user calibration readiness - this may also access device
+        // Only execute for 435LE devices (check by device name for network devices)
+        try {
+          if (device_info_ && ob_camera_node_) {
+            std::string device_name = device_info_->getName();
+            if (device_name.find("435Le") != std::string::npos ||
+                device_name.find("435LE") != std::string::npos) {
+              if (!ob_camera_node_->checkUserCalibrationReady()) {
+                status_msg.customer_calibration_ready = false;
+              } else {
+                status_msg.customer_calibration_ready = true;
+              }
             } else {
-              status_msg.customer_calibration_ready = true;
+              // For non-435LE devices, set a default value or skip this check
+              status_msg.customer_calibration_ready = false;
             }
           } else {
-            // For non-435LE devices, set a default value or skip this check
             status_msg.customer_calibration_ready = false;
           }
-        } else {
-          status_msg.customer_calibration_ready = false;
+        } catch (const ob::Error &e) {
+          std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
+          if (error_msg.find("Device is deactivated") != std::string::npos ||
+              error_msg.find("disconnected") != std::string::npos ||
+              error_msg.find("Send control transfer failed") != std::string::npos) {
+            RCLCPP_WARN(
+                logger_,
+                "Device communication error in %s at line %d: %s - Device may be disconnected",
+                __FUNCTION__, __LINE__, error_msg.c_str());
+            device_communication_error = true;
+          } else {
+            RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
+                         error_msg.c_str());
+          }
+        } catch (const std::exception &e) {
+          RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
+        } catch (...) {
+          RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
         }
-      } catch (const ob::Error &e) {
-        std::string error_msg = orbbec_camera::formatObErrorWithStatus(e);
-        if (error_msg.find("Device is deactivated") != std::string::npos ||
-            error_msg.find("disconnected") != std::string::npos ||
-            error_msg.find("Send control transfer failed") != std::string::npos) {
-          RCLCPP_WARN(
-              logger_,
-              "Device communication error in %s at line %d: %s - Device may be disconnected",
-              __FUNCTION__, __LINE__, error_msg.c_str());
-          device_communication_error = true;
-        } else {
-          RCLCPP_ERROR(logger_, "Error in %s at line %d: %s", __FUNCTION__, __LINE__,
-                       error_msg.c_str());
-        }
-      } catch (const std::exception &e) {
-        RCLCPP_ERROR(logger_, "Exception in %s at line %d: %s", __FUNCTION__, __LINE__, e.what());
-      } catch (...) {
-        RCLCPP_ERROR(logger_, "Unknown exception in %s at line %d", __FUNCTION__, __LINE__);
       }
     }
-  }
 
-  // If device communication error occurred, set device_online to false
-  if (device_communication_error) {
-    status_msg.device_online = false;
-  }
+    // If device communication error occurred, set device_online to false
+    if (device_communication_error) {
+      status_msg.device_online = false;
+    }
 
-  // if status_msg.connection_type is empty, set it to "unknown"
-  if (status_msg.connection_type.empty()) {
-    status_msg.connection_type = "unknown";
-    status_msg.device_online = false;
-  }
+    // if status_msg.connection_type is empty, set it to "unknown"
+    if (status_msg.connection_type.empty()) {
+      status_msg.connection_type = "unknown";
+      status_msg.device_online = false;
+    }
 
-  // Always publish the status message, regardless of device state
-  if (device_status_pub_) {
-    device_status_pub_->publish(status_msg);
+    // Shutdown may have started while device information was being collected.
+    if (is_alive_.load() && rclcpp::ok(context) && device_status_pub_) {
+      device_status_pub_->publish(status_msg);
+    }
+  } catch (const std::exception &e) {
+    if (is_alive_.load() && rclcpp::ok(context)) {
+      RCLCPP_ERROR(logger_, "Failed to publish device status: %s", e.what());
+    }
   }
-  // RCLCPP_INFO_STREAM(logger_, "deviceStatusTimer() ");
 }
 
 void OBCameraNodeDriver::setBagRecordingCallback(
