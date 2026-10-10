@@ -216,6 +216,9 @@ class OBCameraNode {
 
   void clean() noexcept;
 
+  // Called by the driver only after construction has completed successfully.
+  void setupDiagnosticUpdater(const std::shared_ptr<diagnostic_updater::Updater>& updater);
+
   // Safely expose the lock
   template <typename Func>
   auto withDeviceLock(Func&& func) -> decltype(func()) {
@@ -342,8 +345,6 @@ class OBCameraNode {
   rmw_qos_profile_t getImageQosProfile(const stream_index_pair& stream_index) const;
 
   void setupPipelineConfig();
-
-  void setupDiagnosticUpdater();
 
   void onTemperatureUpdate(diagnostic_updater::DiagnosticStatusWrapper& status);
 
@@ -1087,8 +1088,8 @@ class OBCameraNode {
   rclcpp::Publisher<DepthFiltersStatus>::SharedPtr depth_filters_status_pub_;
   nlohmann::json filter_status_;
   std::string align_mode_ = "HW";
-  std::unique_ptr<diagnostic_updater::Updater> diagnostic_updater_ = nullptr;
-  double diagnostic_period_ = 0.0;
+  // The driver retains ownership while this camera unregisters its task in clean().
+  std::shared_ptr<diagnostic_updater::Updater> diagnostic_updater_;
   bool enable_laser_ = false;
   std::unique_ptr<ob::Align> align_filter_ = nullptr;
   std::shared_ptr<ob::EnhancedDepthFilter> enhanced_depth_filter_ = nullptr;
@@ -1130,11 +1131,7 @@ class OBCameraNode {
   // soft ware trigger
   rclcpp::TimerBase::SharedPtr software_trigger_timer_;
   rclcpp::TimerBase::SharedPtr lrm_obstacle_distance_timer_;
-  rclcpp::TimerBase::SharedPtr diagnostic_timer_;
   rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr lrm_obstacle_distance_pub_;
-  std::mutex diagnostic_mutex_;
-  std::condition_variable diagnostic_cv_;
-  bool diagnostic_running_ = false;
   std::chrono::milliseconds software_trigger_period_{33};
   bool enable_lrm_obstacle_distance_publish_ = false;
   double lrm_obstacle_distance_publish_rate_ = 10.0;

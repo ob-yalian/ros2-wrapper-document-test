@@ -428,6 +428,9 @@ void OBCameraNodeDriver::init() {
                              << orbbec_camera::formatObErrorWithStatus(e));
     }
   }
+  // Initialize the updater before discovery can create cameras, and before this
+  // node is added to an executor. It survives all subsequent camera resets.
+  setupDiagnosticUpdater();
   ctx_->enableNetDeviceEnumeration(enumerate_net_device_);
   device_changed_callback_id_ = ctx_->registerDeviceChangedCallback(
       [this](const std::shared_ptr<ob::DeviceList> &removed_list,
@@ -1174,6 +1177,27 @@ void OBCameraNodeDriver::initializeBagPlayback() {
   initializeDevice(device);
 }
 
+void OBCameraNodeDriver::setupDiagnosticUpdater() {
+  if (device_type_ != "camera" || !bag_filename_.empty()) {
+    return;
+  }
+  try {
+    const auto period =
+        parameters_->setParam("diagnostic_period", rclcpp::ParameterValue(0.0)).get<double>();
+    if (period <= 0.0) {
+      return;
+    }
+    diagnostic_updater_ = std::make_shared<diagnostic_updater::Updater>(this, period);
+    // Set only before the executor starts: Updater does not synchronize changes
+    // to its hardware ID. Each temperature task supplies its camera's serial number.
+    diagnostic_updater_->setHardwareID("Orbbec camera");
+    RCLCPP_INFO_STREAM(logger_,
+                       "Temperature diagnostics enabled, default period: " << period << " seconds");
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR_STREAM(logger_, "Failed to setup diagnostic updater: " << e.what());
+  }
+}
+
 void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &device) {
   device_ = device;
   CHECK_NOTNULL(device_);
@@ -1195,6 +1219,7 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
         ob_camera_node_ = std::make_unique<OBCameraNode>(this, device_, parameters_,
                                                          node_options_.use_intra_process_comms(),
                                                          playback_device_ != nullptr);
+        ob_camera_node_->setupDiagnosticUpdater(diagnostic_updater_);
       } else if (device_type_ == "lidar") {
         ob_lidar_node_ = std::make_unique<orbbec_lidar::OBLidarNode>(
             this, device_, parameters_, node_options_.use_intra_process_comms());
