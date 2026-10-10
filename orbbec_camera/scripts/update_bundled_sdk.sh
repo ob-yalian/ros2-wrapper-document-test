@@ -8,6 +8,7 @@ readonly SDK_ROOT="${PACKAGE_DIR}/SDK"
 readonly ROS_CONFIG_FILE="${PACKAGE_DIR}/config/OrbbecSDKConfig_v2.0.xml"
 
 dry_run=false
+single_arch=false
 work_dir=""
 arm64_backup_dir=""
 x64_backup_dir=""
@@ -16,12 +17,15 @@ config_backup_file=""
 usage() {
   cat <<EOF
 Usage:
-  $(basename "$0") [--dry-run] <arm64-or-x86_64-sdk-directory-or.tar.gz>
+  $(basename "$0") [--dry-run] [--single-arch] <arm64-or-x86_64-sdk-directory-or.tar.gz>
 
-Replace the bundled Orbbec SDK for both supported ROS package architectures.
-The other SDK directory or archive is inferred by swapping the architecture
-suffix between "_arm64" and "_x86_64" (before .tar.gz for archives).
-Both architectures must be present in the same input format.
+Replace the supplied architecture and, when found, its paired SDK.
+First try swapping "_arm64" and "_x86_64" (before .tar.gz for archives).
+Then match the same version and commit with a different numeric build timestamp.
+The pair must use the same input format. Missing or ambiguous pairs produce a
+warning and only the supplied architecture is updated.
+Use --single-arch to update only the supplied architecture without searching.
+The shared runtime XML is updated from the supplied SDK, also in single-arch mode.
 Archives are extracted into temporary directories and cleaned up on exit.
 
 Only the files used or distributed by orbbec_camera are copied:
@@ -104,15 +108,16 @@ on_exit() {
 trap on_exit EXIT
 trap 'exit 130' INT TERM HUP
 
-if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-  usage
-  exit 0
-fi
-
-if [[ "${1:-}" == "--dry-run" ]]; then
-  dry_run=true
-  shift
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --help|-h) usage; exit 0 ;;
+    --dry-run) dry_run=true; shift ;;
+    --single-arch) single_arch=true; shift ;;
+    --) shift; break ;;
+    -*) die "unknown option: $1" ;;
+    *) break ;;
+  esac
+done
 
 [[ $# -eq 1 ]] || {
   usage >&2
@@ -147,34 +152,66 @@ input_source="$(readlink -f -- "$1")"
 input_source="${input_source%"${archive_suffix}"}"
 
 case "${input_source}" in
-  *_arm64)
-    arm64_source="${input_source}"
-    x64_source="${input_source%_arm64}_x86_64"
-    ;;
-  *_x86_64)
-    x64_source="${input_source}"
-    arm64_source="${input_source%_x86_64}_arm64"
-    ;;
-  *)
-    die "SDK name must end with _arm64 or _x86_64 (before .tar.gz): ${input_source}"
-    ;;
+  *_arm64) input_arch=arm64; paired_arch=x64; paired_suffix=x86_64 ;;
+  *_x86_64) input_arch=x64; paired_arch=arm64; paired_suffix=arm64 ;;
+  *) die "SDK name must end with _arm64 or _x86_64 (before .tar.gz): ${input_source}" ;;
 esac
 
-if [[ -n "${archive_suffix}" ]]; then
-  [[ -f "${arm64_source}${archive_suffix}" ]] ||
-    die "paired ARM64 SDK archive not found: ${arm64_source}${archive_suffix}"
-  [[ -f "${x64_source}${archive_suffix}" ]] ||
-    die "paired x86-64 SDK archive not found: ${x64_source}${archive_suffix}"
-else
-  [[ -d "${arm64_source}" ]] || die "paired ARM64 SDK directory not found: ${arm64_source}"
-  [[ -d "${x64_source}" ]] || die "paired x86-64 SDK directory not found: ${x64_source}"
+source_exists() {
+  if [[ -n "${archive_suffix}" ]]; then
+    [[ -f "$1${archive_suffix}" ]]
+  else
+    [[ -d "$1" ]]
+  fi
+}
+
+architectures=("${input_arch}")
+sources=("${input_source}")
+if [[ "${single_arch}" == false ]]; then
+  if [[ "${input_arch}" == arm64 ]]; then
+    paired_source="${input_source%_arm64}_${paired_suffix}"
+  else
+    paired_source="${input_source%_x86_64}_${paired_suffix}"
+  fi
+  if ! source_exists "${paired_source}"; then
+    candidates=()
+    source_name=${input_source##*/}
+    # Official names: OrbbecSDK_vVERSION_TIMESTAMP_COMMIT_linux_ARCH.
+    if [[ "${source_name}" =~ ^(OrbbecSDK_v[^_]+)_[0-9]+_([^_]+)_linux_(arm64|x86_64)$ ]]; then
+      prefix=${BASH_REMATCH[1]}
+      commit=${BASH_REMATCH[2]}
+      for candidate in "${input_source%/*}/${prefix}_"*"_${commit}_linux_${paired_suffix}${archive_suffix}"; do
+        candidate=${candidate%"${archive_suffix}"}
+        candidate_name=${candidate##*/}
+        timestamp=${candidate_name#"${prefix}_"}
+        timestamp=${timestamp%"_${commit}_linux_${paired_suffix}"}
+        if [[ "${timestamp}" =~ ^[0-9]+$ ]] && source_exists "${candidate}"; then
+          candidates+=("${candidate}")
+        fi
+      done
+    fi
+    paired_source=""
+    if [[ ${#candidates[@]} -eq 1 ]]; then
+      paired_source=${candidates[0]}
+    elif [[ ${#candidates[@]} -gt 1 ]]; then
+      echo "Warning: multiple paired SDK candidates; updating only ${input_arch}:" >&2
+      printf '  %s\n' "${candidates[@]}" >&2
+    else
+      echo "Warning: paired SDK not found; updating only ${input_arch}." >&2
+    fi
+  fi
+  if [[ -n "${paired_source}" ]]; then
+    architectures+=("${paired_arch}")
+    sources+=("${paired_source}")
+    echo "Found paired SDK: ${paired_source}${archive_suffix}"
+  fi
 fi
-case "${arm64_source}" in
-  "${SDK_ROOT}" | "${SDK_ROOT}"/*) die "the ARM64 source cannot be inside ${SDK_ROOT}" ;;
-esac
-case "${x64_source}" in
-  "${SDK_ROOT}" | "${SDK_ROOT}"/*) die "the x86-64 source cannot be inside ${SDK_ROOT}" ;;
-esac
+
+for source_dir in "${sources[@]}"; do
+  case "${source_dir}" in
+    "${SDK_ROOT}" | "${SDK_ROOT}"/*) die "the source cannot be inside ${SDK_ROOT}" ;;
+  esac
+done
 
 core_library_path() {
   local source_dir=$1
@@ -303,40 +340,40 @@ extract_sdk_archive() {
 }
 
 work_dir="$(mktemp -d -- "${PACKAGE_DIR}/.sdk-update.XXXXXX")"
-if [[ -n "${archive_suffix}" ]]; then
-  arm64_source="$(extract_sdk_archive "${arm64_source}${archive_suffix}" "${work_dir}/source-arm64")" ||
-    die "failed to extract ARM64 SDK archive"
-  x64_source="$(extract_sdk_archive "${x64_source}${archive_suffix}" "${work_dir}/source-x64")" ||
-    die "failed to extract x86-64 SDK archive"
+for i in "${!sources[@]}"; do
+  if [[ -n "${archive_suffix}" ]]; then
+    sources[$i]="$(extract_sdk_archive "${sources[$i]}${archive_suffix}" \
+      "${work_dir}/source-${architectures[$i]}")" || die "failed to extract SDK archive"
+  fi
+  verify_source_layout "${sources[$i]}" "${architectures[$i]}"
+done
+
+version="$(sdk_version "${sources[0]}")"
+if [[ ${#sources[@]} -eq 2 ]]; then
+  paired_version="$(sdk_version "${sources[1]}")"
+  [[ "${version}" == "${paired_version}" ]] ||
+    die "SDK versions do not match: ${version}, ${paired_version}"
+  cmp -s -- "${sources[0]}/lib/OrbbecSDKConfig.xml" \
+    "${sources[1]}/lib/OrbbecSDKConfig.xml" ||
+    die "ARM64 and x86-64 OrbbecSDKConfig.xml files do not match"
+else
+  echo "Warning: shared runtime XML will also be updated; the other architecture's SDK is unchanged." >&2
 fi
-
-verify_source_layout "${arm64_source}" arm64
-verify_source_layout "${x64_source}" x64
-cmp -s -- "${arm64_source}/lib/OrbbecSDKConfig.xml" \
-  "${x64_source}/lib/OrbbecSDKConfig.xml" ||
-  die "ARM64 and x86-64 OrbbecSDKConfig.xml files do not match"
-
-arm64_version="$(sdk_version "${arm64_source}")"
-x64_version="$(sdk_version "${x64_source}")"
-[[ "${arm64_version}" == "${x64_version}" ]] ||
-  die "SDK versions do not match: ARM64=${arm64_version}, x86-64=${x64_version}"
 
 staged_sdk="${work_dir}/SDK.new"
 staged_config="${work_dir}/OrbbecSDKConfig_v2.0.xml.new"
 mkdir -p -- "${staged_sdk}"
-
-copy_architecture "${arm64_source}" arm64 "${staged_sdk}/arm64"
-copy_architecture "${x64_source}" x64 "${staged_sdk}/x64"
-
-cp -a -- "${x64_source}/lib/OrbbecSDKConfig.xml" "${staged_config}"
-
-verify_architecture "${staged_sdk}/arm64" arm64
-verify_architecture "${staged_sdk}/x64" x64
+for i in "${!sources[@]}"; do
+  arch=${architectures[$i]}
+  copy_architecture "${sources[$i]}" "${arch}" "${staged_sdk}/${arch}"
+  verify_architecture "${staged_sdk}/${arch}" "${arch}"
+done
+cp -a -- "${sources[0]}/lib/OrbbecSDKConfig.xml" "${staged_config}"
 verify_symlinks_within "${staged_sdk}"
 
 sdk_file_count="$(find "${staged_sdk}" \( -type f -o -type l \) | wc -l)"
 file_count=$((sdk_file_count + 1))
-echo "Validated Orbbec SDK ${arm64_version} for ARM64 and x86-64."
+echo "Validated Orbbec SDK ${version} for: ${architectures[*]}."
 echo "Staged ${file_count} ROS package files, including ${ROS_CONFIG_FILE}."
 
 if [[ "${dry_run}" == true ]]; then
@@ -344,14 +381,18 @@ if [[ "${dry_run}" == true ]]; then
   exit 0
 fi
 
-arm64_backup_dir="${work_dir}/arm64.old"
-x64_backup_dir="${work_dir}/x64.old"
+for arch in "${architectures[@]}"; do
+  case "${arch}" in
+    arm64) arm64_backup_dir="${work_dir}/arm64.old" ;;
+    x64) x64_backup_dir="${work_dir}/x64.old" ;;
+  esac
+  mv -- "${SDK_ROOT}/${arch}" "${work_dir}/${arch}.old"
+done
 config_backup_file="${work_dir}/OrbbecSDKConfig_v2.0.xml.old"
-mv -- "${SDK_ROOT}/arm64" "${arm64_backup_dir}"
-mv -- "${SDK_ROOT}/x64" "${x64_backup_dir}"
 mv -- "${ROS_CONFIG_FILE}" "${config_backup_file}"
-mv -- "${staged_sdk}/arm64" "${SDK_ROOT}/arm64"
-mv -- "${staged_sdk}/x64" "${SDK_ROOT}/x64"
+for arch in "${architectures[@]}"; do
+  mv -- "${staged_sdk}/${arch}" "${SDK_ROOT}/${arch}"
+done
 mv -- "${staged_config}" "${ROS_CONFIG_FILE}"
 
 # The verified SDK and runtime configuration are now active. Mark the
@@ -360,5 +401,5 @@ arm64_backup_dir=""
 x64_backup_dir=""
 config_backup_file=""
 
-echo "Updated bundled ARM64, x86-64, and runtime configuration to Orbbec SDK ${arm64_version}."
+echo "Updated bundled SDK (${architectures[*]}) and runtime configuration to Orbbec SDK ${version}."
 echo "Left ${SDK_ROOT}/licenses unchanged."
