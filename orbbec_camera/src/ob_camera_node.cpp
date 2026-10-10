@@ -6736,7 +6736,8 @@ uint64_t OBCameraNode::getFrameTimestampUs(const std::shared_ptr<ob::Frame> &fra
   }
 }
 void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set) {
-  if (!is_running_.load()) {
+  const auto context = node_->get_node_base_interface()->get_context();
+  if (!is_running_.load() || !rclcpp::ok(context)) {
     return;
   }
   if (!is_camera_node_initialized_.load()) {
@@ -6961,11 +6962,23 @@ void OBCameraNode::onNewFrameSetCallback(std::shared_ptr<ob::FrameSet> frame_set
       }
     }
   } catch (const ob::Error &e) {
+    // Shutdown can invalidate the context while this callback is processing a frame.
+    if (!is_running_.load() || !rclcpp::ok(context)) {
+      return;
+    }
     RCLCPP_ERROR_STREAM(
         logger_, "onNewFrameSetCallback error: " << orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
+    // Shutdown can invalidate the context while this callback is processing a frame.
+    if (!is_running_.load() || !rclcpp::ok(context)) {
+      return;
+    }
     RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: " << e.what());
   } catch (...) {
+    // Shutdown can invalidate the context while this callback is processing a frame.
+    if (!is_running_.load() || !rclcpp::ok(context)) {
+      return;
+    }
     RCLCPP_ERROR_STREAM(logger_, "onNewFrameSetCallback error: unknown error");
   }
 }
