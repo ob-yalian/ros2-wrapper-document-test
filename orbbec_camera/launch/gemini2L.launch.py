@@ -124,7 +124,7 @@ def generate_launch_description():
         DeclareLaunchArgument("depth_camera_info_qos", default_value="default"),
         DeclareLaunchArgument("ir_width", default_value="640"),
         DeclareLaunchArgument("ir_height", default_value="400"),
-        DeclareLaunchArgument("ir_fps", default_value="15"),
+        DeclareLaunchArgument("ir_fps", default_value="30"),
         DeclareLaunchArgument("ir_format", default_value="Y8"),
         DeclareLaunchArgument("enable_ir", default_value="true"),
         DeclareLaunchArgument("ir_flip", default_value="false"),

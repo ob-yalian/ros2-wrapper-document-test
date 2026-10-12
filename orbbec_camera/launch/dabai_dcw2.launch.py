@@ -66,7 +66,7 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_filter_config', default_value=''),
         DeclareLaunchArgument('ir_width', default_value='640'),
         DeclareLaunchArgument('ir_height', default_value='400'),
-        DeclareLaunchArgument('ir_fps', default_value='10'),
+        DeclareLaunchArgument('ir_fps', default_value='15'),
         DeclareLaunchArgument('ir_format', default_value='Y10'),
         DeclareLaunchArgument('enable_ir', default_value='true'),
         DeclareLaunchArgument('flip_ir', default_value='false'),
