@@ -282,6 +282,10 @@ class OBCameraNode {
 
   void setupDevices();
 
+  void setupDevicePreset();
+
+  void enumerateStreams();
+
   void loadConfigJson();
 
   void captureInitialRosParameters();
@@ -336,7 +340,24 @@ class OBCameraNode {
 
   void selectBaseStream();
 
-  void getParameters();
+  void getCommonParameters();
+
+  void getImageStreamParameters();
+
+  void getPropertyParameters();
+
+  void validateParameters();
+
+  bool isPropertyParameterSupported(const std::string& param_name, OBPropertyID property_id) const;
+
+  template <class T>
+  void setAndGetDeviceParameter(T& param, const std::string& param_name, const T& default_value);
+
+  template <class T>
+  void setAndGetPropertyParameter(T& param, const std::string& param_name, const T& default_value,
+                                  OBPropertyID property_id);
+
+  void clearDeviceParameters() noexcept;
 
   void setupTopics();
 
@@ -1104,6 +1125,7 @@ class OBCameraNode {
   bool retry_on_usb3_detection_failure_ = false;
   bool config_json_loaded_ = false;
   std::unordered_set<std::string> initial_ros_params_;
+  std::unordered_set<std::string> device_param_names_;
   std::atomic_bool is_camera_node_initialized_{false};
   int laser_energy_level_ = -1;
   ob::PointCloudFilter depth_point_cloud_filter_;
