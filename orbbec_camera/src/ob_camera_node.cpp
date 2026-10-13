@@ -4350,6 +4350,7 @@ void OBCameraNode::startStreams() {
     pipeline_.reset();
   }
   pipeline_ = std::make_unique<ob::Pipeline>(device_);
+  disparity_config_attempted_ = false;
 
   try {
     setupPipelineConfig();
@@ -6548,18 +6549,25 @@ std::shared_ptr<ob::Frame> OBCameraNode::processDepthFrameFilter(
   return frame;
 }
 void OBCameraNode::setDisparitySearchOffset() {
-  static bool has_run = false;
-  auto config = OBDispOffsetConfig();
-  if (has_run) {
+  if (disparity_config_attempted_) {
     return;
   }
-  if (device_->isPropertySupported(OB_PROP_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_WRITE)) {
-    if (disparity_search_offset_ >= 0 && disparity_search_offset_ <= 127) {
+  // Attempt once per stream start, even if an optional property write fails.
+  disparity_config_attempted_ = true;
+
+  TRY_EXECUTE_BLOCK({
+    if (disparity_search_offset_ >= 0 && disparity_search_offset_ <= 127 &&
+        device_->isPropertySupported(OB_PROP_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_WRITE)) {
       device_->setIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT, disparity_search_offset_);
       RCLCPP_INFO_STREAM(logger_, "Set disparity search offset to " << disparity_search_offset_);
     }
+  });
+
+  TRY_EXECUTE_BLOCK({
     if (offset_index0_ >= 0 && offset_index0_ <= 127 && offset_index1_ >= 0 &&
-        offset_index1_ <= 127) {
+        offset_index1_ <= 127 &&
+        device_->isPropertySupported(OB_STRUCT_DISP_OFFSET_CONFIG, OB_PERMISSION_WRITE)) {
+      auto config = OBDispOffsetConfig();
       config.enable = disparity_offset_config_;
       config.offset0 = offset_index0_;
       config.offset1 = offset_index1_;
@@ -6571,8 +6579,7 @@ void OBCameraNode::setDisparitySearchOffset() {
                                       << disparity_offset_config_ << "  offset_index0:"
                                       << offset_index0_ << "  offset_index1:" << offset_index1_);
     }
-  }
-  has_run = true;
+  });
 }
 
 void OBCameraNode::setDepthAutoExposureROI() {

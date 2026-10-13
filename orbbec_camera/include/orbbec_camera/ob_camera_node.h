@@ -1193,6 +1193,7 @@ class OBCameraNode {
   bool disparity_offset_config_ = false;
   int offset_index0_ = -1;
   int offset_index1_ = -1;
+  bool disparity_config_attempted_ = false;
   int sync_io_voltage_level_ = -1;
 
   std::string frame_aggregate_mode_ = "ANY";  // # full_frame, color_frame, ANY or disable
