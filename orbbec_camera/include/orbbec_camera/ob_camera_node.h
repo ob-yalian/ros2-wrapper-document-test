@@ -357,6 +357,9 @@ class OBCameraNode {
   void setAndGetPropertyParameter(T& param, const std::string& param_name, const T& default_value,
                                   OBPropertyID property_id);
 
+  void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
+                                 OBPropertyID property_id) const;
+
   void clearDeviceParameters() noexcept;
 
   void setupTopics();

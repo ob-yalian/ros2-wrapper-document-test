@@ -14,6 +14,7 @@
  * limitations under the License.
  *******************************************************************************/
 #include "orbbec_camera/dynamic_params.h"
+#include "orbbec_camera/parameter_descriptions.h"
 
 namespace orbbec_camera {
 
@@ -61,7 +62,15 @@ rclcpp::ParameterValue Parameters::setParam(
   rclcpp::ParameterValue result_value(initial_value);
   try {
     if (!node_->has_parameter(param_name)) {
-      result_value = node_->declare_parameter(param_name, initial_value, descriptor);
+      auto description = descriptor;
+      const auto defaults = describeCameraParameter(param_name);
+      if (description.description.empty()) {
+        description.description = defaults.description;
+      }
+      if (description.additional_constraints.empty()) {
+        description.additional_constraints = defaults.additional_constraints;
+      }
+      result_value = node_->declare_parameter(param_name, initial_value, description);
     } else {
       result_value = node_->get_parameter(param_name).get_parameter_value();
     }

@@ -15,6 +15,7 @@
  *******************************************************************************/
 
 #include "orbbec_camera/ob_camera_node.h"
+#include "orbbec_camera/parameter_descriptions.h"
 #include <rclcpp/expand_topic_or_service_name.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <thread>
@@ -853,9 +854,64 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
                                               const T &default_value, OBPropertyID property_id) {
   param = default_value;
   if (isPropertyParameterSupported(param_name, property_id)) {
-    setAndGetDeviceParameter(param, param_name, default_value);
+    device_param_names_.insert(param_name);
+    auto descriptor = describeCameraParameter(param_name);
+    descriptor.dynamic_typing = true;
+    appendPropertyDescription(descriptor, property_id);
+    const auto initial = rclcpp::ParameterValue(default_value);
+    if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
+        initial.get<int64_t>() == -1) {
+      descriptor.description += " Launch value -1 skips writing this property.";
+    }
+    setAndGetNodeParameter(param, param_name, default_value, descriptor);
   } else {
     RCLCPP_DEBUG_STREAM(logger_, "Skip unsupported property parameter: " << param_name);
+  }
+}
+
+void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor &descriptor,
+                                             OBPropertyID property_id) const {
+  descriptor.description += " SDK property ID: " + std::to_string(property_id) + ".";
+  try {
+    // Query the SDK type, not the ROS type: some bool/string parameters map to SDK integers.
+    const auto count = device_->getSupportedPropertyCount();
+    for (int index = 0; index < count; ++index) {
+      const auto property = device_->getSupportedProperty(index);
+      if (property.id != property_id) {
+        continue;
+      }
+      if (property.name) {
+        descriptor.description += " " + std::string(property.name) + ".";
+      }
+      std::ostringstream range;
+      const auto append_range = [&range](const auto &value) {
+        range << " SDK-reported default=" << value.def << ", min=" << value.min
+              << ", max=" << value.max << ", step=" << value.step
+              << " (SDK property representation at declaration; not the current value).";
+      };
+      switch (property.type) {
+        case OB_BOOL_PROPERTY:
+          append_range(device_->getBoolPropertyRange(property_id));
+          break;
+        case OB_INT_PROPERTY:
+          append_range(device_->getIntPropertyRange(property_id));
+          break;
+        case OB_FLOAT_PROPERTY:
+          append_range(device_->getFloatPropertyRange(property_id));
+          break;
+        case OB_STRUCT_PROPERTY:
+          range << " Structured property; no scalar default/range is available.";
+          break;
+      }
+      // Text preserves launch sentinels and enum mappings without imposing the raw SDK
+      // range on the ROS parameter. Metadata is a snapshot, never a write to the device.
+      descriptor.description += range.str();
+      return;
+    }
+    descriptor.description += " SDK default/range unavailable.";
+  } catch (const std::exception &e) {
+    descriptor.description += " SDK default/range unavailable.";
+    RCLCPP_DEBUG_STREAM(logger_, "Property description query failed: " << e.what());
   }
 }
 

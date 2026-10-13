@@ -16,6 +16,7 @@
 
 #include "orbbec_camera/ob_camera_node_driver.h"
 #include "orbbec_camera/utils.h"
+#include "orbbec_camera/parameter_descriptions.h"
 #include <fcntl.h>
 #include <semaphore.h>
 #include <sys/shm.h>
@@ -291,11 +292,14 @@ void OBCameraNodeDriver::init() {
   signal(SIGFPE, crashSignalHandler);   // float point exception
   signal(SIGILL, crashSignalHandler);   // illegal instruction
   ob::Context::setExtensionsDirectory(extension_path_.c_str());
-  g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name);
-  auto log_level_str = declare_parameter<std::string>("log_level", "info");
+  g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name,
+                                                 describeCameraParameter("camera_name"));
+  auto log_level_str =
+      declare_parameter<std::string>("log_level", "info", describeCameraParameter("log_level"));
   auto log_level = obLogSeverityFromString(log_level_str);
   auto ros_log_level = rosLogSeverityFromString(log_level_str);
-  auto log_file_name = declare_parameter<std::string>("log_file_name", "");
+  auto log_file_name =
+      declare_parameter<std::string>("log_file_name", "", describeCameraParameter("log_file_name"));
   std::string log_path = getLogDirectoryForCamera(g_camera_name);
   // Set logger to console
   ob::Context::setLoggerToConsole(log_level);
@@ -320,9 +324,11 @@ void OBCameraNodeDriver::init() {
   // Bag file playback mode: load a previously recorded .bag file as a virtual
   // device instead of enumerating real hardware. Must be checked before the
   // ob::Context / device discovery machinery is set up below.
-  device_type_ = declare_parameter<std::string>("device_type", "camera");
-  bag_filename_ = declare_parameter<std::string>("bag_filename", "");
-  bag_loop_ = declare_parameter<bool>("bag_loop", false);
+  device_type_ = declare_parameter<std::string>("device_type", "camera",
+                                                describeCameraParameter("device_type"));
+  bag_filename_ =
+      declare_parameter<std::string>("bag_filename", "", describeCameraParameter("bag_filename"));
+  bag_loop_ = declare_parameter<bool>("bag_loop", false, describeCameraParameter("bag_loop"));
   if (!bag_filename_.empty()) {
     is_alive_.store(true);
     parameters_ = std::make_shared<Parameters>(this);
@@ -331,17 +337,23 @@ void OBCameraNodeDriver::init() {
   }
 
   // Force IP
-  force_ip_enable_ = declare_parameter<bool>("force_ip_enable", false);
-  force_ip_mac_ = declare_parameter<std::string>("force_ip_mac", "");
-  force_ip_address_ = declare_parameter<std::string>("force_ip_address", "192.168.1.10");
-  force_ip_subnet_mask_ = declare_parameter<std::string>("force_ip_subnet_mask", "255.255.255.0");
-  force_ip_gateway_ = declare_parameter<std::string>("force_ip_gateway", "192.168.1.1");
+  force_ip_enable_ =
+      declare_parameter<bool>("force_ip_enable", false, describeCameraParameter("force_ip_enable"));
+  force_ip_mac_ =
+      declare_parameter<std::string>("force_ip_mac", "", describeCameraParameter("force_ip_mac"));
+  force_ip_address_ = declare_parameter<std::string>("force_ip_address", "192.168.1.10",
+                                                     describeCameraParameter("force_ip_address"));
+  force_ip_subnet_mask_ = declare_parameter<std::string>(
+      "force_ip_subnet_mask", "255.255.255.0", describeCameraParameter("force_ip_subnet_mask"));
+  force_ip_gateway_ = declare_parameter<std::string>("force_ip_gateway", "192.168.1.1",
+                                                     describeCameraParameter("force_ip_gateway"));
   if (config_path_.empty()) {
     ctx_ = std::make_unique<ob::Context>();
   } else {
     ctx_ = std::make_unique<ob::Context>(config_path_.c_str());
   }
-  timestamp_clock_type_str_ = declare_parameter<std::string>("timestamp_clock_type", "");
+  timestamp_clock_type_str_ = declare_parameter<std::string>(
+      "timestamp_clock_type", "", describeCameraParameter("timestamp_clock_type"));
   if (!timestamp_clock_type_str_.empty()) {
     auto timestamp_clock_type = timestampClockTypeFromString(timestamp_clock_type_str_);
     try {
@@ -356,11 +368,15 @@ void OBCameraNodeDriver::init() {
   }
   applyForceIpConfig();
 
-  connection_delay_ = static_cast<int>(declare_parameter<int>("connection_delay", 100));
-  enable_sync_host_time_ = declare_parameter<bool>("enable_sync_host_time", true);
-  double time_sync_period = declare_parameter<double>("time_sync_period", 60.0);
+  connection_delay_ = static_cast<int>(
+      declare_parameter<int>("connection_delay", 100, describeCameraParameter("connection_delay")));
+  enable_sync_host_time_ = declare_parameter<bool>(
+      "enable_sync_host_time", true, describeCameraParameter("enable_sync_host_time"));
+  double time_sync_period = declare_parameter<double>("time_sync_period", 60.0,
+                                                      describeCameraParameter("time_sync_period"));
   time_sync_period_ = std::chrono::milliseconds((int)(time_sync_period * 1000));
-  g_time_domain = declare_parameter<std::string>("time_domain", g_time_domain);
+  g_time_domain = declare_parameter<std::string>("time_domain", g_time_domain,
+                                                 describeCameraParameter("time_domain"));
   orb_device_lock_shm_fd_ = shm_open(ORB_DEFAULT_LOCK_NAME.c_str(), O_CREAT | O_RDWR, 0666);
   if (orb_device_lock_shm_fd_ < 0) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to open shared memory " << ORB_DEFAULT_LOCK_NAME);
@@ -392,17 +408,26 @@ void OBCameraNodeDriver::init() {
   // Initialize the reset device completion time to allow immediate device connection on startup
   last_reset_device_completion_time_ = std::chrono::steady_clock::now() - std::chrono::seconds(10);
   parameters_ = std::make_shared<Parameters>(this);
-  serial_number_ = declare_parameter<std::string>("serial_number", "");
-  bag_record_filename_ = declare_parameter<std::string>("bag_record_filename", "");
-  bag_record_compression_ = declare_parameter<bool>("bag_record_compression", true);
-  device_num_ = static_cast<int>(declare_parameter<int>("device_num", 1));
-  usb_port_ = declare_parameter<std::string>("usb_port", "");
-  net_device_ip_ = declare_parameter<std::string>("net_device_ip", "");
-  net_device_port_ = static_cast<int>(declare_parameter<int>("net_device_port", 0));
-  enumerate_net_device_ = declare_parameter<bool>("enumerate_net_device", false);
-  uvc_backend_ = declare_parameter<std::string>("uvc_backend", "libuvc");
+  serial_number_ =
+      declare_parameter<std::string>("serial_number", "", describeCameraParameter("serial_number"));
+  bag_record_filename_ = declare_parameter<std::string>(
+      "bag_record_filename", "", describeCameraParameter("bag_record_filename"));
+  bag_record_compression_ = declare_parameter<bool>(
+      "bag_record_compression", true, describeCameraParameter("bag_record_compression"));
+  device_num_ = static_cast<int>(
+      declare_parameter<int>("device_num", 1, describeCameraParameter("device_num")));
+  usb_port_ = declare_parameter<std::string>("usb_port", "", describeCameraParameter("usb_port"));
+  net_device_ip_ =
+      declare_parameter<std::string>("net_device_ip", "", describeCameraParameter("net_device_ip"));
+  net_device_port_ = static_cast<int>(
+      declare_parameter<int>("net_device_port", 0, describeCameraParameter("net_device_port")));
+  enumerate_net_device_ = declare_parameter<bool>("enumerate_net_device", false,
+                                                  describeCameraParameter("enumerate_net_device"));
+  uvc_backend_ = declare_parameter<std::string>("uvc_backend", "libuvc",
+                                                describeCameraParameter("uvc_backend"));
   const bool use_explicit_net_device = !net_device_ip_.empty() && net_device_port_ != 0;
-  device_access_mode_str_ = declare_parameter<std::string>("device_access_mode", "Default");
+  device_access_mode_str_ = declare_parameter<std::string>(
+      "device_access_mode", "Default", describeCameraParameter("device_access_mode"));
   device_access_mode_ = stringToAccessMode(device_access_mode_str_);
   RCLCPP_INFO_STREAM(logger_, "Device access mode: " << device_access_mode_str_ << " ("
                                                      << device_access_mode_ << ")");
