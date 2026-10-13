@@ -17,30 +17,72 @@
 #include "orbbec_camera/parameter_descriptions.h"
 
 namespace orbbec_camera {
+namespace {
+// Suppression is local to the initialization thread; concurrent external requests still validate.
+thread_local const Parameters *readback_owner = nullptr;
+}  // namespace
 
 Parameters::Parameters(rclcpp::Node *node)
     : node_(node), logger_(node_->get_logger()), params_backend_(node) {
-  params_backend_.addOnSetParametersCallback(
-      [this](const std::vector<rclcpp::Parameter> &parameters) {
-        rcl_interfaces::msg::SetParametersResult result;
-        result.successful = true;
+  params_backend_.addOnSetParametersCallback([this](
+                                                 const std::vector<rclcpp::Parameter> &parameters) {
+    std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    if (readback_owner == this) {
+      return result;
+    }
+    bool has_dynamic = false;
+    // Reject the entire request before invoking any callback with side effects.
+    for (const auto &parameter : parameters) {
+      const auto dynamic = dynamic_types_.find(parameter.get_name());
+      if (dynamic != dynamic_types_.end()) {
+        has_dynamic = true;
+        if (parameter.get_type() != dynamic->second) {
+          result.successful = false;
+          result.reason = "Invalid type for " + parameter.get_name();
+          return result;
+        }
+        continue;
+      }
+      const auto function_it = param_functions_.find(parameter.get_name());
+      if (function_it != param_functions_.end() && function_it->second.empty()) {
+        result.successful = false;
+        result.reason = "Parameter " + parameter.get_name() + " can not be changed in runtime.";
+        return result;
+      }
+    }
+    try {
+      if (has_dynamic) {
         for (const auto &parameter : parameters) {
-          const auto function_it = param_functions_.find(parameter.get_name());
-          if (function_it == param_functions_.end()) {
-            continue;
-          }
-          if (function_it->second.empty()) {
+          if (dynamic_types_.count(parameter.get_name()) == 0) {
             result.successful = false;
-            result.reason = "Parameter " + parameter.get_name() + " can not be changed in runtime.";
-            RCLCPP_WARN_STREAM(logger_, result.reason);
-          } else {
-            for (const auto &func : function_it->second) {
+            result.reason = "Hardware updates cannot be mixed with other parameters.";
+            return result;
+          }
+        }
+        result = batch_setter_(parameters);
+        if (result.successful && !device_key_.empty()) {
+          for (const auto &parameter : parameters) {
+            runtime_overrides_[device_key_][parameter.get_name()] = parameter.get_parameter_value();
+          }
+        }
+      } else {
+        for (const auto &parameter : parameters) {
+          const auto it = param_functions_.find(parameter.get_name());
+          if (it != param_functions_.end()) {
+            for (const auto &func : it->second) {
               func(parameter);
             }
           }
         }
-        return result;
-      });
+      }
+    } catch (const std::exception &e) {
+      result.successful = false;
+      result.reason = e.what();
+    }
+    return result;
+  });
 }
 
 Parameters::~Parameters() noexcept {
@@ -59,6 +101,18 @@ rclcpp::ParameterValue Parameters::setParam(
     const std::string &param_name, rclcpp::ParameterValue initial_value,
     const std::function<void(const rclcpp::Parameter &)> &func,
     const rcl_interfaces::msg::ParameterDescriptor &descriptor) {
+  bool restore_runtime = false;
+  {
+    std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+    const auto device = runtime_overrides_.find(device_key_);
+    if (!device_key_.empty() && device != runtime_overrides_.end()) {
+      const auto value = device->second.find(param_name);
+      if (value != device->second.end()) {
+        initial_value = value->second;
+        restore_runtime = true;
+      }
+    }
+  }
   rclcpp::ParameterValue result_value(initial_value);
   try {
     if (!node_->has_parameter(param_name)) {
@@ -70,7 +124,8 @@ rclcpp::ParameterValue Parameters::setParam(
       if (description.additional_constraints.empty()) {
         description.additional_constraints = defaults.additional_constraints;
       }
-      result_value = node_->declare_parameter(param_name, initial_value, description);
+      result_value =
+          node_->declare_parameter(param_name, initial_value, description, restore_runtime);
     } else {
       result_value = node_->get_parameter(param_name).get_parameter_value();
     }
@@ -91,6 +146,7 @@ rclcpp::ParameterValue Parameters::setParam(
     return initial_value;
   }
 
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   if (func) {
     param_functions_[param_name].push_back(func);
   } else {
@@ -143,7 +199,48 @@ void Parameters::setParamValue(T &param, const T &value) {
 
 void Parameters::removeParam(const std::string &param_name) {
   node_->undeclare_parameter(param_name);
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   param_functions_.erase(param_name);
+  dynamic_types_.erase(param_name);
+}
+
+void Parameters::setDeviceContext(const std::string &device_key) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  dynamic_types_.clear();
+  batch_setter_ = {};
+  device_key_ = device_key;
+}
+
+void Parameters::registerDynamicParameters(
+    const std::map<std::string, rclcpp::ParameterType> &types, BatchSetter setter) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  dynamic_types_ = types;
+  batch_setter_ = std::move(setter);
+}
+
+void Parameters::clearDynamicParameters() {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  dynamic_types_.clear();
+  batch_setter_ = {};
+}
+
+bool Parameters::hasRuntimeOverride(const std::string &name) const {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  const auto device = runtime_overrides_.find(device_key_);
+  return !device_key_.empty() && device != runtime_overrides_.end() &&
+         device->second.count(name) != 0;
+}
+
+void Parameters::syncParameters(const std::vector<rclcpp::Parameter> &values) {
+  struct ReadbackScope {
+    const Parameters *previous = readback_owner;
+    explicit ReadbackScope(const Parameters *owner) { readback_owner = owner; }
+    ~ReadbackScope() { readback_owner = previous; }
+  } scope(this);
+  const auto result = node_->set_parameters_atomically(values);
+  if (!result.successful) {
+    throw std::runtime_error("Could not publish device parameter readback: " + result.reason);
+  }
 }
 
 template void Parameters::setParamT<bool>(std::string param_name,

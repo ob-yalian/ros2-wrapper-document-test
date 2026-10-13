@@ -16,6 +16,7 @@
 
 #pragma once
 #include <rclcpp/rclcpp.hpp>
+#include <mutex>
 
 #include "ros_param_backend.h"
 
@@ -42,8 +43,23 @@ class Parameters {
                                                  // locally and in the parameters server
   void removeParam(const std::string& param_name);
 
+  using BatchSetter = std::function<rcl_interfaces::msg::SetParametersResult(
+      const std::vector<rclcpp::Parameter>&)>;
+  void setDeviceContext(const std::string& device_key);
+  void registerDynamicParameters(const std::map<std::string, rclcpp::ParameterType>& types,
+                                 BatchSetter setter);
+  // Drains any in-flight callback before releasing its camera captures.
+  void clearDynamicParameters();
+  bool hasRuntimeOverride(const std::string& name) const;
+  // Initialization readback only: update ROS values without writing hardware or recording intent.
+  void syncParameters(const std::vector<rclcpp::Parameter>& values);
+
  private:
- private:
+  mutable std::recursive_mutex callback_mutex_;
+  std::map<std::string, rclcpp::ParameterType> dynamic_types_;
+  BatchSetter batch_setter_;
+  std::string device_key_;
+  std::map<std::string, std::map<std::string, rclcpp::ParameterValue>> runtime_overrides_;
   rclcpp::Node* node_;
   rclcpp::Logger logger_;
   std::map<std::string, std::vector<std::function<void(const rclcpp::Parameter&)> > >

@@ -24,3 +24,64 @@ description. Range text does not impose the raw SDK range on launch sentinels.
 Only parameters for present image streams and supported hardware properties are declared.
 Capability selectors such as presets and legacy `depth_work_mode` retain their existing
 module-specific behavior. Availability does not imply runtime mutability.
+
+## Runtime controls and service compatibility
+
+The first runtime-writable controls are:
+
+- `color_exposure`, `color_gain`, `depth_exposure`, `depth_gain`, `ir_exposure`, `ir_gain`.
+- `enable_color_auto_exposure`, `enable_depth_auto_exposure`, `enable_ir_auto_exposure`.
+- `color_white_balance`, `enable_color_auto_white_balance`.
+
+Each requires the connected device to support reading and writing its SDK property.
+Other parameters retain their initialization-only behavior. The new depth AE control
+only writes at startup when explicitly configured, like the existing IR/color AE controls.
+
+After initialization, these controls are read from the device into the ROS parameter store,
+including when the launch value was `-1`. If a read fails, a warning is logged and the launch
+value remains. Reading back a value never turns a skipped startup write into an explicit
+configuration. Successful runtime writes through either interface become reconnect overrides
+for the same camera serial number, within the current driver process. A new process starts
+from its launch configuration. Devices without a serial number do not persist overrides.
+
+`param get` returns the initialization snapshot or the last accepted runtime setting. It is
+not a live exposure/gain measurement while automatic control is active. Existing getter
+services continue to read the device. Depth/IR and left/right controls may share hardware on
+some modules; changing one can affect the other without continuously refreshing parameters.
+
+Existing exposure, gain, AE, white-balance and AWB setter service names and message types
+are retained. They call the node parameter API, so validation, device writes, errors and
+reconnect intent use the same path as `ros2 param set`. Left/right IR services map to `ir_*`,
+and left/right color services map to `color_*`, matching their existing shared SDK properties.
+
+```sh
+ros2 param set /camera/camera enable_color_auto_white_balance false
+ros2 param set /camera/camera color_white_balance 4500
+ros2 param get /camera/camera color_white_balance
+```
+
+Choose manual values within the connected device's range. Runtime `-1` and type changes are
+rejected. A manual white balance requires AWB to be disabled; an atomic batch may disable
+AWB and set white balance together. Automatic controls are disabled before manual writes
+and enabled afterwards. Batch requests are validated before any SDK write; they cannot mix
+these controls with startup-only or unrelated ROS parameters. A failed write attempts to
+restore all attempted properties, including the failing one. Rollback failure is reported
+explicitly: SDK/USB operations cannot guarantee hardware atomicity after a disconnect.
+
+The Humble implementation applies hardware updates synchronously in this package's single
+on-set callback. Additional callbacks that reject the request after hardware has been written
+are not supported; there is no Humble post-set hook to make arbitrary callback chains and
+hardware writes transactional. Services must call the parameter API without holding the
+device lock. Cleanup drains and detaches the callback before destroying the camera.
+
+## Verification
+
+`dynamic_params_test` covers batch prevalidation, fixed runtime types, SDK-error propagation,
+readback versus reconnect intent, per-device restore and callback detachment using a fake
+device apply callback. It does not exercise SDK writes.
+
+Hardware validation should cover Gemini 336 and Gemini 305 (including Dual Color Streams):
+compare parameter and legacy service writes/readback; reject out-of-range and `-1` writes;
+disable AWB and set WB atomically; unplug during a write; reconnect after both inherited and
+explicit settings; and verify absent-stream parameters remain filtered. Also check SDK range
+metadata after preset selection and initialization without readable property metadata.

@@ -360,6 +360,20 @@ class OBCameraNode {
   void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
                                  OBPropertyID property_id) const;
 
+  bool isDynamicProperty(OBPropertyID property_id) const;
+  void setupDynamicParameters();
+  rcl_interfaces::msg::SetParametersResult setDynamicParameters(
+      const std::vector<rclcpp::Parameter>& parameters);
+  rcl_interfaces::msg::SetParametersResult setLegacyParameter(const rclcpp::Parameter& parameter);
+
+  struct DynamicProperty {
+    OBPropertyID id;
+    rclcpp::ParameterType type;
+    std::function<void(const rclcpp::ParameterValue&)> update_cache;
+  };
+  rclcpp::ParameterValue readDynamicProperty(const DynamicProperty& property) const;
+  void writeDynamicProperty(const DynamicProperty& property, const rclcpp::ParameterValue& value);
+
   void clearDeviceParameters() noexcept;
 
   void setupTopics();
@@ -1129,6 +1143,8 @@ class OBCameraNode {
   bool config_json_loaded_ = false;
   std::unordered_set<std::string> initial_ros_params_;
   std::unordered_set<std::string> device_param_names_;
+  std::map<std::string, DynamicProperty> dynamic_properties_;
+  bool enable_depth_auto_exposure_ = true;
   std::atomic_bool is_camera_node_initialized_{false};
   int laser_energy_level_ = -1;
   ob::PointCloudFilter depth_point_cloud_filter_;

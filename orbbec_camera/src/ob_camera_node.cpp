@@ -19,6 +19,7 @@
 #include <rclcpp/expand_topic_or_service_name.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <thread>
+#include <type_traits>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <sstream>
 #include <array>
@@ -799,6 +800,14 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   fps_counter_depth_->setLogLevel(log_level);
   fps_counter_left_ir_->setLogLevel(log_level);
   fps_counter_right_ir_->setLogLevel(log_level);
+  // Register the callback only after every other constructor operation has succeeded.
+  // A constructor that throws must never leave Parameters holding a dangling camera capture.
+  try {
+    setupDynamicParameters();
+  } catch (...) {
+    clearDeviceParameters();
+    throw;
+  }
 }
 
 template <class T>
@@ -863,6 +872,18 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
         initial.get<int64_t>() == -1) {
       descriptor.description += " Launch value -1 skips writing this property.";
     }
+    if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
+      if (isDynamicProperty(property_id)) {
+        descriptor.additional_constraints =
+            "Runtime writable after initialization. Type is fixed; -1 is a launch-only sentinel. "
+            "SDK range is validated on each update. Device readback becomes the initial ROS value.";
+        dynamic_properties_.emplace(param_name,
+                                    DynamicProperty{property_id, initial.get_type(),
+                                                    [&param](const rclcpp::ParameterValue &value) {
+                                                      param = value.get<T>();
+                                                    }});
+      }
+    }
     setAndGetNodeParameter(param, param_name, default_value, descriptor);
   } else {
     RCLCPP_DEBUG_STREAM(logger_, "Skip unsupported property parameter: " << param_name);
@@ -916,6 +937,8 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
 }
 
 void OBCameraNode::clearDeviceParameters() noexcept {
+  parameters_->clearDynamicParameters();
+  dynamic_properties_.clear();
   for (const auto &name : device_param_names_) {
     try {
       if (node_->has_parameter(name)) {
@@ -953,6 +976,8 @@ void OBCameraNode::clean() noexcept {
     RCLCPP_DEBUG(logger_, "clean() already running, skip re-entry");
     return;
   }
+  // Detach and drain the parameter callback before taking device_lock_ or destroying members.
+  parameters_->clearDynamicParameters();
   // Set running flags to false first to signal all operations to stop
   is_running_.store(false);
   is_camera_node_initialized_.store(false);
@@ -1877,6 +1902,11 @@ void OBCameraNode::setupDevices() {
         logger_, "Current IR auto exposure: "
                      << (device_->getBoolProperty(OB_PROP_IR_AUTO_EXPOSURE_BOOL) ? "ON" : "OFF")));
   }
+  if (should_apply_launch_config("enable_depth_auto_exposure") &&
+      device_->isPropertySupported(OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, OB_PERMISSION_WRITE)) {
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL,
+                        enable_depth_auto_exposure_);
+  }
   if (mean_intensity_set_point_ != -1 &&
       device_->isPropertySupported(OB_PROP_IR_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
     auto range = device_->getIntPropertyRange(OB_PROP_IR_BRIGHTNESS_INT);
@@ -2380,7 +2410,8 @@ bool OBCameraNode::isLaunchParamProvided(const std::string &param_name) const {
   if (param_name.empty()) {
     return false;
   }
-  return initial_ros_params_.find(param_name) != initial_ros_params_.end();
+  return initial_ros_params_.find(param_name) != initial_ros_params_.end() ||
+         parameters_->hasRuntimeOverride(param_name);
 }
 
 void OBCameraNode::syncConfigJsonApplicationConfig() {
@@ -5338,6 +5369,8 @@ void OBCameraNode::getPropertyParameters() {
                                   OB_PROP_COLOR_DENOISING_LEVEL_INT);
   setAndGetPropertyParameter<std::string>(color_powerline_freq_, "color_powerline_freq", "",
                                           OB_PROP_COLOR_POWER_LINE_FREQUENCY_INT);
+  setAndGetPropertyParameter<bool>(enable_depth_auto_exposure_, "enable_depth_auto_exposure", true,
+                                   OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL);
   setAndGetPropertyParameter<bool>(enable_depth_auto_exposure_priority_,
                                    "enable_depth_auto_exposure_priority", false,
                                    OB_PROP_DEPTH_AUTO_EXPOSURE_PRIORITY_INT);
@@ -5431,6 +5464,10 @@ void OBCameraNode::validateParameters() {
 
 void OBCameraNode::setupTopics() {
   try {
+    // Parameters survives reconnects. Only explicit successful runtime writes are restored.
+    const char *serial =
+        is_playback_device_ ? nullptr : device_->getDeviceInfo()->getSerialNumber();
+    parameters_->setDeviceContext(serial ? serial : "");
     captureInitialRosParameters();
     getCommonParameters();
     loadConfigJson();
