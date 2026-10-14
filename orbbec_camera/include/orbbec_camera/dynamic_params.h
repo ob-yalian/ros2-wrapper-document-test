@@ -51,8 +51,6 @@ class Parameters {
   // Drains any in-flight callback before releasing its camera captures.
   void clearDynamicParameters();
   bool hasRuntimeOverride(const std::string& name) const;
-  // Initialization readback only: update ROS values without writing hardware or recording intent.
-  void syncParameters(const std::vector<rclcpp::Parameter>& values);
 
  private:
   mutable std::recursive_mutex callback_mutex_;

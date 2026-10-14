@@ -17,10 +17,6 @@
 #include "orbbec_camera/parameter_descriptions.h"
 
 namespace orbbec_camera {
-namespace {
-// Suppression is local to the initialization thread; concurrent external requests still validate.
-thread_local const Parameters *readback_owner = nullptr;
-}  // namespace
 
 Parameters::Parameters(rclcpp::Node *node)
     : node_(node), logger_(node_->get_logger()), params_backend_(node) {
@@ -29,9 +25,6 @@ Parameters::Parameters(rclcpp::Node *node)
     std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
-    if (readback_owner == this) {
-      return result;
-    }
     bool has_dynamic = false;
     // Reject the entire request before invoking any callback with side effects.
     for (const auto &parameter : parameters) {
@@ -229,18 +222,6 @@ bool Parameters::hasRuntimeOverride(const std::string &name) const {
   const auto device = runtime_overrides_.find(device_key_);
   return !device_key_.empty() && device != runtime_overrides_.end() &&
          device->second.count(name) != 0;
-}
-
-void Parameters::syncParameters(const std::vector<rclcpp::Parameter> &values) {
-  struct ReadbackScope {
-    const Parameters *previous = readback_owner;
-    explicit ReadbackScope(const Parameters *owner) { readback_owner = owner; }
-    ~ReadbackScope() { readback_owner = previous; }
-  } scope(this);
-  const auto result = node_->set_parameters_atomically(values);
-  if (!result.successful) {
-    throw std::runtime_error("Could not publish device parameter readback: " + result.reason);
-  }
 }
 
 template void Parameters::setParamT<bool>(std::string param_name,

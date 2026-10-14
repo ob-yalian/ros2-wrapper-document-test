@@ -67,9 +67,8 @@ TEST_F(DynamicParametersTest, FailedDeviceWriteDoesNotChangeValueOrReconnectInte
   EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
 }
 
-TEST_F(DynamicParametersTest, ReadbackPreservesSkipIntentAcrossReconnect) {
-  manager->syncParameters({rclcpp::Parameter("exposure", 30)});
-  EXPECT_EQ(node->get_parameter("exposure").as_int(), 30);
+TEST_F(DynamicParametersTest, PreservesLaunchSentinelAcrossReconnect) {
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
   EXPECT_EQ(writes, 0);
   EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
   manager->clearDynamicParameters();
@@ -77,12 +76,18 @@ TEST_F(DynamicParametersTest, ReadbackPreservesSkipIntentAcrossReconnect) {
   manager->setDeviceContext("camera-A");
   const auto initial = manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor);
   EXPECT_EQ(initial.get<int64_t>(), -1);
+  enableUpdates();
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(writes, 0);
 }
 
 TEST_F(DynamicParametersTest, RestoresOnlyExplicitSuccessfulUpdatesForSameDevice) {
   ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
   EXPECT_TRUE(manager->hasRuntimeOverride("exposure"));
-  manager->syncParameters({rclcpp::Parameter("exposure", 41)});
+  accept = false;
+  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("exposure", 41)).successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
   manager->clearDynamicParameters();
   manager->removeParam("exposure");
   manager->setDeviceContext("camera-A");

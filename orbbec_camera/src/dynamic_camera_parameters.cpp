@@ -20,7 +20,7 @@ bool OBCameraNode::isDynamicProperty(OBPropertyID property_id) const {
     case OB_PROP_IR_AUTO_EXPOSURE_BOOL:
     case OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL:
       try {
-        // Read access is required for initialization readback and failure recovery.
+        // Read access is required to snapshot device values for failure recovery.
         return device_->isPropertySupported(property_id, OB_PERMISSION_READ_WRITE);
       } catch (const std::exception &e) {
         RCLCPP_DEBUG_STREAM(logger_, "Runtime property capability query failed: " << e.what());
@@ -48,25 +48,11 @@ void OBCameraNode::writeDynamicProperty(const DynamicProperty &property,
 }
 
 void OBCameraNode::setupDynamicParameters() {
-  std::vector<rclcpp::Parameter> readback;
+  // ROS parameters represent requested configuration, including launch-only sentinels.
+  // Do not replace configured values with device readings here.
   std::map<std::string, rclcpp::ParameterType> types;
   for (const auto &entry : dynamic_properties_) {
-    // A transient read failure must not abort camera initialization. A later request retries
-    // range/snapshot reads before it can write anything.
     types.emplace(entry.first, entry.second.type);
-    try {
-      readback.emplace_back(entry.first, readDynamicProperty(entry.second));
-    } catch (const std::exception &e) {
-      RCLCPP_WARN_STREAM(logger_, "Cannot initialize "
-                                      << entry.first
-                                      << " from device; retaining launch value: " << e.what());
-    }
-  }
-  if (!readback.empty()) {
-    parameters_->syncParameters(readback);
-    for (const auto &value : readback) {
-      dynamic_properties_.at(value.get_name()).update_cache(value.get_parameter_value());
-    }
   }
   parameters_->registerDynamicParameters(
       types, [this](const auto &values) { return setDynamicParameters(values); });

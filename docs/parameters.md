@@ -37,17 +37,21 @@ Each requires the connected device to support reading and writing its SDK proper
 Other parameters retain their initialization-only behavior. The new depth AE control
 only writes at startup when explicitly configured, like the existing IR/color AE controls.
 
-After initialization, these controls are read from the device into the ROS parameter store,
-including when the launch value was `-1`. If a read fails, a warning is logged and the launch
-value remains. Reading back a value never turns a skipped startup write into an explicit
-configuration. Successful runtime writes through either interface become reconnect overrides
-for the same camera serial number, within the current driver process. A new process starts
-from its launch configuration. Devices without a serial number do not persist overrides.
+`param get` returns the requested configuration: the launch value or the last accepted runtime
+setting. Initialization does not replace it with a device reading. For example, launching with
+`color_exposure:=-1` skips the startup exposure write and leaves the ROS parameter at `-1`.
+A successful runtime setting replaces that value; a failed setting leaves it unchanged.
+Parameter dumps therefore retain the launch sentinel until an explicit runtime update.
 
-`param get` returns the initialization snapshot or the last accepted runtime setting. It is
-not a live exposure/gain measurement while automatic control is active. Existing getter
-services continue to read the device. Depth/IR and left/right controls may share hardware on
-some modules; changing one can affect the other without continuously refreshing parameters.
+Successful runtime writes through either interface become reconnect overrides for the same
+camera serial number, within the current driver process. Without a runtime override, reconnect
+uses the launch configuration, including `-1`. A new process starts from its launch configuration.
+Devices without a serial number do not persist overrides.
+
+The ROS parameter is not a live exposure/gain measurement while automatic control is active.
+Existing getter services continue to read the device, and `param describe` reports SDK default
+and range metadata. Depth/IR and left/right controls may share hardware on some modules;
+changing one can affect the other's actual value without changing its requested configuration.
 
 Existing exposure, gain, AE, white-balance and AWB setter service names and message types
 are retained. They call the node parameter API, so validation, device writes, errors and
@@ -60,9 +64,17 @@ ros2 param set /camera/camera color_white_balance 4500
 ros2 param get /camera/camera color_white_balance
 ```
 
+To compare the requested exposure with the current device value:
+
+```sh
+ros2 param get /camera/camera color_exposure
+ros2 service call /camera/get_color_exposure orbbec_camera_msgs/srv/GetInt32 "{}"
+```
+
 Choose manual values within the connected device's range. Runtime `-1` and type changes are
-rejected. A manual white balance requires AWB to be disabled; an atomic batch may disable
-AWB and set white balance together. Automatic controls are disabled before manual writes
+rejected. `-1` only skips a startup write; it does not reset an option to its SDK default or
+enable automatic exposure. A manual white balance requires AWB to be disabled; an atomic batch
+may disable AWB and set white balance together. Automatic controls are disabled before manual writes
 and enabled afterwards. Batch requests are validated before any SDK write; they cannot mix
 these controls with startup-only or unrelated ROS parameters. A failed write attempts to
 restore all attempted properties, including the failing one. Rollback failure is reported
@@ -77,11 +89,13 @@ device lock. Cleanup drains and detaches the callback before destroying the came
 ## Verification
 
 `dynamic_params_test` covers batch prevalidation, fixed runtime types, SDK-error propagation,
-readback versus reconnect intent, per-device restore and callback detachment using a fake
+launch-sentinel preservation, per-device restore and callback detachment using a fake
 device apply callback. It does not exercise SDK writes.
 
-Hardware validation should cover Gemini 336 and Gemini 305 (including Dual Color Streams):
-compare parameter and legacy service writes/readback; reject out-of-range and `-1` writes;
+Hardware validation should cover Gemini 330, Gemini 336 and Gemini 305 (including Dual Color Streams):
+launch with `color_exposure:=-1` and verify that `param get` and parameter dumps retain `-1`
+while the getter service reports the actual exposure; compare parameter and legacy service
+writes/readback with AE disabled; reject out-of-range and runtime `-1` writes;
 disable AWB and set WB atomically; unplug during a write; reconnect after both inherited and
 explicit settings; and verify absent-stream parameters remain filtered. Also check SDK range
 metadata after preset selection and initialization without readable property metadata.

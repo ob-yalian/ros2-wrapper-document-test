@@ -870,13 +870,15 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
     const auto initial = rclcpp::ParameterValue(default_value);
     if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
         initial.get<int64_t>() == -1) {
-      descriptor.description += " Launch value -1 skips writing this property.";
+      descriptor.description +=
+          " Launch value -1 skips writing this property and remains visible in param get.";
     }
     if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
       if (isDynamicProperty(property_id)) {
         descriptor.additional_constraints =
             "Runtime writable after initialization. Type is fixed; -1 is a launch-only sentinel. "
-            "SDK range is validated on each update. Device readback becomes the initial ROS value.";
+            "SDK range is validated on each update. The ROS value is the requested configuration; "
+            "use the getter service to read the current device value.";
         dynamic_properties_.emplace(param_name,
                                     DynamicProperty{property_id, initial.get_type(),
                                                     [&param](const rclcpp::ParameterValue &value) {
