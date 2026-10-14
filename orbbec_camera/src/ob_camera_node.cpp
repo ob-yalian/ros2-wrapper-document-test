@@ -3135,7 +3135,7 @@ void OBCameraNode::setupIrPostProcessFilter() {
 
 void OBCameraNode::setupUndistortionFilters() {
   // LingBot requires color undistortion before D2C alignment on Dabai A series devices.
-  if (enable_enhanced_depth_.load() && isDabaiASeriesForHwD2C(pid_)) {
+  if (enable_enhanced_depth_.load() && isGemini340SeriesPID(pid_)) {
     enable_undistortion_[COLOR] = true;
     RCLCPP_INFO(logger_, "Enable color undistortion for LingBot enhanced depth filter");
   }
@@ -3200,7 +3200,7 @@ void OBCameraNode::setupUndistortionFilters() {
 bool OBCameraNode::shouldUseHwD2CColorUndistortion() const {
   auto color_undistortion = enable_undistortion_.find(COLOR);
   return color_undistortion != enable_undistortion_.end() && color_undistortion->second &&
-         isDabaiASeriesForHwD2C(pid_) && depth_registration_ && align_mode_ == "HW" &&
+         isGemini340SeriesPID(pid_) && depth_registration_ && align_mode_ == "HW" &&
          align_target_stream_ == OB_STREAM_COLOR && enable_stream_.at(COLOR) &&
          enable_stream_.at(DEPTH);
 }
@@ -8263,16 +8263,17 @@ bool OBCameraNode::setupFormatConvertType(OBFormat format, ob::FormatConvertFilt
 
 bool OBCameraNode::isGemini435LePID(uint32_t pid) { return pid == GEMINI_435Le_PID; }
 bool OBCameraNode::isPublishMetaData(uint32_t pid) {
-  return isGemini330SeriesPID(pid) || isGemini435LePID(pid) || isGemini301SeriesPID(pid);
+  return isGemini330SeriesPID(pid) || isGemini340SeriesPID(pid) || isGemini435LePID(pid) ||
+         isGemini301SeriesPID(pid);
 }
 
-bool OBCameraNode::isDabaiASeriesForHwD2C(uint32_t pid) {
+bool OBCameraNode::isGemini340SeriesPID(uint32_t pid) {
   return pid == DABAI_A_PID || pid == DABAI_AL_PID || pid == GEMINI_345_PID ||
          pid == GEMINI_345LG_PID;
 }
 
 bool OBCameraNode::isLingBotSupportedPID(uint32_t pid) {
-  return isGemini330SeriesPID(pid) || isDabaiASeriesForHwD2C(pid);
+  return isGemini330SeriesPID(pid) || isGemini340SeriesPID(pid);
 }
 
 bool OBCameraNode::isDepthWorkModeDevices(uint32_t pid) { return pid == GEMINI_435Le_PID; }
