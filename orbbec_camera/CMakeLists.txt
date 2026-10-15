@@ -190,6 +190,7 @@ set(SOURCE_FILES
   src/d2c_viewer.cpp
   src/dynamic_params.cpp
   src/dynamic_camera_parameters.cpp
+  src/runtime_camera_parameters.cpp
   src/parameter_descriptions.cpp
   src/image_publisher.cpp
   src/frame_timestamp_csv_logger.cpp

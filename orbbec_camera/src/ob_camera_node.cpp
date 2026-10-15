@@ -876,7 +876,7 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
     if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
       if (isDynamicProperty(property_id)) {
         descriptor.additional_constraints =
-            "Runtime writable after initialization. Type is fixed; -1 is a launch-only sentinel. "
+            "Runtime writable while streaming. Type is fixed; -1 is a launch-only sentinel. "
             "SDK range is validated on each update. The ROS value is the requested configuration; "
             "use the getter service to read the current device value.";
         dynamic_properties_.emplace(param_name,
@@ -1010,6 +1010,7 @@ void OBCameraNode::clean() noexcept {
 
   RCLCPP_DEBUG_STREAM(logger_, "Stop tf thread");
   try {
+    tf_thread_running_.store(false);
     if (tf_thread_ && tf_thread_->joinable()) {
       tf_cv_.notify_all();  // Wake up tf thread if it's waiting
       tf_thread_->join();
@@ -2306,7 +2307,8 @@ void OBCameraNode::syncApplicationPointCloudConfigForExport() {
     point_cloud_config->enable(enable_point_cloud_ || enable_colored_point_cloud_);
     point_cloud_config->setFormat(enable_colored_point_cloud_ ? OB_FORMAT_RGB_POINT
                                                               : OB_FORMAT_POINT);
-    point_cloud_config->setDecimationFactor(std::max(1, point_cloud_decimation_filter_factor_));
+    point_cloud_config->setDecimationFactor(
+        std::max(1, point_cloud_decimation_filter_factor_.load()));
 
     auto align_mode = ALIGN_DISABLE;
     if (depth_registration_) {
@@ -6115,36 +6117,35 @@ rmw_qos_profile_t OBCameraNode::getImageQosProfile(const stream_index_pair &stre
   return image_qos_profile;
 }
 
-void OBCameraNode::setupPublishers() {
+void OBCameraNode::setupPointCloudPublishers() {
   using PointCloud2 = sensor_msgs::msg::PointCloud2;
-  using CameraInfo = sensor_msgs::msg::CameraInfo;
-  auto point_cloud_qos_profile = getRMWQosProfileFromString(point_cloud_qos_);
-  if (use_intra_process_) {
-    point_cloud_qos_profile = rmw_qos_profile_default;
-  }
-  if (enable_colored_point_cloud_) {
-    depth_registration_cloud_pub_ = node_->create_publisher<PointCloud2>(
-        "depth_registered/points",
-        rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(point_cloud_qos_profile),
-                    point_cloud_qos_profile));
-    const auto publisher = depth_registration_cloud_pub_;
-    registerStreamStatus("depth_registered/points", [publisher]() {
-      return publisher ? publisher->get_subscription_count() : 0;
-    });
+  auto profile = getRMWQosProfileFromString(point_cloud_qos_);
+  if (use_intra_process_) profile = rmw_qos_profile_default;
+  const auto qos = rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(profile), profile);
+  // Construct both outputs before replacing either live publisher.
+  auto color = enable_colored_point_cloud_
+                   ? node_->create_publisher<PointCloud2>("depth_registered/points", qos)
+                   : nullptr;
+  auto depth =
+      enable_point_cloud_ ? node_->create_publisher<PointCloud2>("depth/points", qos) : nullptr;
+  depth_registration_cloud_pub_ = color;
+  depth_cloud_pub_ = depth;
+  if (color) {
+    registerStreamStatus("depth_registered/points",
+                         [color]() { return color->get_subscription_count(); });
   } else {
     removeStreamStatus("depth_registered/points");
   }
-  if (enable_point_cloud_) {
-    depth_cloud_pub_ = node_->create_publisher<PointCloud2>(
-        "depth/points", rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(point_cloud_qos_profile),
-                                    point_cloud_qos_profile));
-    const auto publisher = depth_cloud_pub_;
-    registerStreamStatus("depth/points", [publisher]() {
-      return publisher ? publisher->get_subscription_count() : 0;
-    });
+  if (depth) {
+    registerStreamStatus("depth/points", [depth]() { return depth->get_subscription_count(); });
   } else {
     removeStreamStatus("depth/points");
   }
+}
+
+void OBCameraNode::setupPublishers() {
+  using CameraInfo = sensor_msgs::msg::CameraInfo;
+  setupPointCloudPublishers();
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info.get());
   for (const auto &stream_index : IMAGE_STREAMS) {
@@ -6452,11 +6453,12 @@ cv::Mat OBCameraNode::colorizeDepthImage(const cv::Mat &depth_image,
 }
 
 void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {
+  std::lock_guard<decltype(point_cloud_mutex_)> point_cloud_msg_lock(point_cloud_mutex_);
+  const bool ordered_pc = ordered_pc_.load();
   if (!depth_cloud_pub_ || depth_cloud_pub_->get_subscription_count() == 0 ||
       !enable_point_cloud_) {
     return;
   }
-  std::lock_guard<decltype(point_cloud_mutex_)> point_cloud_msg_lock(point_cloud_mutex_);
   auto depth_frame = frame_set->depthFrame();
   if (!depth_frame) {
     RCLCPP_ERROR_STREAM(logger_, "depth frame is null");
@@ -6497,7 +6499,7 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
   auto *points = static_cast<OBPoint *>(result_frame->data());
   auto width = static_cast<uint32_t>(point_size);
   uint32_t height = 1;
-  if (ordered_pc_) {
+  if (ordered_pc) {
     auto points_frame = result_frame->as<ob::PointsFrame>();
     width = points_frame->getWidth();
     height = points_frame->getHeight();
@@ -6524,7 +6526,7 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     // Distance limits are handled by depth filters; only reject invalid points here.
     bool valid_point = points[i].z > 0.0f && std::isfinite(points[i].x) &&
                        std::isfinite(points[i].y) && std::isfinite(points[i].z);
-    if (valid_point || ordered_pc_) {
+    if (valid_point || ordered_pc) {
       *iter_x = static_cast<float>(points[i].x / 1000.0);
       *iter_y = static_cast<float>(points[i].y / 1000.0);
       *iter_z = static_cast<float>(points[i].z / 1000.0);
@@ -6536,7 +6538,7 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
     RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000, "No valid point in point cloud");
     return;
   }
-  if (!ordered_pc_) {
+  if (!ordered_pc) {
     point_cloud_msg->is_dense = true;
     modifier.resize(valid_count);
   }
@@ -6572,12 +6574,13 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
 }
 
 void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> &frame_set) {
+  std::lock_guard<decltype(point_cloud_mutex_)> point_cloud_msg_lock(point_cloud_mutex_);
+  const bool ordered_pc = ordered_pc_.load();
   if (!depth_registration_cloud_pub_ ||
       depth_registration_cloud_pub_->get_subscription_count() == 0 ||
       !enable_colored_point_cloud_ || !frame_set) {
     return;
   }
-  std::lock_guard<decltype(point_cloud_mutex_)> point_cloud_msg_lock(point_cloud_mutex_);
 
   auto depth_frame = frame_set->depthFrame();
   auto color_frame = frame_set->colorFrame();
@@ -6633,7 +6636,7 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
   auto *point_cloud = static_cast<OBColorPoint *>(result_frame->data());
   auto width = static_cast<uint32_t>(point_size);
   uint32_t height = 1;
-  if (ordered_pc_) {
+  if (ordered_pc) {
     auto points_frame = result_frame->as<ob::PointsFrame>();
     width = points_frame->getWidth();
     height = points_frame->getHeight();
@@ -6667,7 +6670,7 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     // Distance limits are handled by depth filters; only reject invalid points here.
     bool valid_point = point_cloud[i].z > 0.0f && std::isfinite(point_cloud[i].x) &&
                        std::isfinite(point_cloud[i].y) && std::isfinite(point_cloud[i].z);
-    if (valid_point || ordered_pc_) {
+    if (valid_point || ordered_pc) {
       *iter_x = static_cast<float>(point_cloud[i].x / 1000.0);
       *iter_y = static_cast<float>(point_cloud[i].y / 1000.0);
       *iter_z = static_cast<float>(point_cloud[i].z / 1000.0);
@@ -6683,7 +6686,7 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000, "No valid points in point cloud");
     return;
   }
-  if (!ordered_pc_) {
+  if (!ordered_pc) {
     point_cloud_msg->is_dense = true;
     modifier.resize(valid_count);
   }
@@ -6719,6 +6722,7 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
   depth_registration_cloud_pub_->publish(std::move(point_cloud_msg));
 }
 std::shared_ptr<ob::Frame> OBCameraNode::processIrFrameFilter(std::shared_ptr<ob::Frame> &frame) {
+  std::lock_guard<std::mutex> filter_lock(image_filter_mutex_);
   if (frame == nullptr || frame->getType() != OB_FRAME_IR) {
     return nullptr;
   }
@@ -6738,6 +6742,7 @@ std::shared_ptr<ob::Frame> OBCameraNode::processIrFrameFilter(std::shared_ptr<ob
 
 std::shared_ptr<ob::Frame> OBCameraNode::processRightIrFrameFilter(
     std::shared_ptr<ob::Frame> &frame) {
+  std::lock_guard<std::mutex> filter_lock(image_filter_mutex_);
   if (frame == nullptr || frame->getType() != OB_FRAME_IR_RIGHT) {
     return nullptr;
   }
@@ -6756,6 +6761,7 @@ std::shared_ptr<ob::Frame> OBCameraNode::processRightIrFrameFilter(
 }
 std::shared_ptr<ob::Frame> OBCameraNode::processLeftIrFrameFilter(
     std::shared_ptr<ob::Frame> &frame) {
+  std::lock_guard<std::mutex> filter_lock(image_filter_mutex_);
   if (frame == nullptr || frame->getType() != OB_FRAME_IR_LEFT) {
     return nullptr;
   }
@@ -6774,6 +6780,7 @@ std::shared_ptr<ob::Frame> OBCameraNode::processLeftIrFrameFilter(
 }
 std::shared_ptr<ob::Frame> OBCameraNode::processColorFrameFilter(
     std::shared_ptr<ob::Frame> &frame) {
+  std::lock_guard<std::mutex> filter_lock(image_filter_mutex_);
   if (frame == nullptr) {
     return nullptr;
   }
@@ -7488,10 +7495,12 @@ bool OBCameraNode::decodeColorFrameToBuffer(const std::shared_ptr<ob::Frame> &fr
     has_subscriber = true;
   }
 
-  if (frame->getType() == OB_FRAME_COLOR && enable_colored_point_cloud_ &&
-      depth_registration_cloud_pub_ &&
-      depth_registration_cloud_pub_->get_subscription_count() > 0) {
-    has_subscriber = true;
+  if (frame->getType() == OB_FRAME_COLOR) {
+    std::lock_guard<decltype(point_cloud_mutex_)> lock(point_cloud_mutex_);
+    if (enable_colored_point_cloud_ && depth_registration_cloud_pub_ &&
+        depth_registration_cloud_pub_->get_subscription_count() > 0) {
+      has_subscriber = true;
+    }
   }
 
   if (!has_subscriber) {
@@ -8144,6 +8153,8 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
 }
 
 void OBCameraNode::setDefaultIMUMessage(sensor_msgs::msg::Imu &imu_msg) {
+  const double linear_cov = linear_accel_cov_.load();
+  const double angular_cov = angular_vel_cov_.load();
   imu_msg.header.frame_id = "imu_link";
   imu_msg.orientation.x = 0.0;
   imu_msg.orientation.y = 0.0;
@@ -8151,10 +8162,10 @@ void OBCameraNode::setDefaultIMUMessage(sensor_msgs::msg::Imu &imu_msg) {
   imu_msg.orientation.w = 1.0;
 
   imu_msg.orientation_covariance = {-1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-  imu_msg.linear_acceleration_covariance = {
-      linear_accel_cov_, 0.0, 0.0, 0.0, linear_accel_cov_, 0.0, 0.0, 0.0, linear_accel_cov_};
-  imu_msg.angular_velocity_covariance = {
-      angular_vel_cov_, 0.0, 0.0, 0.0, angular_vel_cov_, 0.0, 0.0, 0.0, angular_vel_cov_};
+  imu_msg.linear_acceleration_covariance = {linear_cov, 0.0, 0.0, 0.0,       linear_cov,
+                                            0.0,        0.0, 0.0, linear_cov};
+  imu_msg.angular_velocity_covariance = {angular_cov, 0.0, 0.0, 0.0,        angular_cov,
+                                         0.0,         0.0, 0.0, angular_cov};
 }
 
 sensor_msgs::msg::Imu OBCameraNode::createUnitIMUMessage(const IMUData &accel_data,
@@ -8437,10 +8448,20 @@ void OBCameraNode::publishStaticTransforms() {
   if (!publish_tf_) {
     return;
   }
-  static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(*node_);
-  dynamic_tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*node_);
-  calcAndPublishStaticTransform();
+  if (!static_tf_broadcaster_) {
+    static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(*node_);
+    dynamic_tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*node_);
+  }
+  if (static_tf_msgs_.empty()) {
+    try {
+      calcAndPublishStaticTransform();
+    } catch (...) {
+      static_tf_msgs_.clear();
+      throw;
+    }
+  }
   if (tf_publish_rate_ > 0) {
+    tf_thread_running_.store(true);
     tf_thread_ = std::make_shared<std::thread>([this]() { publishDynamicTransforms(); });
   } else {
     static_tf_broadcaster_->sendTransform(static_tf_msgs_);
@@ -8448,12 +8469,16 @@ void OBCameraNode::publishStaticTransforms() {
 }
 
 void OBCameraNode::publishDynamicTransforms() {
-  RCLCPP_WARN(logger_, "Publishing dynamic camera transforms (/tf) at %g Hz", tf_publish_rate_);
+  RCLCPP_WARN(logger_, "Publishing dynamic camera transforms (/tf) at %g Hz",
+              tf_publish_rate_.load());
   std::mutex mu;
   std::unique_lock<std::mutex> lock(mu);
-  while (rclcpp::ok() && is_running_) {
-    tf_cv_.wait_for(lock, std::chrono::milliseconds((int)(1000.0 / tf_publish_rate_)),
-                    [this] { return (!(is_running_)); });
+  while (rclcpp::ok() && is_running_ && tf_thread_running_.load()) {
+    tf_cv_.wait_for(lock, std::chrono::milliseconds((int)(1000.0 / tf_publish_rate_.load())),
+                    [this] { return !is_running_ || !tf_thread_running_.load(); });
+    if (!is_running_ || !tf_thread_running_.load()) {
+      break;
+    }
     {
       rclcpp::Time t = node_->now();
       for (auto &msg : static_tf_msgs_) {
@@ -8972,6 +8997,12 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
 
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
+  applyServiceParameters(filterServiceParameters(*request), response,
+                         [&] { applyFilter(request, response); });
+}
+
+void OBCameraNode::applyFilter(const std::shared_ptr<SetFilter ::Request> &request,
+                               std::shared_ptr<SetFilter ::Response> &response) {
   try {
     response->success = false;
     response->message.clear();

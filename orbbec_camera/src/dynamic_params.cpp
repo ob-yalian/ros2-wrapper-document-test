@@ -17,6 +17,27 @@
 #include "orbbec_camera/parameter_descriptions.h"
 
 namespace orbbec_camera {
+namespace {
+struct ServiceParameterUpdate;
+thread_local ServiceParameterUpdate *service_update = nullptr;
+
+struct ServiceParameterUpdate {
+  Parameters *manager;
+  const std::vector<rclcpp::Parameter> &values;
+  const std::function<rcl_interfaces::msg::SetParametersResult()> &apply;
+  ServiceParameterUpdate *previous;
+  bool invoked = false;
+  bool completed = false;
+  rcl_interfaces::msg::SetParametersResult result;
+
+  ServiceParameterUpdate(Parameters *owner, const std::vector<rclcpp::Parameter> &parameters,
+                         const std::function<rcl_interfaces::msg::SetParametersResult()> &setter)
+      : manager(owner), values(parameters), apply(setter), previous(service_update) {
+    service_update = this;
+  }
+  ~ServiceParameterUpdate() { service_update = previous; }
+};
+}  // namespace
 
 Parameters::Parameters(rclcpp::Node *node)
     : node_(node), logger_(node_->get_logger()), params_backend_(node) {
@@ -25,6 +46,18 @@ Parameters::Parameters(rclcpp::Node *node)
     std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
+    if (service_update && !service_update->invoked && service_update->manager == this &&
+        service_update->values == parameters) {
+      service_update->invoked = true;
+      service_update->result = service_update->apply();
+      service_update->completed = true;
+      if (service_update->result.successful) {
+        for (const auto &parameter : parameters) {
+          service_updates_.insert(parameter.get_name());
+        }
+      }
+      return service_update->result;
+    }
     bool has_dynamic = false;
     // Reject the entire request before invoking any callback with side effects.
     for (const auto &parameter : parameters) {
@@ -95,6 +128,7 @@ rclcpp::ParameterValue Parameters::setParam(
     const std::function<void(const rclcpp::Parameter &)> &func,
     const rcl_interfaces::msg::ParameterDescriptor &descriptor) {
   bool restore_runtime = false;
+  bool restore_initial = false;
   {
     std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
     const auto device = runtime_overrides_.find(device_key_);
@@ -103,6 +137,14 @@ rclcpp::ParameterValue Parameters::setParam(
       if (value != device->second.end()) {
         initial_value = value->second;
         restore_runtime = true;
+      }
+    }
+    if (!restore_runtime && (service_updates_.count(param_name) != 0 ||
+                             runtime_parameter_names_.count(param_name) != 0)) {
+      const auto original = initial_values_.find(param_name);
+      if (original != initial_values_.end()) {
+        initial_value = original->second;
+        restore_initial = true;
       }
     }
   }
@@ -121,6 +163,17 @@ rclcpp::ParameterValue Parameters::setParam(
           node_->declare_parameter(param_name, initial_value, description, restore_runtime);
     } else {
       result_value = node_->get_parameter(param_name).get_parameter_value();
+      if ((restore_initial || restore_runtime) && result_value != initial_value) {
+        const auto restored =
+            applyServiceParameters({rclcpp::Parameter(param_name, initial_value)}, [] {
+              rcl_interfaces::msg::SetParametersResult result;
+              result.successful = true;
+              return result;
+            });
+        if (restored.successful) {
+          result_value = initial_value;
+        }
+      }
     }
   } catch (const std::exception &e) {
     std::stringstream range;
@@ -140,6 +193,7 @@ rclcpp::ParameterValue Parameters::setParam(
   }
 
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  initial_values_.emplace(param_name, result_value);
   if (func) {
     param_functions_[param_name].push_back(func);
   } else {
@@ -149,6 +203,54 @@ rclcpp::ParameterValue Parameters::setParam(
     func(rclcpp::Parameter(param_name, result_value));
   }
   return result_value;
+}
+
+rcl_interfaces::msg::SetParametersResult Parameters::applyServiceParameters(
+    const std::vector<rclcpp::Parameter> &values,
+    const std::function<rcl_interfaces::msg::SetParametersResult()> &apply) {
+  std::vector<rclcpp::Parameter> declared;
+  try {
+    for (const auto &value : values) {
+      if (node_->has_parameter(value.get_name()) &&
+          node_->get_parameter(value.get_name()).get_type() == value.get_type()) {
+        declared.push_back(value);
+      }
+    }
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_, "Cannot prepare service parameter synchronization: " << e.what());
+    return apply();
+  }
+  if (declared.empty()) {
+    return apply();
+  }
+  // Enter through the ROS parameter API before acquiring callback/device locks. This
+  // serializes service operations with param set and avoids a second SDK write.
+  ServiceParameterUpdate update(this, declared, apply);
+  try {
+    const auto mirrored = node_->set_parameters_atomically(declared);
+    if (update.invoked) {
+      if (update.result.successful && !mirrored.successful) {
+        RCLCPP_WARN_STREAM(
+            logger_, "Service succeeded but parameter synchronization failed: " << mirrored.reason);
+      }
+      return update.result;
+    }
+    RCLCPP_WARN_STREAM(
+        logger_, "Parameter synchronization unavailable; preserving service: " << mirrored.reason);
+  } catch (const std::exception &e) {
+    if (update.invoked) {
+      if (update.completed) {
+        RCLCPP_WARN_STREAM(logger_,
+                           "Service completed but parameter synchronization threw: " << e.what());
+        return update.result;
+      }
+      throw;
+    }
+    RCLCPP_WARN_STREAM(logger_,
+                       "Parameter synchronization unavailable; preserving service: " << e.what());
+  }
+  update.invoked = true;
+  return apply();
 }
 
 template <class T>
@@ -208,6 +310,9 @@ void Parameters::registerDynamicParameters(
     const std::map<std::string, rclcpp::ParameterType> &types, BatchSetter setter) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   dynamic_types_ = types;
+  for (const auto &entry : types) {
+    runtime_parameter_names_.insert(entry.first);
+  }
   batch_setter_ = std::move(setter);
 }
 
@@ -222,6 +327,15 @@ bool Parameters::hasRuntimeOverride(const std::string &name) const {
   const auto device = runtime_overrides_.find(device_key_);
   return !device_key_.empty() && device != runtime_overrides_.end() &&
          device->second.count(name) != 0;
+}
+
+void Parameters::rememberRuntimeConfiguration(const std::vector<rclcpp::Parameter> &values) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  if (!device_key_.empty()) {
+    for (const auto &value : values) {
+      runtime_overrides_[device_key_][value.get_name()] = value.get_parameter_value();
+    }
+  }
 }
 
 template void Parameters::setParamT<bool>(std::string param_name,

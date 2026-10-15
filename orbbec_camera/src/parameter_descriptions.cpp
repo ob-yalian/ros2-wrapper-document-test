@@ -89,12 +89,22 @@ rcl_interfaces::msg::ParameterDescriptor describeCameraParameter(const std::stri
       {"ae_reference_stream", "Auto-exposure reference stream; empty skips setting."},
       {"ae_strategy", "Device auto-exposure strategy; empty skips setting."},
       {"exposure_range_mode", "Device exposure/performance mode; empty skips setting."},
+      {"disparity_range_mode",
+       "Disparity search range: 64, 128 or 256; -1 skips setting at launch. "
+       "The SDK property represents these values as indices 0, 1 and 2."},
       {"mean_intensity_set_point",
        "Depth/IR auto-exposure target brightness, sharing the IR brightness property."},
   };
   rcl_interfaces::msg::ParameterDescriptor descriptor;
   descriptor.additional_constraints =
       "Initialization only; restart the camera to change this parameter.";
+  if (isRuntimeCameraParameter(name)) {
+    descriptor.additional_constraints =
+        "Runtime writable without stopping streams when the connected device/filter supports it. "
+        "Runtime types are fixed. Update one control group at a time; ROI/filter settings are "
+        "applied as a group. Optional skip values (-1/empty) are launch-only. The ROS value is "
+        "requested configuration, not a live device reading.";
+  }
   const auto it = descriptions.find(name);
   if (it != descriptions.end()) {
     descriptor.description = it->second;
@@ -128,7 +138,9 @@ rcl_interfaces::msg::ParameterDescriptor describeCameraParameter(const std::stri
     descriptor.description += " Values and units follow the connected module's SDK property.";
   } else if (name.find("_ae_roi_") != std::string::npos) {
     descriptor.description +=
-        " Coordinate of the auto-exposure region of interest; -1 skips setting.";
+        " Coordinate of the auto-exposure region of interest; launch value -1 leaves this "
+        "coordinate unspecified. Runtime updates may change a single coordinate; unspecified "
+        "coordinates use the corresponding full-frame boundaries.";
   } else if (endsWith(name, "_info_url")) {
     descriptor.description += " Camera calibration URL; empty uses device calibration.";
   } else if (name.find("filter") != std::string::npos && name.find("enable_") != 0) {

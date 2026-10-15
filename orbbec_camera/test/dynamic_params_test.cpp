@@ -113,5 +113,128 @@ TEST_F(DynamicParametersTest, RejectsMixingHardwareAndRosClockUpdates) {
   EXPECT_FALSE(node->get_parameter("use_sim_time").as_bool());
 }
 
+TEST_F(DynamicParametersTest, ServiceAppliesOnceAndMirrorsWithoutCallingDynamicSetter) {
+  int service_writes = 0;
+  const auto result = manager->applyServiceParameters({rclcpp::Parameter("exposure", 200)}, [&] {
+    ++service_writes;
+    rcl_interfaces::msg::SetParametersResult applied;
+    applied.successful = true;
+    applied.reason = "legacy success";
+    return applied;
+  });
+  EXPECT_TRUE(result.successful);
+  EXPECT_EQ(result.reason, "legacy success");
+  EXPECT_EQ(service_writes, 1);
+  EXPECT_EQ(writes, 0);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 200);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
+TEST_F(DynamicParametersTest, FailedServicePreservesItsErrorAndRosConfiguration) {
+  int service_writes = 0;
+  const auto result = manager->applyServiceParameters({rclcpp::Parameter("exposure", 200)}, [&] {
+    ++service_writes;
+    rcl_interfaces::msg::SetParametersResult applied;
+    applied.reason = "legacy SDK failure";
+    return applied;
+  });
+  EXPECT_FALSE(result.successful);
+  EXPECT_EQ(result.reason, "legacy SDK failure");
+  EXPECT_EQ(service_writes, 1);
+  EXPECT_EQ(writes, 0);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+}
+
+TEST_F(DynamicParametersTest, ServiceKeepsItsValidationAndDoesNotEnableExternalStartupUpdates) {
+  const auto result = manager->applyServiceParameters({rclcpp::Parameter("width", 1280)}, [] {
+    rcl_interfaces::msg::SetParametersResult applied;
+    applied.successful = true;
+    return applied;
+  });
+  EXPECT_TRUE(result.successful);
+  EXPECT_EQ(node->get_parameter("width").as_int(), 1280);
+  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("width", 1920)).successful);
+  EXPECT_FALSE(manager->hasRuntimeOverride("width"));
+  manager->clearDynamicParameters();
+  manager->setDeviceContext("camera-A");
+  EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(640)).get<int64_t>(), 640);
+  EXPECT_EQ(node->get_parameter("width").as_int(), 640);
+}
+
+TEST_F(DynamicParametersTest, MissingParameterDoesNotPreventAnExistingServiceOperation) {
+  int service_writes = 0;
+  const auto result = manager->applyServiceParameters({rclcpp::Parameter("unsupported", 200)}, [&] {
+    ++service_writes;
+    rcl_interfaces::msg::SetParametersResult applied;
+    applied.successful = true;
+    return applied;
+  });
+  EXPECT_TRUE(result.successful);
+  EXPECT_EQ(service_writes, 1);
+  EXPECT_FALSE(node->has_parameter("unsupported"));
+}
+
+TEST_F(DynamicParametersTest, ServiceDoesNotReplaceTheExistingExplicitReconnectIntent) {
+  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
+  ASSERT_TRUE(manager
+                  ->applyServiceParameters({rclcpp::Parameter("exposure", 200)},
+                                           [] {
+                                             rcl_interfaces::msg::SetParametersResult applied;
+                                             applied.successful = true;
+                                             return applied;
+                                           })
+                  .successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 200);
+  manager->clearDynamicParameters();
+  manager->removeParam("exposure");
+  manager->setDeviceContext("camera-A");
+  EXPECT_EQ(manager->setParam("exposure", rclcpp::ParameterValue(-1)).get<int64_t>(), 40);
+}
+
+TEST_F(DynamicParametersTest, RetainedCommonParametersDoNotLeakBetweenDevices) {
+  manager->registerDynamicParameters({{"width", rclcpp::ParameterType::PARAMETER_INTEGER}},
+                                     [](const auto &) {
+                                       rcl_interfaces::msg::SetParametersResult result;
+                                       result.successful = true;
+                                       return result;
+                                     });
+  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("width", 1280)).successful);
+  manager->clearDynamicParameters();
+  manager->setDeviceContext("camera-B");
+  EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(640)).get<int64_t>(), 640);
+  EXPECT_EQ(node->get_parameter("width").as_int(), 640);
+  manager->clearDynamicParameters();
+  manager->setDeviceContext("camera-A");
+  EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(640)).get<int64_t>(), 1280);
+}
+
+TEST_F(DynamicParametersTest, RosSynchronizationExceptionDoesNotChangeCompletedServiceResult) {
+  auto service_node = std::make_shared<rclcpp::Node>("service_parameter_test");
+  // ROS invokes the newest callback first: throw after the service operation completed.
+  auto rejecting_callback = service_node->add_on_set_parameters_callback([](const auto &values) {
+    if (!values.empty() && values.front().as_int() == 1280) {
+      throw std::runtime_error("simulated ROS callback failure");
+    }
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    return result;
+  });
+  Parameters service_manager(service_node.get());
+  service_manager.setParam("width", rclcpp::ParameterValue(640));
+  int service_writes = 0;
+  const auto result =
+      service_manager.applyServiceParameters({rclcpp::Parameter("width", 1280)}, [&] {
+        ++service_writes;
+        rcl_interfaces::msg::SetParametersResult applied;
+        applied.successful = true;
+        applied.reason = "legacy success";
+        return applied;
+      });
+  EXPECT_TRUE(result.successful);
+  EXPECT_EQ(result.reason, "legacy success");
+  EXPECT_EQ(service_writes, 1);
+  EXPECT_EQ(service_node->get_parameter("width").as_int(), 640);
+}
+
 }  // namespace
 }  // namespace orbbec_camera
