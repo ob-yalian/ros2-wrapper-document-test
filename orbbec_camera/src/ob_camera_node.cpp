@@ -4937,7 +4937,6 @@ void OBCameraNode::getParameters() {
   setAndGetNodeParameter<double>(linear_accel_cov_, "linear_accel_cov", 0.0003);
   setAndGetNodeParameter<double>(angular_vel_cov_, "angular_vel_cov", 0.02);
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
-  setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
   setAndGetNodeParameter<int>(depth_decimation_factor_, "depth_decimation_factor", 1);
   setAndGetNodeParameter<int>(left_ir_decimation_factor_, "left_ir_decimation_factor", 1);
@@ -7627,7 +7626,7 @@ void OBCameraNode::saveImageToFile(const stream_index_pair &stream_index, const 
         return;
       }
       index = save_images_count_[stream_index]++;
-      if (save_images_count_[stream_index] >= max_save_images_count_) {
+      if (save_images_count_[stream_index] >= save_images_target_count_) {
         save_images_[stream_index].store(false, std::memory_order_release);
       }
     }
