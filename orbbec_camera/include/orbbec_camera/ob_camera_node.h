@@ -352,22 +352,28 @@ class OBCameraNode {
 
   void getCommonParameters();
 
+  void getDevicePresetParameters();
+
   void getImageStreamParameters();
 
   void getPropertyParameters();
 
   void validateParameters();
 
-  bool isPropertyParameterSupported(const std::string& param_name, OBPropertyID property_id) const;
+  bool queryDeviceCapability(const std::string& name, const std::function<bool()>& query) const;
+
+  bool isPropertyParameterSupported(const std::string& param_name, OBPropertyID property_id,
+                                    OBPermissionType permission = OB_PERMISSION_WRITE) const;
 
   template <class T>
-  void setAndGetDeviceParameter(T& param, const std::string& param_name, const T& default_value);
+  void setAndGetDeviceParameter(T& param, const std::string& param_name, const T& default_value,
+                                bool supported = true);
 
   template <class T>
   void setAndGetDeviceParameter(std::atomic<T>& param, const std::string& name,
-                                const T& default_value) {
+                                const T& default_value, bool supported = true) {
     T value = param.load();
-    setAndGetDeviceParameter(value, name, default_value);
+    setAndGetDeviceParameter(value, name, default_value, supported);
     param.store(value);
   }
 

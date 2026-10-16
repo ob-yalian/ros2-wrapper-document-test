@@ -28,6 +28,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <queue>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -825,29 +826,43 @@ void OBCameraNode::setAndGetNodeParameter(
   }
 }
 
+bool OBCameraNode::queryDeviceCapability(const std::string &name,
+                                         const std::function<bool()> &query) const {
+  try {
+    return query();
+  } catch (const ob::Error &e) {
+    RCLCPP_WARN_STREAM(logger_, "Keep parameters for "
+                                    << name << ": capability query failed: "
+                                    << orbbec_camera::formatObErrorWithStatus(e));
+  } catch (const std::exception &e) {
+    RCLCPP_WARN_STREAM(logger_,
+                       "Keep parameters for " << name << ": capability query failed: " << e.what());
+  } catch (...) {
+    RCLCPP_WARN_STREAM(logger_, "Keep parameters for " << name << ": capability query failed");
+  }
+  // A failed query does not establish that an uncommon module lacks this capability.
+  return true;
+}
+
 bool OBCameraNode::isPropertyParameterSupported(const std::string &param_name,
-                                                OBPropertyID property_id) const {
+                                                OBPropertyID property_id,
+                                                OBPermissionType permission) const {
   if (is_playback_device_) {
     return false;
   }
-  try {
-    return device_->isPropertySupported(property_id, OB_PERMISSION_WRITE);
-  } catch (const ob::Error &e) {
-    RCLCPP_WARN_STREAM(logger_, "Keep parameter " << param_name
-                                                  << ": property capability query failed: "
-                                                  << orbbec_camera::formatObErrorWithStatus(e));
-  } catch (const std::exception &e) {
-    RCLCPP_WARN_STREAM(logger_, "Keep parameter "
-                                    << param_name
-                                    << ": property capability query failed: " << e.what());
-  }
-  // A failed query does not establish that an uncommon module lacks this property.
-  return true;
+  return queryDeviceCapability(param_name, [this, property_id, permission]() {
+    return device_->isPropertySupported(property_id, permission);
+  });
 }
 
 template <class T>
 void OBCameraNode::setAndGetDeviceParameter(T &param, const std::string &param_name,
-                                            const T &default_value) {
+                                            const T &default_value, bool supported) {
+  param = default_value;
+  if (!supported) {
+    RCLCPP_DEBUG_STREAM(logger_, "Skip unsupported device parameter: " << param_name);
+    return;
+  }
   // Parameters is shared by the driver across reconnections. Track declarations so a new
   // camera does not inherit parameters for streams/properties it does not support.
   device_param_names_.insert(param_name);
@@ -4870,7 +4885,107 @@ void OBCameraNode::setupDefaultImageFormat() {
   unit_step_size_[COLOR_RIGHT] = 3 * sizeof(uint8_t);
 }
 
+void OBCameraNode::getDevicePresetParameters() {
+  // JSON imports may append presets. Keep both interfaces when both are supported;
+  // recommending presets is not evidence that legacy work modes are unsupported.
+  const bool supports_presets =
+      !is_playback_device_ && queryDeviceCapability("device_preset", [this]() {
+        auto presets = device_->getAvailablePresetList();
+        return !presets || presets->getCount() > 0;
+      });
+  const bool supports_work_modes =
+      !is_playback_device_ && queryDeviceCapability("depth_work_mode", [this]() {
+        if (!device_->isPropertySupported(OB_STRUCT_CURRENT_DEPTH_ALG_MODE,
+                                          OB_PERMISSION_READ_WRITE)) {
+          return false;
+        }
+        auto modes = device_->getDepthWorkModeList();
+        return !modes || modes->getCount() > 0;
+      });
+
+  depth_work_mode_.clear();
+  device_preset_.clear();
+  const bool use_legacy_preset = isDepthWorkModeDevices(pid_) && supports_work_modes;
+  setAndGetDeviceParameter<std::string>(depth_work_mode_, "depth_work_mode", "",
+                                        supports_work_modes);
+  if (use_legacy_preset) {
+    // Preserve the existing 435Le public name for the legacy SDK operation.
+    setAndGetDeviceParameter<std::string>(depth_work_mode_, "device_preset", "");
+  } else {
+    setAndGetDeviceParameter<std::string>(device_preset_, "device_preset", "", supports_presets);
+  }
+  // Empty version strings and failed queries do not prove a lack of version support.
+  setAndGetDeviceParameter<std::string>(device_preset_version_, "device_preset_version", "",
+                                        supports_presets && !use_legacy_preset);
+
+  if (device_preset_ == "Dual Color Streams") {
+    RCLCPP_INFO_STREAM(logger_,
+                       "Using Double Color preset, only left and right color streams are enabled.");
+    enable_stream_[COLOR] = false;
+    enable_stream_[DEPTH] = false;
+    enable_stream_[INFRA0] = false;
+    enable_stream_[INFRA1] = false;
+    enable_stream_[INFRA2] = false;
+    enable_stream_[LIDAR] = false;
+    enable_stream_[COLOR_LEFT] = true;
+    enable_stream_[COLOR_RIGHT] = true;
+
+    enable_point_cloud_ = false;
+    enable_colored_point_cloud_ = false;
+    depth_registration_ = false;
+    enable_d2c_viewer_ = false;
+    enable_depth_filter_ = false;
+    enable_undistortion_[COLOR] = false;
+  }
+}
+
 void OBCameraNode::getCommonParameters() {
+  std::set<OBSensorType> sensor_types;
+  bool sensor_list_known = false;
+  queryDeviceCapability("sensor list", [this, &sensor_types, &sensor_list_known]() {
+    auto sensors = device_->getSensorList();
+    if (!sensors) {
+      return true;
+    }
+    for (uint32_t i = 0; i < sensors->getCount(); ++i) {
+      sensor_types.insert(sensors->getSensor(i)->getType());
+    }
+    sensor_list_known = true;
+    return true;
+  });
+  const auto has_sensor = [&sensor_types, sensor_list_known](OBSensorType type) {
+    return !sensor_list_known || sensor_types.count(type) != 0;
+  };
+  const bool has_depth = has_sensor(OB_SENSOR_DEPTH);
+  const bool has_accel = has_sensor(OB_SENSOR_ACCEL);
+  const bool has_gyro = has_sensor(OB_SENSOR_GYRO);
+  const bool supports_sync =
+      !is_playback_device_ && queryDeviceCapability("synchronization", [this]() {
+        return device_->getSupportedMultiDeviceSyncModeBitmap() != 0;
+      });
+  const bool supports_interleave =
+      !is_playback_device_ &&
+      (queryDeviceCapability("frame interleave",
+                             [this]() { return device_->isFrameInterleaveSupported(); }) ||
+       isPropertyParameterSupported("frame interleave", OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL) ||
+       isPropertyParameterSupported("frame interleave", OB_PROP_FRAME_INTERLEAVE_CONFIG_INDEX_INT));
+  const bool supports_disp_offset =
+      isPropertyParameterSupported("disparity offset configuration", OB_STRUCT_DISP_OFFSET_CONFIG);
+  const bool supports_color_preset =
+      !is_playback_device_ &&
+      queryDeviceCapability("color_preset", [this]() { return device_->isColorPresetSupported(); });
+  const bool supports_depth_precision =
+      isPropertyParameterSupported("depth_precision", OB_PROP_DEPTH_PRECISION_LEVEL_INT) ||
+      isPropertyParameterSupported("depth_precision", OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT);
+  const bool supports_preset_resolution =
+      isPropertyParameterSupported("preset_resolution_config", OB_STRUCT_PRESET_RESOLUTION_CONFIG);
+  const bool supports_disparity_mode =
+      isPropertyParameterSupported("disparity_to_depth_mode", OB_PROP_DISPARITY_TO_DEPTH_BOOL) &&
+      isPropertyParameterSupported("disparity_to_depth_mode", OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL);
+  const bool supports_lrm = isPropertyParameterSupported(
+      "LRM obstacle distance", OB_PROP_LDP_MEASURE_DISTANCE_INT, OB_PERMISSION_READ);
+  const bool supports_enhanced_depth = isLingBotSupportedPID(pid_);
+
   setAndGetNodeParameter<std::string>(camera_name_, "camera_name", "camera");
   camera_link_frame_id_ = camera_name_ + "_link";
   // Initialize stream state without declaring device-dependent ROS parameters.
@@ -4894,27 +5009,29 @@ void OBCameraNode::getCommonParameters() {
 
   accel_gyro_frame_id_ = camera_name_ + "_accel_gyro_optical_frame";
 
-  setAndGetNodeParameter<bool>(enable_sync_output_accel_gyro_, "enable_sync_output_accel_gyro",
-                               false);
+  setAndGetDeviceParameter<bool>(enable_sync_output_accel_gyro_, "enable_sync_output_accel_gyro",
+                                 false, has_accel && has_gyro);
   for (const auto &stream_index : HID_STREAMS) {
+    const bool supported = stream_index == ACCEL ? has_accel : has_gyro;
     std::string param_name = stream_name_[stream_index] + "_qos";
-    setAndGetNodeParameter<std::string>(imu_qos_[stream_index], param_name, "default");
+    setAndGetDeviceParameter<std::string>(imu_qos_[stream_index], param_name, "default", supported);
     param_name = "enable_" + stream_name_[stream_index];
-    setAndGetNodeParameter<bool>(enable_stream_[stream_index], param_name, false);
-    if (enable_sync_output_accel_gyro_) {
+    setAndGetDeviceParameter<bool>(enable_stream_[stream_index], param_name, false, supported);
+    if (supported && enable_sync_output_accel_gyro_) {
       enable_stream_[stream_index] = true;
     }
     param_name = stream_name_[stream_index] + "_rate";
-    setAndGetNodeParameter<std::string>(imu_rate_[stream_index], param_name, "");
+    setAndGetDeviceParameter<std::string>(imu_rate_[stream_index], param_name, "", supported);
     param_name = stream_name_[stream_index] + "_range";
-    setAndGetNodeParameter<std::string>(imu_range_[stream_index], param_name, "");
+    setAndGetDeviceParameter<std::string>(imu_range_[stream_index], param_name, "", supported);
     param_name = camera_name_ + "_" + stream_name_[stream_index] + "_frame_id";
     std::string default_frame_id = camera_name_ + "_" + stream_name_[stream_index] + "_frame";
-    setAndGetNodeParameter(frame_id_[stream_index], param_name, default_frame_id);
+    setAndGetDeviceParameter(frame_id_[stream_index], param_name, default_frame_id, supported);
     std::string default_optical_frame_id =
         camera_name_ + "_" + stream_name_[stream_index] + "_optical_frame";
     param_name = stream_name_[stream_index] + "_optical_frame_id";
-    setAndGetNodeParameter(optical_frame_id_[stream_index], param_name, default_optical_frame_id);
+    setAndGetDeviceParameter(optical_frame_id_[stream_index], param_name, default_optical_frame_id,
+                             supported);
     depth_aligned_frame_id_[stream_index] =
         camera_name_ + "_" + stream_name_[COLOR] + "_optical_frame";
   }
@@ -4922,11 +5039,13 @@ void OBCameraNode::getCommonParameters() {
   setAndGetNodeParameter<double>(tf_publish_rate_, "tf_publish_rate", 0.0);
   setAndGetNodeParameter<bool>(depth_registration_, "depth_registration", false);
   bool enable_enhanced_depth = false;
-  setAndGetNodeParameter<bool>(enable_enhanced_depth, "enable_enhanced_depth", false);
+  setAndGetDeviceParameter<bool>(enable_enhanced_depth, "enable_enhanced_depth", false,
+                                 supports_enhanced_depth);
   enable_enhanced_depth_.store(enable_enhanced_depth);
-  setAndGetNodeParameter<std::string>(enhanced_depth_model_path_, "enhanced_depth_model_path", "");
-  setAndGetNodeParameter<int>(enhanced_depth_confidence_threshold_,
-                              "enhanced_depth_confidence_threshold", 51);
+  setAndGetDeviceParameter<std::string>(enhanced_depth_model_path_, "enhanced_depth_model_path", "",
+                                        supports_enhanced_depth);
+  setAndGetDeviceParameter<int>(enhanced_depth_confidence_threshold_,
+                                "enhanced_depth_confidence_threshold", 51, supports_enhanced_depth);
   setAndGetNodeParameter<bool>(enable_point_cloud_, "enable_point_cloud", false);
   setAndGetNodeParameter<std::string>(ir_info_url_, "ir_info_url", "");
   setAndGetNodeParameter<std::string>(color_info_url_, "color_info_url", "");
@@ -4948,62 +5067,71 @@ void OBCameraNode::getCommonParameters() {
             << colorizer_mode_ << "'. Disabling enable_d2c_viewer.");
     enable_d2c_viewer_ = false;
   }
-  setAndGetNodeParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "");
+  setAndGetDeviceParameter<std::string>(disparity_to_depth_mode_, "disparity_to_depth_mode", "",
+                                        supports_disparity_mode);
   disparity_to_depth_mode_ =
       normalizeClosedSetParameterValue(logger_, "disparity_to_depth_mode", disparity_to_depth_mode_,
                                        {"", "HW", "SW", "disable"}, "");
-  setAndGetNodeParameter<std::string>(depth_filter_config_, "depth_filter_config", "");
+  setAndGetDeviceParameter<std::string>(depth_filter_config_, "depth_filter_config", "", has_depth);
   if (!depth_filter_config_.empty()) {
     enable_depth_filter_ = true;
   }
   setAndGetNodeParameter<bool>(enable_frame_sync_, "enable_frame_sync", false);
-  setAndGetNodeParameter<std::string>(color_preset_, "color_preset", "");
-  setAndGetNodeParameter<std::string>(depth_precision_str_, "depth_precision", "");
-  setAndGetNodeParameter<std::string>(preset_resolution_config_, "preset_resolution_config", "");
-  setAndGetNodeParameter<std::string>(sync_mode_str_, "sync_mode", "");
-  setAndGetNodeParameter<int>(depth_delay_us_, "depth_delay_us", 0);
-  setAndGetNodeParameter<int>(color_delay_us_, "color_delay_us", 0);
-  setAndGetNodeParameter<int>(trigger2image_delay_us_, "trigger2image_delay_us", 0);
-  setAndGetNodeParameter<int>(trigger_out_delay_us_, "trigger_out_delay_us", 0);
-  setAndGetNodeParameter<bool>(trigger_out_enabled_, "trigger_out_enabled", true);
-  setAndGetNodeParameter<bool>(software_trigger_enabled_, "software_trigger_enabled", true);
+  setAndGetDeviceParameter<std::string>(color_preset_, "color_preset", "", supports_color_preset);
+  setAndGetDeviceParameter<std::string>(depth_precision_str_, "depth_precision", "",
+                                        supports_depth_precision);
+  setAndGetDeviceParameter<std::string>(preset_resolution_config_, "preset_resolution_config", "",
+                                        supports_preset_resolution);
+  setAndGetDeviceParameter<std::string>(sync_mode_str_, "sync_mode", "", supports_sync);
+  setAndGetDeviceParameter<int>(depth_delay_us_, "depth_delay_us", 0, supports_sync);
+  setAndGetDeviceParameter<int>(color_delay_us_, "color_delay_us", 0, supports_sync);
+  setAndGetDeviceParameter<int>(trigger2image_delay_us_, "trigger2image_delay_us", 0,
+                                supports_sync);
+  setAndGetDeviceParameter<int>(trigger_out_delay_us_, "trigger_out_delay_us", 0, supports_sync);
+  setAndGetDeviceParameter<bool>(trigger_out_enabled_, "trigger_out_enabled", true, supports_sync);
+  setAndGetDeviceParameter<bool>(software_trigger_enabled_, "software_trigger_enabled", true,
+                                 supports_sync);
   setAndGetNodeParameter<std::string>(cloud_frame_id_, "cloud_frame_id", "");
-  setAndGetNodeParameter<double>(linear_accel_cov_, "linear_accel_cov", 0.0003);
-  setAndGetNodeParameter<double>(angular_vel_cov_, "angular_vel_cov", 0.02);
+  setAndGetDeviceParameter<double>(linear_accel_cov_, "linear_accel_cov", 0.0003, has_accel);
+  setAndGetDeviceParameter<double>(angular_vel_cov_, "angular_vel_cov", 0.02, has_gyro);
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
-  setAndGetNodeParameter<std::string>(depth_work_mode_, "depth_work_mode", "");
-  if (isDepthWorkModeDevices(device_->getDeviceInfo()->getPid())) {
-    setAndGetNodeParameter<std::string>(depth_work_mode_, "device_preset", "");
-  } else {
-    setAndGetNodeParameter<std::string>(device_preset_, "device_preset", "");
-  }
-  setAndGetNodeParameter<std::string>(device_preset_version_, "device_preset_version", "");
-  setAndGetNodeParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
-  setAndGetNodeParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);
-  setAndGetNodeParameter<bool>(enable_sequence_id_filter_, "enable_sequence_id_filter", false);
-  setAndGetNodeParameter<bool>(enable_disparity_to_depth_, "enable_disparity_to_depth", true);
-  setAndGetNodeParameter<bool>(enable_threshold_filter_, "enable_threshold_filter", false);
-  setAndGetNodeParameter<bool>(enable_hardware_noise_removal_filter_,
-                               "enable_hardware_noise_removal_filter", true);
-  setAndGetNodeParameter<bool>(enable_noise_removal_filter_, "enable_noise_removal_filter", true);
-  setAndGetNodeParameter<bool>(enable_spatial_filter_, "enable_spatial_filter", false);
-  setAndGetNodeParameter<bool>(enable_temporal_filter_, "enable_temporal_filter", false);
-  setAndGetNodeParameter<bool>(enable_hole_filling_filter_, "enable_hole_filling_filter", false);
-  setAndGetNodeParameter<bool>(enable_edge_noise_removal_filter_,
-                               "enable_edge_noise_removal_filter", false);
-  setAndGetNodeParameter<bool>(enable_spatial_fast_filter_, "enable_spatial_fast_filter", false);
-  setAndGetNodeParameter<bool>(enable_spatial_moderate_filter_, "enable_spatial_moderate_filter",
-                               false);
-  setAndGetNodeParameter<bool>(enable_mgc_noise_removal_filter_, "enable_mgc_noise_removal_filter",
-                               false);
-  setAndGetNodeParameter<bool>(enable_lut_noise_removal_filter_, "enable_lut_noise_removal_filter",
-                               false);
-  setAndGetNodeParameter<bool>(enable_disp_outliers_filter_, "enable_disp_outliers_filter", false);
+  // A missing depth sensor is definitive; omissions from a recommended filter list are not.
+  // Keep software/fallback filter controls whenever a depth sensor may be available.
+  setAndGetDeviceParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false, has_depth);
+  setAndGetDeviceParameter<bool>(enable_sequence_id_filter_, "enable_sequence_id_filter", false,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_disparity_to_depth_, "enable_disparity_to_depth", true,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_threshold_filter_, "enable_threshold_filter", false,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_hardware_noise_removal_filter_,
+                                 "enable_hardware_noise_removal_filter", true, has_depth);
+  setAndGetDeviceParameter<bool>(enable_noise_removal_filter_, "enable_noise_removal_filter", true,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_spatial_filter_, "enable_spatial_filter", false, has_depth);
+  setAndGetDeviceParameter<bool>(enable_temporal_filter_, "enable_temporal_filter", false,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_hole_filling_filter_, "enable_hole_filling_filter", false,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_edge_noise_removal_filter_,
+                                 "enable_edge_noise_removal_filter", false, has_depth);
+  setAndGetDeviceParameter<bool>(enable_spatial_fast_filter_, "enable_spatial_fast_filter", false,
+                                 has_depth);
+  setAndGetDeviceParameter<bool>(enable_spatial_moderate_filter_, "enable_spatial_moderate_filter",
+                                 false, has_depth);
+  setAndGetDeviceParameter<bool>(enable_mgc_noise_removal_filter_,
+                                 "enable_mgc_noise_removal_filter", false, has_depth);
+  setAndGetDeviceParameter<bool>(enable_lut_noise_removal_filter_,
+                                 "enable_lut_noise_removal_filter", false, has_depth);
+  setAndGetDeviceParameter<bool>(enable_disp_outliers_filter_, "enable_disp_outliers_filter", false,
+                                 has_depth);
   std::string disp_outliers_filter_search_mode;
-  setAndGetNodeParameter<std::string>(disp_outliers_filter_search_mode,
-                                      "disp_outliers_filter_search_mode", "");
+  setAndGetDeviceParameter<std::string>(disp_outliers_filter_search_mode,
+                                        "disp_outliers_filter_search_mode", "", has_depth);
   std::string disp_outliers_filter_search_mode_message;
   if (!parseDispOutliersSearchMode(disp_outliers_filter_search_mode,
                                    disp_outliers_filter_search_mode_,
@@ -5013,35 +5141,42 @@ void OBCameraNode::getCommonParameters() {
                                     << disp_outliers_filter_search_mode_message << "; using empty");
     disp_outliers_filter_search_mode_ = -1;
   }
-  setAndGetNodeParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1);
-  setAndGetNodeParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1);
-  setAndGetNodeParameter<int>(threshold_filter_max_, "threshold_filter_max", -1);
-  setAndGetNodeParameter<int>(threshold_filter_min_, "threshold_filter_min", -1);
-  setAndGetNodeParameter<float>(hardware_noise_removal_filter_threshold_,
-                                "hardware_noise_removal_filter_threshold", -1.0);
-  setAndGetNodeParameter<int>(noise_removal_filter_min_diff_, "noise_removal_filter_min_diff", -1);
-  setAndGetNodeParameter<int>(noise_removal_filter_max_size_, "noise_removal_filter_max_size", -1);
-  setAndGetNodeParameter<float>(spatial_filter_alpha_, "spatial_filter_alpha", -1.0);
-  setAndGetNodeParameter<int>(spatial_filter_diff_threshold_, "spatial_filter_diff_threshold", -1);
-  setAndGetNodeParameter<int>(spatial_filter_magnitude_, "spatial_filter_magnitude", -1);
-  setAndGetNodeParameter<int>(spatial_filter_radius_, "spatial_filter_radius", -1);
-  setAndGetNodeParameter<int>(spatial_fast_filter_radius_, "spatial_fast_filter_radius", -1);
-  setAndGetNodeParameter<int>(spatial_moderate_filter_diff_threshold_,
-                              "spatial_moderate_filter_diff_threshold", -1);
-  setAndGetNodeParameter<int>(spatial_moderate_filter_magnitude_,
-                              "spatial_moderate_filter_magnitude", -1);
-  setAndGetNodeParameter<int>(spatial_moderate_filter_radius_, "spatial_moderate_filter_radius",
-                              -1);
-  setAndGetNodeParameter<float>(temporal_filter_diff_threshold_, "temporal_filter_diff_threshold",
-                                -1.0);
-  setAndGetNodeParameter<float>(temporal_filter_weight_, "temporal_filter_weight", -1.0);
-  setAndGetNodeParameter<std::string>(hole_filling_filter_mode_, "hole_filling_filter_mode", "");
-  setAndGetNodeParameter<bool>(enable_false_positive_filter_, "enable_false_positive_filter",
-                               false);
-  setAndGetNodeParameter<int>(hdr_merge_exposure_1_, "hdr_merge_exposure_1", -1);
-  setAndGetNodeParameter<int>(hdr_merge_gain_1_, "hdr_merge_gain_1", -1);
-  setAndGetNodeParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1);
-  setAndGetNodeParameter<int>(hdr_merge_gain_2_, "hdr_merge_gain_2", -1);
+  setAndGetDeviceParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1, has_depth);
+  setAndGetDeviceParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1, has_depth);
+  setAndGetDeviceParameter<int>(threshold_filter_max_, "threshold_filter_max", -1, has_depth);
+  setAndGetDeviceParameter<int>(threshold_filter_min_, "threshold_filter_min", -1, has_depth);
+  setAndGetDeviceParameter<float>(hardware_noise_removal_filter_threshold_,
+                                  "hardware_noise_removal_filter_threshold", -1.0, has_depth);
+  setAndGetDeviceParameter<int>(noise_removal_filter_min_diff_, "noise_removal_filter_min_diff", -1,
+                                has_depth);
+  setAndGetDeviceParameter<int>(noise_removal_filter_max_size_, "noise_removal_filter_max_size", -1,
+                                has_depth);
+  setAndGetDeviceParameter<float>(spatial_filter_alpha_, "spatial_filter_alpha", -1.0, has_depth);
+  setAndGetDeviceParameter<int>(spatial_filter_diff_threshold_, "spatial_filter_diff_threshold", -1,
+                                has_depth);
+  setAndGetDeviceParameter<int>(spatial_filter_magnitude_, "spatial_filter_magnitude", -1,
+                                has_depth);
+  setAndGetDeviceParameter<int>(spatial_filter_radius_, "spatial_filter_radius", -1, has_depth);
+  setAndGetDeviceParameter<int>(spatial_fast_filter_radius_, "spatial_fast_filter_radius", -1,
+                                has_depth);
+  setAndGetDeviceParameter<int>(spatial_moderate_filter_diff_threshold_,
+                                "spatial_moderate_filter_diff_threshold", -1, has_depth);
+  setAndGetDeviceParameter<int>(spatial_moderate_filter_magnitude_,
+                                "spatial_moderate_filter_magnitude", -1, has_depth);
+  setAndGetDeviceParameter<int>(spatial_moderate_filter_radius_, "spatial_moderate_filter_radius",
+                                -1, has_depth);
+  setAndGetDeviceParameter<float>(temporal_filter_diff_threshold_, "temporal_filter_diff_threshold",
+                                  -1.0, has_depth);
+  setAndGetDeviceParameter<float>(temporal_filter_weight_, "temporal_filter_weight", -1.0,
+                                  has_depth);
+  setAndGetDeviceParameter<std::string>(hole_filling_filter_mode_, "hole_filling_filter_mode", "",
+                                        has_depth);
+  setAndGetDeviceParameter<bool>(enable_false_positive_filter_, "enable_false_positive_filter",
+                                 false, has_depth);
+  setAndGetDeviceParameter<int>(hdr_merge_exposure_1_, "hdr_merge_exposure_1", -1, has_depth);
+  setAndGetDeviceParameter<int>(hdr_merge_gain_1_, "hdr_merge_gain_1", -1, has_depth);
+  setAndGetDeviceParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1, has_depth);
+  setAndGetDeviceParameter<int>(hdr_merge_gain_2_, "hdr_merge_gain_2", -1, has_depth);
   setAndGetNodeParameter<std::string>(align_mode_, "align_mode", "HW");
   align_mode_ =
       normalizeClosedSetParameterValue(logger_, "align_mode", align_mode_, {"HW", "SW"}, "HW");
@@ -5050,8 +5185,9 @@ void OBCameraNode::getCommonParameters() {
   align_target_stream_str_ = normalizeClosedSetParameterValue(
       logger_, "align_target_stream", align_target_stream_str_, {"COLOR", "DEPTH"}, "COLOR");
   align_target_stream_ = obStreamTypeFromString(align_target_stream_str_);
-  setAndGetNodeParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
-  setAndGetNodeParameter<int>(monitor_poll_interval_sec_, "monitor_poll_interval_sec", -1);
+  // No reliable support query is available for these device monitor controls.
+  setAndGetDeviceParameter<bool>(enable_firmware_log_, "enable_firmware_log", false);
+  setAndGetDeviceParameter<int>(monitor_poll_interval_sec_, "monitor_poll_interval_sec", -1);
   if (monitor_poll_interval_sec_ != -1 &&
       (monitor_poll_interval_sec_ < 1 || monitor_poll_interval_sec_ > 10)) {
     const auto requested_monitor_poll_interval_sec = monitor_poll_interval_sec_;
@@ -5073,70 +5209,75 @@ void OBCameraNode::getCommonParameters() {
   auto device_info = device_->getDeviceInfo();
   CHECK_NOTNULL(device_info.get());
 
-  if (device_preset_ == "Dual Color Streams") {
-    RCLCPP_INFO_STREAM(logger_,
-                       "Using Double Color preset, only left and right color streams are enabled.");
-    enable_stream_[COLOR] = false;
-    enable_stream_[DEPTH] = false;
-    enable_stream_[INFRA0] = false;
-    enable_stream_[INFRA1] = false;
-    enable_stream_[INFRA2] = false;
-    enable_stream_[LIDAR] = false;
-    enable_stream_[COLOR_LEFT] = true;
-    enable_stream_[COLOR_RIGHT] = true;
-
-    enable_point_cloud_ = false;
-    enable_colored_point_cloud_ = false;
-    depth_registration_ = false;
-    enable_d2c_viewer_ = false;
-    enable_depth_filter_ = false;
-    enable_undistortion_[COLOR] = false;
-  }
-
   if (isOpenNIDevice(pid_)) {
     time_domain_ = "system";
   }
   if (time_domain_ == "global" && !is_playback_device_) {
     device_->enableGlobalTimestamp(true);
   }
-  setAndGetNodeParameter<int>(frames_per_trigger_, "frames_per_trigger", 1);
+  setAndGetDeviceParameter<int>(frames_per_trigger_, "frames_per_trigger", 1, supports_sync);
   int software_trigger_period = 33;
-  setAndGetNodeParameter<int>(software_trigger_period, "software_trigger_period", 33);
+  setAndGetDeviceParameter<int>(software_trigger_period, "software_trigger_period", 33,
+                                supports_sync);
   software_trigger_period_ = std::chrono::milliseconds(software_trigger_period);
-  setAndGetNodeParameter<int>(gmsl_trigger_fps_, "gmsl_trigger_fps", 3000);
-  setAndGetNodeParameter<bool>(enable_gmsl_trigger_, "enable_gmsl_trigger", false);
-  setAndGetNodeParameter<std::string>(interleave_ae_mode_, "interleave_ae_mode", "");
-  setAndGetNodeParameter<bool>(interleave_frame_enable_, "interleave_frame_enable", false);
-  setAndGetNodeParameter<bool>(interleave_skip_enable_, "interleave_skip_enable", false);
-  setAndGetNodeParameter<int>(interleave_skip_index_, "interleave_skip_index", -1);
+  // This controls a host driver; camera connection type alone cannot establish support.
+  setAndGetDeviceParameter<int>(gmsl_trigger_fps_, "gmsl_trigger_fps", 3000);
+  setAndGetDeviceParameter<bool>(enable_gmsl_trigger_, "enable_gmsl_trigger", false);
+  setAndGetDeviceParameter<std::string>(interleave_ae_mode_, "interleave_ae_mode", "",
+                                        supports_interleave);
+  setAndGetDeviceParameter<bool>(interleave_frame_enable_, "interleave_frame_enable", false,
+                                 supports_interleave);
+  setAndGetDeviceParameter<bool>(interleave_skip_enable_, "interleave_skip_enable", false,
+                                 supports_interleave);
+  setAndGetDeviceParameter<int>(interleave_skip_index_, "interleave_skip_index", -1,
+                                supports_interleave);
 
   // hdr and laser interleave params
-  setAndGetNodeParameter<int>(hdr_index1_laser_control_, "hdr_index1_laser_control", -1);
-  setAndGetNodeParameter<int>(hdr_index1_depth_exposure_, "hdr_index1_depth_exposure", -1);
-  setAndGetNodeParameter<int>(hdr_index1_depth_gain_, "hdr_index1_depth_gain", -1);
-  setAndGetNodeParameter<int>(hdr_index1_ir_brightness_, "hdr_index1_ir_brightness", -1);
-  setAndGetNodeParameter<int>(hdr_index1_ir_ae_max_exposure_, "hdr_index1_ir_ae_max_exposure", -1);
-  setAndGetNodeParameter<int>(hdr_index0_laser_control_, "hdr_index0_laser_control", -1);
-  setAndGetNodeParameter<int>(hdr_index0_depth_exposure_, "hdr_index0_depth_exposure", -1);
-  setAndGetNodeParameter<int>(hdr_index0_depth_gain_, "hdr_index0_depth_gain", -1);
-  setAndGetNodeParameter<int>(hdr_index0_ir_brightness_, "hdr_index0_ir_brightness", -1);
-  setAndGetNodeParameter<int>(hdr_index0_ir_ae_max_exposure_, "hdr_index0_ir_ae_max_exposure", -1);
+  setAndGetDeviceParameter<int>(hdr_index1_laser_control_, "hdr_index1_laser_control", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index1_depth_exposure_, "hdr_index1_depth_exposure", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index1_depth_gain_, "hdr_index1_depth_gain", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index1_ir_brightness_, "hdr_index1_ir_brightness", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index1_ir_ae_max_exposure_, "hdr_index1_ir_ae_max_exposure", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index0_laser_control_, "hdr_index0_laser_control", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index0_depth_exposure_, "hdr_index0_depth_exposure", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index0_depth_gain_, "hdr_index0_depth_gain", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index0_ir_brightness_, "hdr_index0_ir_brightness", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(hdr_index0_ir_ae_max_exposure_, "hdr_index0_ir_ae_max_exposure", -1,
+                                supports_interleave);
 
-  setAndGetNodeParameter<int>(laser_index1_laser_control_, "laser_index1_laser_control", -1);
-  setAndGetNodeParameter<int>(laser_index1_depth_exposure_, "laser_index1_depth_exposure", -1);
-  setAndGetNodeParameter<int>(laser_index1_depth_gain_, "laser_index1_depth_gain", -1);
-  setAndGetNodeParameter<int>(laser_index1_ir_brightness_, "laser_index1_ir_brightness", -1);
-  setAndGetNodeParameter<int>(laser_index1_ir_ae_max_exposure_, "laser_index1_ir_ae_max_exposure",
-                              -1);
-  setAndGetNodeParameter<int>(laser_index0_laser_control_, "laser_index0_laser_control", -1);
-  setAndGetNodeParameter<int>(laser_index0_depth_exposure_, "laser_index0_depth_exposure", -1);
-  setAndGetNodeParameter<int>(laser_index0_depth_gain_, "laser_index0_depth_gain", -1);
-  setAndGetNodeParameter<int>(laser_index0_ir_brightness_, "laser_index0_ir_brightness", -1);
-  setAndGetNodeParameter<int>(laser_index0_ir_ae_max_exposure_, "laser_index0_ir_ae_max_exposure",
-                              -1);
-  setAndGetNodeParameter<bool>(disparity_offset_config_, "disparity_offset_config", false);
-  setAndGetNodeParameter<int>(offset_index0_, "offset_index0", -1);
-  setAndGetNodeParameter<int>(offset_index1_, "offset_index1", -1);
+  setAndGetDeviceParameter<int>(laser_index1_laser_control_, "laser_index1_laser_control", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index1_depth_exposure_, "laser_index1_depth_exposure", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index1_depth_gain_, "laser_index1_depth_gain", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index1_ir_brightness_, "laser_index1_ir_brightness", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index1_ir_ae_max_exposure_, "laser_index1_ir_ae_max_exposure",
+                                -1, supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index0_laser_control_, "laser_index0_laser_control", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index0_depth_exposure_, "laser_index0_depth_exposure", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index0_depth_gain_, "laser_index0_depth_gain", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index0_ir_brightness_, "laser_index0_ir_brightness", -1,
+                                supports_interleave);
+  setAndGetDeviceParameter<int>(laser_index0_ir_ae_max_exposure_, "laser_index0_ir_ae_max_exposure",
+                                -1, supports_interleave);
+  setAndGetDeviceParameter<bool>(disparity_offset_config_, "disparity_offset_config", false,
+                                 supports_disp_offset);
+  setAndGetDeviceParameter<int>(offset_index0_, "offset_index0", -1, supports_disp_offset);
+  setAndGetDeviceParameter<int>(offset_index1_, "offset_index1", -1, supports_disp_offset);
 
   setAndGetNodeParameter<std::string>(frame_aggregate_mode_, "frame_aggregate_mode", "ANY");
   frame_aggregate_mode_ =
@@ -5145,10 +5286,10 @@ void OBCameraNode::getCommonParameters() {
 
   setAndGetNodeParameter<bool>(show_fps_enable_, "show_fps_enable", false);
   setAndGetNodeParameter<bool>(enable_publish_extrinsic_, "enable_publish_extrinsic", false);
-  setAndGetNodeParameter<bool>(enable_lrm_obstacle_distance_publish_,
-                               "enable_lrm_obstacle_distance_publish", false);
-  setAndGetNodeParameter<double>(lrm_obstacle_distance_publish_rate_,
-                                 "lrm_obstacle_distance_publish_rate", 10.0);
+  setAndGetDeviceParameter<bool>(enable_lrm_obstacle_distance_publish_,
+                                 "enable_lrm_obstacle_distance_publish", false, supports_lrm);
+  setAndGetDeviceParameter<double>(lrm_obstacle_distance_publish_rate_,
+                                   "lrm_obstacle_distance_publish_rate", 10.0, supports_lrm);
   if (lrm_obstacle_distance_publish_rate_ <= 0.0) {
     RCLCPP_WARN_STREAM(logger_, "Invalid lrm_obstacle_distance_publish_rate "
                                     << lrm_obstacle_distance_publish_rate_
@@ -5475,6 +5616,7 @@ void OBCameraNode::setupTopics() {
     captureInitialRosParameters();
     getCommonParameters();
     loadConfigJson();
+    getDevicePresetParameters();
     syncConfigJsonApplicationConfig();
     setupDevicePreset();
     enumerateStreams();

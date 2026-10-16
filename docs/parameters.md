@@ -21,9 +21,32 @@ from a ROS string or boolean. Structured properties such as ROI have no scalar r
 An unavailable default/range is reported as unavailable; startup continues with the basic
 description. Range text does not impose the raw SDK range on launch sentinels.
 
-Only parameters for present image streams and supported hardware properties are declared.
-Capability selectors such as presets and legacy `depth_work_mode` retain their existing
-module-specific behavior. Availability does not imply runtime mutability.
+Device-dependent parameters are omitted only when the device explicitly lacks the required
+sensor or SDK capability. Failed capability queries retain parameters and log a warning;
+an unavailable capability query is not proof that a module is unsupported. Supported
+controls remain declared when their stream or feature is disabled. Availability does not
+imply runtime mutability.
+
+- Image and IMU stream controls follow the sensor list. Synchronized IMU output requires
+  both an accelerometer and a gyroscope; covariance follows the corresponding sensor.
+- Preset availability is queried after JSON import, which may add a custom preset.
+  `device_preset` and `depth_work_mode` are both retained when both SDK interfaces are
+  supported. The existing 435Le `device_preset` mapping to legacy work modes is preserved.
+  Version parameters remain available on the preset path without requiring a nonempty
+  reported version. Existing selection precedence and device-setting operations are unchanged.
+- Color presets, depth precision, preset resolution, synchronization, legacy/new frame
+  interleave, disparity offset configuration and LRM publishing use their corresponding
+  support queries or property permissions. LRM requires read access to the distance property.
+  Synchronization fields are retained as a group because the mode bitmap does not describe
+  each field's support separately.
+- Depth filter controls require a depth sensor, but are not removed merely because a filter
+  is absent from the SDK's recommended list: software and existing fallback paths remain.
+  Enhanced depth follows the driver's existing supported-device rules.
+- Firmware logging, monitor polling, host GMSL triggering and other settings without a
+  reliable capability query remain declared. Camera connection type alone does not establish
+  whether the host trigger driver is available.
+
+Device-dependent declarations are cleared on disconnect and evaluated again on reconnect.
 
 ## Runtime controls and service compatibility
 
