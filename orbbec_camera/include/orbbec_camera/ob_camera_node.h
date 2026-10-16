@@ -382,7 +382,7 @@ class OBCameraNode {
                                   OBPropertyID property_id);
 
   void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
-                                 OBPropertyID property_id) const;
+                                 OBPropertyID property_id, rclcpp::ParameterType type) const;
 
   bool isDynamicProperty(OBPropertyID property_id) const;
   void setupDynamicParameters();

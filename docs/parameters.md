@@ -7,17 +7,19 @@ ros2 param describe /camera/camera color_exposure
 ros2 param get /camera/camera color_exposure
 ```
 
-`describe` reports the parameter's purpose and initialization constraints. For supported
-hardware properties, it also includes the connected SDK/device's scalar default, minimum,
-maximum and step when that metadata can be queried. These values are queried at declaration,
-after selecting the device preset; they are not a table of defaults for every module, and
-are not refreshed when auto-exposure changes a measurement. Firmware, presets and SDK versions
+`describe` reports the parameter's purpose, units, special values and when it can be changed.
+For supported numeric camera settings, it also includes the camera default, range and step
+when available. Boolean defaults are shown as `true` or `false`; named choices are described
+without internal numeric codes. SDK property IDs and internal names are not displayed.
+These values are queried at declaration, after selecting the device preset;
+they are not a table of defaults for every module and are not refreshed when auto-exposure
+changes a measurement. Firmware, presets and SDK versions
 can change them without requiring a hard-coded default update in this package.
 
 The ROS launch default, SDK-reported default and current device value are different concepts.
 A launch value of `-1` for an optional hardware property means to skip writing it, not that
-the hardware default is `-1`. SDK enum ranges use the SDK representation, which may differ
-from a ROS string or boolean. Structured properties such as ROI have no scalar range.
+the hardware default is `-1`. Enum descriptions use the values accepted by the ROS parameter;
+for example, disparity range uses 64/128/256. Structured properties such as ROI have no scalar range.
 An unavailable default/range is reported as unavailable; startup continues with the basic
 description. Range text does not impose the raw SDK range on launch sentinels.
 

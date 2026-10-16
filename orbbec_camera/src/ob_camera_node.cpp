@@ -881,19 +881,20 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
     device_param_names_.insert(param_name);
     auto descriptor = describeCameraParameter(param_name);
     descriptor.dynamic_typing = true;
-    appendPropertyDescription(descriptor, property_id);
     const auto initial = rclcpp::ParameterValue(default_value);
+    appendPropertyDescription(descriptor, property_id, initial.get_type());
     if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
         initial.get<int64_t>() == -1) {
-      descriptor.description +=
-          " Launch value -1 skips writing this property and remains visible in param get.";
+      descriptor.description += " At startup, -1 keeps the current camera setting.";
     }
     if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
       if (isDynamicProperty(property_id)) {
         descriptor.additional_constraints =
-            "Runtime writable while streaming. Type is fixed; -1 is a launch-only sentinel. "
-            "SDK range is validated on each update. The ROS value is the requested configuration; "
-            "use the getter service to read the current device value.";
+            "Can be changed while streaming. Values must be within the camera's supported range.";
+        if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
+            initial.get<int64_t>() == -1) {
+          descriptor.additional_constraints += " -1 is only accepted at startup.";
+        }
         dynamic_properties_.emplace(param_name,
                                     DynamicProperty{property_id, initial.get_type(),
                                                     [&param](const rclcpp::ParameterValue &value) {
@@ -908,8 +909,12 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
 }
 
 void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor &descriptor,
-                                             OBPropertyID property_id) const {
-  descriptor.description += " SDK property ID: " + std::to_string(property_id) + ".";
+                                             OBPropertyID property_id,
+                                             rclcpp::ParameterType type) const {
+  // String selectors use named choices rather than the underlying integer range.
+  if (type == rclcpp::ParameterType::PARAMETER_STRING) {
+    return;
+  }
   try {
     // Query the SDK type, not the ROS type: some bool/string parameters map to SDK integers.
     const auto count = device_->getSupportedPropertyCount();
@@ -918,37 +923,47 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
       if (property.id != property_id) {
         continue;
       }
-      if (property.name) {
-        descriptor.description += " " + std::string(property.name) + ".";
-      }
       std::ostringstream range;
       const auto append_range = [&range](const auto &value) {
-        range << " SDK-reported default=" << value.def << ", min=" << value.min
-              << ", max=" << value.max << ", step=" << value.step
-              << " (SDK property representation at declaration; not the current value).";
+        range << " Camera default: " << value.def << ". Range: [" << value.min << ", " << value.max
+              << "]";
+        if (value.step > 0) {
+          range << ", step: " << value.step;
+        }
+        range << ".";
       };
       switch (property.type) {
         case OB_BOOL_PROPERTY:
-          append_range(device_->getBoolPropertyRange(property_id));
+          range << " Camera default: " << std::boolalpha
+                << device_->getBoolPropertyRange(property_id).def << ".";
           break;
-        case OB_INT_PROPERTY:
-          append_range(device_->getIntPropertyRange(property_id));
+        case OB_INT_PROPERTY: {
+          const auto value = device_->getIntPropertyRange(property_id);
+          if (type == rclcpp::ParameterType::PARAMETER_BOOL) {
+            range << " Camera default: " << std::boolalpha << (value.def != 0) << ".";
+          } else if (property_id == OB_PROP_DISP_SEARCH_RANGE_MODE_INT) {
+            if (value.def >= 0 && value.def <= 2) {
+              range << " Camera default: " << (64 << value.def) << ".";
+            }
+          } else {
+            append_range(value);
+          }
           break;
+        }
         case OB_FLOAT_PROPERTY:
           append_range(device_->getFloatPropertyRange(property_id));
           break;
         case OB_STRUCT_PROPERTY:
-          range << " Structured property; no scalar default/range is available.";
-          break;
+          return;
       }
       // Text preserves launch sentinels and enum mappings without imposing the raw SDK
       // range on the ROS parameter. Metadata is a snapshot, never a write to the device.
       descriptor.description += range.str();
       return;
     }
-    descriptor.description += " SDK default/range unavailable.";
+    descriptor.description += " Camera default/range unavailable.";
   } catch (const std::exception &e) {
-    descriptor.description += " SDK default/range unavailable.";
+    descriptor.description += " Camera default/range unavailable.";
     RCLCPP_DEBUG_STREAM(logger_, "Property description query failed: " << e.what());
   }
 }
