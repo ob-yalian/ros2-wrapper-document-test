@@ -217,7 +217,6 @@ def generate_launch_description():
         DeclareLaunchArgument('frame_aggregate_mode', default_value='ANY'), # full_frame, color_frame, ANY or disable
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'),
         DeclareLaunchArgument('enable_laser', default_value='true'),
-        DeclareLaunchArgument('depth_precision', default_value=''),
         DeclareLaunchArgument('device_preset', default_value=''),
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('laser_energy_level', default_value='-1'),

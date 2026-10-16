@@ -97,8 +97,6 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_mirror', default_value='false'),
         DeclareLaunchArgument('depth_exposure', default_value='-1'),
         DeclareLaunchArgument('depth_gain', default_value='-1'),
-        DeclareLaunchArgument('depth_qos', default_value='default'),
-        DeclareLaunchArgument('depth_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('ir_mirror', default_value='false'),
         DeclareLaunchArgument('ir_rotation', default_value='-1'),   # depth rotation degree : 0, 90, 180, 270
         # enable laser
