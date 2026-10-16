@@ -389,25 +389,8 @@ class OBCameraNode {
   void setupRuntimeControls();
   void setupPointCloudPublishers();
   void addRuntimeControl(const std::vector<std::string>& names, Parameters::BatchSetter setter);
-  std::vector<rclcpp::Parameter> roiServiceParameters(
-      const std::shared_ptr<SetArrays::Request>& request,
-      const stream_index_pair& stream_index) const;
-  std::vector<rclcpp::Parameter> filterServiceParameters(const SetFilter::Request& request) const;
-  template <class Response, class Apply>
-  void applyServiceParameters(const std::vector<rclcpp::Parameter>& values,
-                              const std::shared_ptr<Response>& response, Apply apply) {
-    parameters_->applyServiceParameters(values, [&] {
-      std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-      apply();
-      rcl_interfaces::msg::SetParametersResult result;
-      result.successful = response->success;
-      result.reason = response->message;
-      return result;
-    });
-  }
   rcl_interfaces::msg::SetParametersResult setDynamicParameters(
       const std::vector<rclcpp::Parameter>& parameters);
-  rcl_interfaces::msg::SetParametersResult setLegacyParameter(const rclcpp::Parameter& parameter);
 
   struct DynamicProperty {
     OBPropertyID id;
@@ -559,16 +542,10 @@ class OBCameraNode {
   void setAeRoiCallback(const std::shared_ptr<SetArrays::Request>& request,
                         std::shared_ptr<SetArrays::Response>& response,
                         const stream_index_pair& stream_index);
-  void applyAeRoi(const std::shared_ptr<SetArrays::Request>& request,
-                  std::shared_ptr<SetArrays::Response>& response,
-                  const stream_index_pair& stream_index);
 
   void setLaserEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
                               const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
-  void applyLaserEnable(const std::shared_ptr<rmw_request_id_t>& request_header,
-                        const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-                        std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
   void setFloodEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
                               const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
@@ -577,16 +554,10 @@ class OBCameraNode {
   void setLdpEnableCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
                             const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                             std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
-  void applyLdpEnable(const std::shared_ptr<rmw_request_id_t>& request_header,
-                      const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-                      std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
   void setPtpConfigCallback(const std::shared_ptr<rmw_request_id_t>& request_header,
                             const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                             std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
-  void applyPtpConfig(const std::shared_ptr<rmw_request_id_t>& request_header,
-                      const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-                      std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
   void setFanWorkModeCallback(const std::shared_ptr<SetInt32::Request>& request,
                               std::shared_ptr<SetInt32::Response>& response);
@@ -613,23 +584,14 @@ class OBCameraNode {
   void setMirrorCallback(const std::shared_ptr<SetBool::Request>& request,
                          std::shared_ptr<SetBool::Response>& response,
                          const stream_index_pair& stream_index);
-  void applyMirror(const std::shared_ptr<SetBool::Request>& request,
-                   std::shared_ptr<SetBool::Response>& response,
-                   const stream_index_pair& stream_index);
 
   void setFlipCallback(const std::shared_ptr<SetBool::Request>& request,
                        std::shared_ptr<SetBool::Response>& response,
                        const stream_index_pair& stream_index);
-  void applyFlip(const std::shared_ptr<SetBool::Request>& request,
-                 std::shared_ptr<SetBool::Response>& response,
-                 const stream_index_pair& stream_index);
 
   void setRotationCallback(const std::shared_ptr<SetInt32::Request>& request,
                            std::shared_ptr<SetInt32::Response>& response,
                            const stream_index_pair& stream_index);
-  void applyRotation(const std::shared_ptr<SetInt32::Request>& request,
-                     std::shared_ptr<SetInt32::Response>& response,
-                     const stream_index_pair& stream_index);
   void getLaserStatusCallback(const std::shared_ptr<GetBool::Request>& request,
                               std::shared_ptr<GetBool::Response>& response);
   void getLdpStatusCallback(const std::shared_ptr<GetBool::Request>& request,
@@ -645,26 +607,16 @@ class OBCameraNode {
                                       std::shared_ptr<SetInt32 ::Response>& response);
   void setFilterCallback(const std::shared_ptr<SetFilter ::Request>& request,
                          std::shared_ptr<SetFilter ::Response>& response);
-  void applyFilter(const std::shared_ptr<SetFilter ::Request>& request,
-                   std::shared_ptr<SetFilter ::Response>& response);
   void setPointCloudDecimationCallback(const std::shared_ptr<SetInt32::Request>& request,
                                        std::shared_ptr<SetInt32::Response>& response);
-  void applyPointCloudDecimation(const std::shared_ptr<SetInt32::Request>& request,
-                                 std::shared_ptr<SetInt32::Response>& response);
   void getPointCloudDecimationCallback(const std::shared_ptr<GetInt32::Request>& request,
                                        std::shared_ptr<GetInt32::Response>& response);
   void setDisparityRangeModeCallback(const std::shared_ptr<SetInt32::Request>& request,
                                      std::shared_ptr<SetInt32::Response>& response);
-  void applyDisparityRangeMode(const std::shared_ptr<SetInt32::Request>& request,
-                               std::shared_ptr<SetInt32::Response>& response);
   void setDisparitySearchOffsetCallback(const std::shared_ptr<SetInt32::Request>& request,
                                         std::shared_ptr<SetInt32::Response>& response);
-  void applyDisparitySearchOffset(const std::shared_ptr<SetInt32::Request>& request,
-                                  std::shared_ptr<SetInt32::Response>& response);
   void setSyncIoVoltageLevelCallback(const std::shared_ptr<SetInt32::Request>& request,
                                      std::shared_ptr<SetInt32::Response>& response);
-  void applySyncIoVoltageLevel(const std::shared_ptr<SetInt32::Request>& request,
-                               std::shared_ptr<SetInt32::Response>& response);
   void setSYNCHostimeCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
   void sendSoftwareTriggerCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
@@ -699,13 +651,9 @@ class OBCameraNode {
 
   void setAEReferenceStreamCallback(const std::shared_ptr<SetString::Request>& request,
                                     std::shared_ptr<SetString::Response>& response);
-  void applyAEReferenceStream(const std::shared_ptr<SetString::Request>& request,
-                              std::shared_ptr<SetString::Response>& response);
 
   void setAEStrategyCallback(const std::shared_ptr<SetString::Request>& request,
                              std::shared_ptr<SetString::Response>& response);
-  void applyAEStrategy(const std::shared_ptr<SetString::Request>& request,
-                       std::shared_ptr<SetString::Response>& response);
 
   void setStreamProfileCallback(const std::shared_ptr<SetStreamProfile::Request>& request,
                                 std::shared_ptr<SetStreamProfile::Response>& response);
@@ -715,8 +663,6 @@ class OBCameraNode {
 
   void setIRLongExposureCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
                                  std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
-  void applyIRLongExposure(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-                           std::shared_ptr<std_srvs::srv::SetBool::Response>& response);
 
   void publishPointCloud(const std::shared_ptr<ob::FrameSet>& frame_set);
 

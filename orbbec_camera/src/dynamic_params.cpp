@@ -18,24 +18,19 @@
 
 namespace orbbec_camera {
 namespace {
-struct ServiceParameterUpdate;
-thread_local ServiceParameterUpdate *service_update = nullptr;
+struct ParameterRestore;
+thread_local ParameterRestore *parameter_restore = nullptr;
 
-struct ServiceParameterUpdate {
-  Parameters *manager;
-  const std::vector<rclcpp::Parameter> &values;
-  const std::function<rcl_interfaces::msg::SetParametersResult()> &apply;
-  ServiceParameterUpdate *previous;
-  bool invoked = false;
-  bool completed = false;
-  rcl_interfaces::msg::SetParametersResult result;
+struct ParameterRestore {
+  const Parameters *manager;
+  const rclcpp::Parameter &value;
+  ParameterRestore *previous;
 
-  ServiceParameterUpdate(Parameters *owner, const std::vector<rclcpp::Parameter> &parameters,
-                         const std::function<rcl_interfaces::msg::SetParametersResult()> &setter)
-      : manager(owner), values(parameters), apply(setter), previous(service_update) {
-    service_update = this;
+  ParameterRestore(const Parameters *owner, const rclcpp::Parameter &parameter)
+      : manager(owner), value(parameter), previous(parameter_restore) {
+    parameter_restore = this;
   }
-  ~ServiceParameterUpdate() { service_update = previous; }
+  ~ParameterRestore() { parameter_restore = previous; }
 };
 }  // namespace
 
@@ -46,17 +41,10 @@ Parameters::Parameters(rclcpp::Node *node)
     std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
-    if (service_update && !service_update->invoked && service_update->manager == this &&
-        service_update->values == parameters) {
-      service_update->invoked = true;
-      service_update->result = service_update->apply();
-      service_update->completed = true;
-      if (service_update->result.successful) {
-        for (const auto &parameter : parameters) {
-          service_updates_.insert(parameter.get_name());
-        }
-      }
-      return service_update->result;
+    // Reconnect restores retained ROS values before the camera applies its initial configuration.
+    if (parameter_restore && parameter_restore->manager == this && parameters.size() == 1 &&
+        parameter_restore->value == parameters.front()) {
+      return result;
     }
     bool has_dynamic = false;
     // Reject the entire request before invoking any callback with side effects.
@@ -139,8 +127,7 @@ rclcpp::ParameterValue Parameters::setParam(
         restore_runtime = true;
       }
     }
-    if (!restore_runtime && (service_updates_.count(param_name) != 0 ||
-                             runtime_parameter_names_.count(param_name) != 0)) {
+    if (!restore_runtime && runtime_parameter_names_.count(param_name) != 0) {
       const auto original = initial_values_.find(param_name);
       if (original != initial_values_.end()) {
         initial_value = original->second;
@@ -164,14 +151,14 @@ rclcpp::ParameterValue Parameters::setParam(
     } else {
       result_value = node_->get_parameter(param_name).get_parameter_value();
       if ((restore_initial || restore_runtime) && result_value != initial_value) {
-        const auto restored =
-            applyServiceParameters({rclcpp::Parameter(param_name, initial_value)}, [] {
-              rcl_interfaces::msg::SetParametersResult result;
-              result.successful = true;
-              return result;
-            });
+        const rclcpp::Parameter value(param_name, initial_value);
+        ParameterRestore restore(this, value);
+        const auto restored = node_->set_parameter(value);
         if (restored.successful) {
           result_value = initial_value;
+        } else {
+          RCLCPP_WARN_STREAM(
+              logger_, "Could not restore parameter " << param_name << ": " << restored.reason);
         }
       }
     }
@@ -203,54 +190,6 @@ rclcpp::ParameterValue Parameters::setParam(
     func(rclcpp::Parameter(param_name, result_value));
   }
   return result_value;
-}
-
-rcl_interfaces::msg::SetParametersResult Parameters::applyServiceParameters(
-    const std::vector<rclcpp::Parameter> &values,
-    const std::function<rcl_interfaces::msg::SetParametersResult()> &apply) {
-  std::vector<rclcpp::Parameter> declared;
-  try {
-    for (const auto &value : values) {
-      if (node_->has_parameter(value.get_name()) &&
-          node_->get_parameter(value.get_name()).get_type() == value.get_type()) {
-        declared.push_back(value);
-      }
-    }
-  } catch (const std::exception &e) {
-    RCLCPP_WARN_STREAM(logger_, "Cannot prepare service parameter synchronization: " << e.what());
-    return apply();
-  }
-  if (declared.empty()) {
-    return apply();
-  }
-  // Enter through the ROS parameter API before acquiring callback/device locks. This
-  // serializes service operations with param set and avoids a second SDK write.
-  ServiceParameterUpdate update(this, declared, apply);
-  try {
-    const auto mirrored = node_->set_parameters_atomically(declared);
-    if (update.invoked) {
-      if (update.result.successful && !mirrored.successful) {
-        RCLCPP_WARN_STREAM(
-            logger_, "Service succeeded but parameter synchronization failed: " << mirrored.reason);
-      }
-      return update.result;
-    }
-    RCLCPP_WARN_STREAM(
-        logger_, "Parameter synchronization unavailable; preserving service: " << mirrored.reason);
-  } catch (const std::exception &e) {
-    if (update.invoked) {
-      if (update.completed) {
-        RCLCPP_WARN_STREAM(logger_,
-                           "Service completed but parameter synchronization threw: " << e.what());
-        return update.result;
-      }
-      throw;
-    }
-    RCLCPP_WARN_STREAM(logger_,
-                       "Parameter synchronization unavailable; preserving service: " << e.what());
-  }
-  update.invoked = true;
-  return apply();
 }
 
 template <class T>

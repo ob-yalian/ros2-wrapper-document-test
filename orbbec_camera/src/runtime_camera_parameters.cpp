@@ -190,93 +190,12 @@ void OBCameraNode::addRuntimeControl(const std::vector<std::string> &names,
   runtime_control_setters_.emplace(names.front(), std::move(setter));
 }
 
-std::vector<rclcpp::Parameter> OBCameraNode::roiServiceParameters(
-    const std::shared_ptr<SetArrays::Request> &request,
-    const stream_index_pair &stream_index) const {
-  if (!request || request->data_param.size() < 4) {
-    return {};
-  }
-  if (std::any_of(request->data_param.begin(), request->data_param.begin() + 4, [](float value) {
-        return !std::isfinite(value) || value < std::numeric_limits<int32_t>::min() ||
-               value > std::numeric_limits<int32_t>::max();
-      })) {
-    return {};
-  }
-  const bool color =
-      stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT;
-  const std::string prefix = color ? "color_ae_roi_" : "depth_ae_roi_";
-  return {rclcpp::Parameter(prefix + "left", static_cast<int64_t>(request->data_param[0])),
-          rclcpp::Parameter(prefix + "right", static_cast<int64_t>(request->data_param[1])),
-          rclcpp::Parameter(prefix + "top", static_cast<int64_t>(request->data_param[2])),
-          rclcpp::Parameter(prefix + "bottom", static_cast<int64_t>(request->data_param[3]))};
-}
-
-std::vector<rclcpp::Parameter> OBCameraNode::filterServiceParameters(
-    const SetFilter::Request &request) const {
-  const auto name = normalizeDepthFilterName(request.filter_name);
-  const auto spec = std::find_if(runtimeFilters().begin(), runtimeFilters().end(),
-                                 [&](const auto &filter) { return filter.name == name; });
-  if (spec == runtimeFilters().end()) {
-    return {};
-  }
-  std::vector<rclcpp::Parameter> result = {
-      rclcpp::Parameter(spec->enable_parameter, request.filter_enable)};
-  const auto append = [&](const std::string &parameter_name, const std::string &text) {
-    if (!node_->has_parameter(parameter_name)) {
-      return;
-    }
-    try {
-      const auto type = node_->get_parameter(parameter_name).get_type();
-      if (type == rclcpp::ParameterType::PARAMETER_INTEGER) {
-        const double value = std::stod(text);
-        if (std::isfinite(value) && value >= std::numeric_limits<int32_t>::min() &&
-            value <= std::numeric_limits<int32_t>::max()) {
-          result.emplace_back(parameter_name, static_cast<int64_t>(value));
-        }
-      } else if (type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
-        result.emplace_back(parameter_name, std::stod(text));
-      } else {
-        if (parameter_name == "hole_filling_filter_mode") {
-          const auto value = std::stod(text);
-          if (!std::isfinite(value) || value < 0 || value > 2) return;
-          const int mode = static_cast<int>(value);
-          if (mode == 0) result.emplace_back(parameter_name, "FILL_TOP");
-          if (mode == 1) result.emplace_back(parameter_name, "FILL_NEAREST");
-          if (mode == 2) result.emplace_back(parameter_name, "FILL_FAREST");
-        } else {
-          result.emplace_back(parameter_name, text);
-        }
-      }
-    } catch (const std::exception &) {
-      // Parsing/validation belongs to the original service implementation.
-    }
-  };
-  for (size_t index = 0; index < request.filter_param.size() && index < spec->config.size();
-       ++index) {
-    append(spec->config[index].first, std::to_string(request.filter_param[index]));
-  }
-  for (const auto &config : request.filter_config) {
-    for (const auto &binding : spec->config) {
-      const bool alias =
-          (binding.second == "scale" && config.name == "decimate") ||
-          (binding.second == "disp_diff" && config.name == "diff_threshold") ||
-          (binding.second == "diff_scale" && config.name == "diff_threshold") ||
-          (binding.second == "hole_filling_mode" && config.name == "mode") ||
-          (binding.second == "sequenceid" && (config.name == "id" || config.name == "sequence_id" ||
-                                              config.name == "sequence_id_filter_id"));
-      if (binding.second == config.name || alias) {
-        append(binding.first, config.value);
-      }
-    }
-  }
-  return result;
-}
-
 void OBCameraNode::setupRuntimeControls() {
   if (!static_tf_broadcaster_) {
     static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(*node_);
     dynamic_tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*node_);
   }
+  // Reuse legacy implementations locally; service requests do not enter the parameter path.
   const auto add_int = [this](const std::string &name, auto apply) {
     addRuntimeControl({name}, [apply](const auto &values) {
       auto request = std::make_shared<SetInt32::Request>();
@@ -320,7 +239,7 @@ void OBCameraNode::setupRuntimeControls() {
             response->message = "Color orientation requires an uncompressed stream on this device.";
             return;
           }
-          applyMirror(request, response, stream);
+          setMirrorCallback(request, response, stream);
         });
     add_bool(
         name + "_flip", [this, stream, check_orientation](const auto &request, auto &response) {
@@ -328,7 +247,7 @@ void OBCameraNode::setupRuntimeControls() {
             response->message = "Color orientation requires an uncompressed stream on this device.";
             return;
           }
-          applyFlip(request, response, stream);
+          setFlipCallback(request, response, stream);
         });
     add_int(
         name + "_rotation", [this, stream, check_orientation](const auto &request, auto &response) {
@@ -341,37 +260,39 @@ void OBCameraNode::setupRuntimeControls() {
             response->message = "Color orientation requires an uncompressed stream on this device.";
             return;
           }
-          applyRotation(request, response, stream);
+          setRotationCallback(request, response, stream);
         });
   }
   add_bool("enable_laser", [this](const auto &request, auto &response) {
-    applyLaserEnable(nullptr, request, response);
+    setLaserEnableCallback(nullptr, request, response);
   });
   add_bool("enable_ldp", [this](const auto &request, auto &response) {
-    applyLdpEnable(nullptr, request, response);
+    setLdpEnableCallback(nullptr, request, response);
   });
   add_bool("enable_ptp_config", [this](const auto &request, auto &response) {
-    applyPtpConfig(nullptr, request, response);
+    setPtpConfigCallback(nullptr, request, response);
   });
-  add_bool("enable_ir_long_exposure",
-           [this](const auto &request, auto &response) { applyIRLongExposure(request, response); });
+  add_bool("enable_ir_long_exposure", [this](const auto &request, auto &response) {
+    setIRLongExposureCallback(request, response);
+  });
   add_int("point_cloud_decimation_filter_factor", [this](const auto &request, auto &response) {
-    applyPointCloudDecimation(request, response);
+    setPointCloudDecimationCallback(request, response);
   });
   add_int("disparity_search_offset", [this](const auto &request, auto &response) {
-    applyDisparitySearchOffset(request, response);
+    setDisparitySearchOffsetCallback(request, response);
   });
   add_int("sync_io_voltage_level", [this](const auto &request, auto &response) {
-    applySyncIoVoltageLevel(request, response);
+    setSyncIoVoltageLevelCallback(request, response);
   });
   add_int("disparity_range_mode", [this](const auto &request, auto &response) {
-    applyDisparityRangeMode(request, response);
+    setDisparityRangeModeCallback(request, response);
   });
   add_string("ae_reference_stream", [this](const auto &request, auto &response) {
-    applyAEReferenceStream(request, response);
+    setAEReferenceStreamCallback(request, response);
   });
-  add_string("ae_strategy",
-             [this](const auto &request, auto &response) { applyAEStrategy(request, response); });
+  add_string("ae_strategy", [this](const auto &request, auto &response) {
+    setAEStrategyCallback(request, response);
+  });
   add_string("color_powerline_freq", [this](const auto &request, auto &response) {
     const std::vector<std::string> names = {"disable", "50hz", "60hz", "auto"};
     auto frequency = request->data;
@@ -515,8 +436,10 @@ void OBCameraNode::setupRuntimeControls() {
           }
           const bool created = !filter;
           if (created) filter = std::make_shared<ob::DecimationFilter>();
-          bool enabled = filter->isEnabled();
-          int scale = filter->getScaleValue();
+          const bool was_enabled = !created && filter->isEnabled();
+          const int previous_scale = filter->getScaleValue();
+          bool enabled = was_enabled;
+          int scale = previous_scale;
           bool set_scale = false;
           for (const auto &value : values) {
             if (value.get_name() == enabled_name) enabled = value.as_bool();
@@ -531,6 +454,15 @@ void OBCameraNode::setupRuntimeControls() {
           const auto range = filter->getScaleRange();
           if (set_scale && (scale < range.min || scale > range.max)) {
             return runtimeResult(false, "Color decimation scale is outside the SDK range.");
+          }
+          // Align keeps stream profiles configured at startup. Changing the incoming color
+          // dimensions without rebuilding it can crash the SDK.
+          if (stream == COLOR && align_filter_ &&
+              (enabled ? scale : 1) != (was_enabled ? previous_scale : 1)) {
+            return runtimeResult(
+                false,
+                "Changing color decimation dimensions while software alignment is active "
+                "requires restarting the camera with the desired launch configuration.");
           }
           if (set_scale) filter->setScaleValue(scale);
           filter->enable(enabled);
@@ -573,6 +505,7 @@ void OBCameraNode::setupRuntimeControls() {
           auto response = std::make_shared<SetArrays::Response>();
           const std::vector<std::string> names = {prefix + "left", prefix + "right", prefix + "top",
                                                   prefix + "bottom"};
+          std::vector<rclcpp::Parameter> configuration;
           for (const auto &name : names) {
             const auto coordinate = node_->get_parameter(name).as_int();
             if (coordinate < -1 || coordinate > std::numeric_limits<int16_t>::max()) {
@@ -580,6 +513,7 @@ void OBCameraNode::setupRuntimeControls() {
                                    "ROI coordinates must fit the legacy int16 representation.");
             }
             request->data_param.push_back(static_cast<float>(coordinate));
+            configuration.emplace_back(name, coordinate);
           }
           for (const auto &value : values) {
             const auto index =
@@ -590,6 +524,7 @@ void OBCameraNode::setupRuntimeControls() {
                   false, "ROI coordinates must fit the legacy nonnegative int16 representation.");
             }
             request->data_param[index] = static_cast<float>(coordinate);
+            configuration[index] = value;
           }
           const auto stream = color ? COLOR : DEPTH;
           const int width = width_[stream];
@@ -598,7 +533,6 @@ void OBCameraNode::setupRuntimeControls() {
             return runtimeResult(false, "ROI requires valid stream dimensions.");
           }
           // Preserve unspecified coordinates in ROS/reconnect intent; resolve only the SDK request.
-          const auto configuration = roiServiceParameters(request, stream);
           const std::vector<int> defaults = {0, width - 1, 0, height - 1};
           for (size_t index = 0; index < defaults.size(); ++index) {
             if (request->data_param[index] == -1) {
@@ -609,7 +543,7 @@ void OBCameraNode::setupRuntimeControls() {
               request->data_param[2] > request->data_param[3]) {
             return runtimeResult(false, "ROI left/top must not exceed right/bottom.");
           }
-          applyAeRoi(request, response, stream);
+          setAeRoiCallback(request, response, stream);
           if (response->success) {
             parameters_->rememberRuntimeConfiguration(configuration);
           }
@@ -661,6 +595,7 @@ void OBCameraNode::setupRuntimeControls() {
     addRuntimeControl(names, [this, spec](const auto &values) {
       auto request = std::make_shared<SetFilter::Request>();
       auto response = std::make_shared<SetFilter::Response>();
+      std::vector<rclcpp::Parameter> configuration;
       request->filter_name = spec.name;
       // Preserve the effective enable state when changing only filter configuration.
       request->filter_enable = node_->get_parameter(spec.enable_parameter).as_bool();
@@ -701,16 +636,13 @@ void OBCameraNode::setupRuntimeControls() {
             }
           }
           request->filter_param.push_back(static_cast<float>(runtimeInt(value)));
+          configuration.push_back(value);
         }
         request->filter_config.clear();
       }
-      applyFilter(request, response);
-      if (response->success && spec.name == "HDRMerge" && !request->filter_param.empty()) {
-        auto configuration = filterServiceParameters(*request);
-        if (!configuration.empty()) {
-          configuration.erase(configuration.begin());
-          parameters_->rememberRuntimeConfiguration(configuration);
-        }
+      setFilterCallback(request, response);
+      if (response->success && !configuration.empty()) {
+        parameters_->rememberRuntimeConfiguration(configuration);
       }
       return runtimeResult(response->success, response->message);
     });

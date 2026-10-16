@@ -9139,12 +9139,6 @@ bool OBCameraNode::applyEnhancedDepthFilterConfig(
 
 void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> &request,
                                      std::shared_ptr<SetFilter ::Response> &response) {
-  applyServiceParameters(filterServiceParameters(*request), response,
-                         [&] { applyFilter(request, response); });
-}
-
-void OBCameraNode::applyFilter(const std::shared_ptr<SetFilter ::Request> &request,
-                               std::shared_ptr<SetFilter ::Response> &response) {
   try {
     response->success = false;
     response->message.clear();

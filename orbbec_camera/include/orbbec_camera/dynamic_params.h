@@ -46,11 +46,6 @@ class Parameters {
 
   using BatchSetter = std::function<rcl_interfaces::msg::SetParametersResult(
       const std::vector<rclcpp::Parameter>&)>;
-  // Run an existing service operation once and mirror its successful configuration.
-  // The service keeps its own validation, device writes and response semantics.
-  rcl_interfaces::msg::SetParametersResult applyServiceParameters(
-      const std::vector<rclcpp::Parameter>& values,
-      const std::function<rcl_interfaces::msg::SetParametersResult()>& apply);
   void setDeviceContext(const std::string& device_key);
   void registerDynamicParameters(const std::map<std::string, rclcpp::ParameterType>& types,
                                  BatchSetter setter);
@@ -66,7 +61,6 @@ class Parameters {
   std::string device_key_;
   std::map<std::string, std::map<std::string, rclcpp::ParameterValue>> runtime_overrides_;
   std::map<std::string, rclcpp::ParameterValue> initial_values_;
-  std::set<std::string> service_updates_;
   std::set<std::string> runtime_parameter_names_;
   rclcpp::Node* node_;
   rclcpp::Logger logger_;

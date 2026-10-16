@@ -206,17 +206,4 @@ rcl_interfaces::msg::SetParametersResult OBCameraNode::setDynamicParameters(
   return result;
 }
 
-rcl_interfaces::msg::SetParametersResult OBCameraNode::setLegacyParameter(
-    const rclcpp::Parameter &parameter) {
-  // Do not hold device_lock_ here: the node parameter API invokes the common callback,
-  // which acquires it after the parameter-manager lock.
-  try {
-    return node_->set_parameters_atomically({parameter});
-  } catch (const std::exception &e) {
-    rcl_interfaces::msg::SetParametersResult result;
-    result.reason = e.what();
-    return result;
-  }
-}
-
 }  // namespace orbbec_camera

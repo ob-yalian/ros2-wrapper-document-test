@@ -81,6 +81,10 @@ parameter counterpart, and commands such as software trigger, reset and save, ar
 Gemini 330 SDK color orientation does not process MJPG frames. Dynamic mirror/flip/rotation
 requests that enable a transform require an uncompressed color profile on these devices;
 legacy services retain their existing behavior. Rotation parameters accept 0/90/180/270.
+Changing color decimation dimensions while software alignment is active is rejected: the
+SDK Align filter retains its startup stream profiles and can crash if color dimensions change.
+Configure this combination at launch. With decimation disabled, updating only its scale
+keeps the filter disabled until it is explicitly enabled.
 MJPEG quality remains initialization-only because Gemini 336 firmware rejects writes while
 streaming. SDK read/write permission alone does not establish streaming mutability.
 
@@ -94,30 +98,33 @@ firmware can cap an AE exposure limit. The stored ROS value remains the accepted
 and device readback may differ.
 
 Successful parameter writes become reconnect overrides for the same camera serial number,
-within the current driver process. The original exposure/gain/AE/WB/AWB services retain their
-existing override behavior. Newly adapted services mirror successful configuration into ROS
-without creating a new reconnect override; reconnect keeps their previous launch/explicit
-parameter intent. Mirroring does not silently change an existing service's reconnect policy. Without a runtime override, reconnect
-uses the launch configuration, including `-1`. A new process starts from its launch configuration.
-Devices without a serial number do not persist overrides.
+within the current driver process. Legacy services do not update ROS parameters or these
+overrides. Without a parameter override, reconnect uses the launch configuration, including
+`-1`. A new process starts from its launch configuration. Devices without a serial number do
+not persist overrides.
 
 The ROS parameter is not a live exposure/gain measurement while automatic control is active.
 Existing getter services continue to read the device, and `param describe` reports SDK default
 and range metadata. Depth/IR and left/right controls may share hardware on some modules;
 changing one can affect the other's actual value without changing its requested configuration.
 
-All existing service names and message types are retained. The original exposure, gain,
-AE, white-balance and AWB setters keep their current parameter path. Other adapted setters
-and dynamic parameters share the extracted service implementation. A service is executed
-once, under its original validation rules; successful equivalent ROS configuration is
-committed without a second SDK write. If ROS synchronization is unavailable, the existing
-service operation/result is preserved and the synchronization failure is logged.
+All existing service names, message types and device-setting implementations are retained.
+Services do not enter the dynamic parameter callback and do not mirror their requests into
+ROS parameters. Dynamic controls reuse existing service functions through local C++ calls
+where applicable; they do not send a ROS service request. Parameter-specific validation is
+performed before these calls, without imposing the new rules on service clients.
+
+For example, setting `color_exposure` to `100` through the parameter interface and then
+setting exposure to `200` through a legacy service leaves the ROS parameter at `100`.
+The getter service reads the device value, and reconnect restores the explicit parameter
+configuration `100`. Use the parameter interface consistently for configuration that must
+appear in parameter dumps and be restored on reconnect.
 
 Service request representations remain compatible. The disparity-range service and
 `disparity_range_mode` both accept 64/128/256, matching the existing launch parameter.
 Only the underlying SDK property uses indices 0/1/2.
 ROI services keep their existing float-array order `[left, right, top, bottom]`, clipping
-and readback. Setter mirrors represent requested configuration, not periodic device reads.
+and readback. ROS parameters are not refreshed by legacy service calls or periodic device reads.
 Left/right IR exposure controls still map to `ir_*`, and left/right color controls to `color_*`.
 
 ```sh
@@ -137,7 +144,9 @@ Choose manual values within the connected device's range. Runtime `-1` and type 
 rejected. `-1` only skips a startup write; it does not reset an option to its SDK default or
 enable automatic exposure. A manual white balance requires AWB to be disabled; an atomic batch
 may disable AWB and set white balance together. Automatic controls are disabled before manual writes
-and enabled afterwards. Scalar-property batches are validated before any SDK write; they
+and enabled afterwards. Changing only an AE/AWB switch does not reapply previously configured
+manual exposure, gain or white balance values; include those values in the same atomic request
+when they must be written together. Scalar-property batches are validated before any SDK write; they
 cannot mix these controls with startup-only or unrelated ROS parameters. A failed scalar
 write attempts to restore all attempted properties, including the failing one. Rollback failure is reported
 explicitly: SDK/USB operations cannot guarantee hardware atomicity after a disconnect.
@@ -152,16 +161,17 @@ preserve the effective filter-enable state unless an enable value is explicitly 
 The Humble implementation applies hardware updates synchronously in this package's single
 on-set callback. Additional callbacks that reject the request after hardware has been written
 are not supported; there is no Humble post-set hook to make arbitrary callback chains and
-hardware writes transactional. Services must call the parameter API without holding the
-device lock. Cleanup drains and detaches the callback before destroying the camera.
+hardware writes transactional. Legacy services and ROS parameter services use the node's
+default mutually exclusive callback group. Cleanup drains and detaches the parameter
+callback before destroying the camera.
 
 ## Verification
 
 `dynamic_params_test` covers batch prevalidation, fixed runtime types, SDK-error propagation,
 launch-sentinel preservation, per-device restore and callback detachment using a fake
-device apply callback. It also covers service execution exactly once, failure propagation,
-configuration mirroring, startup-parameter rejection after an internal update, unavailable
-parameters and preserving the existing reconnect intent. It does not exercise SDK writes.
+device apply callback. It also covers exceptions from device setters and retained parameters
+being restored without another device write or permitting startup-only runtime updates.
+It does not exercise SDK writes or legacy service implementations.
 
 Hardware validation should cover Gemini 330, Gemini 336 and Gemini 305 (including Dual Color Streams):
 launch with `color_exposure:=-1` and verify that `param get` and parameter dumps retain `-1`
@@ -178,6 +188,7 @@ stop/start occurs. Start with SDK-supported values and inspect the relevant gett
 ros2 param set /camera/camera color_mirror true
 ros2 param get /camera/camera color_mirror
 ros2 service call /camera/set_color_mirror std_srvs/srv/SetBool "{data: false}"
+# Still true: legacy services do not synchronize ROS parameters.
 ros2 param get /camera/camera color_mirror
 
 ros2 param set /camera/camera point_cloud_decimation_filter_factor 2
@@ -211,6 +222,7 @@ ros2 param set /camera/camera decimation_filter_scale 2
 ros2 param set /camera/camera enable_decimation_filter true
 ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter \
   "{filter_name: DecimationFilter, filter_enable: false, filter_config: [{name: scale, value: '2'}]}"
+# Still true and 2: inspect depth_filters/status for the effective service result.
 ros2 param get /camera/camera enable_decimation_filter
 ros2 param get /camera/camera decimation_filter_scale
 ```
