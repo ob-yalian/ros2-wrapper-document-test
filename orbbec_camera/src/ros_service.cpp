@@ -376,9 +376,9 @@ void OBCameraNode::setupCameraCtrlServices() {
       "get_sdk_version",
       [this](const std::shared_ptr<GetString::Request> request,
              std::shared_ptr<GetString::Response> response) { getSDKVersion(request, response); });
-  save_images_srv_ = node_->create_service<SetInt32>(
-      "save_images", [this](const std::shared_ptr<SetInt32::Request> request,
-                            std::shared_ptr<SetInt32::Response> response) {
+  save_images_srv_ = node_->create_service<std_srvs::srv::Empty>(
+      "save_images", [this](const std::shared_ptr<std_srvs::srv::Empty::Request> request,
+                            std::shared_ptr<std_srvs::srv::Empty::Response> response) {
         saveImageCallback(request, response);
       });
   save_point_cloud_srv_ = node_->create_service<std_srvs::srv::Empty>(
@@ -2319,39 +2319,17 @@ bool OBCameraNode::toggleSensor(const stream_index_pair& stream_index, bool enab
   }
 }
 
-void OBCameraNode::saveImageCallback(const std::shared_ptr<SetInt32::Request>& request,
-                                     std::shared_ptr<SetInt32::Response>& response) {
-  if (request->data <= 0) {
-    response->success = false;
-    response->message = "Image count must be greater than zero";
-    return;
-  }
-
+void OBCameraNode::saveImageCallback(const std::shared_ptr<std_srvs::srv::Empty::Request>& request,
+                                     std::shared_ptr<std_srvs::srv::Empty::Response>& response) {
+  (void)request;
+  (void)response;
   std::lock_guard<std::mutex> lock(save_images_mutex_);
-  bool has_enabled_stream = false;
-  for (const auto& stream_index : IMAGE_STREAMS) {
-    if (enable_stream_[stream_index]) {
-      has_enabled_stream = true;
-      break;
-    }
-  }
-  if (!has_enabled_stream) {
-    response->success = false;
-    response->message = "No image streams are enabled";
-    return;
-  }
-
-  save_images_target_count_ = request->data;
   for (const auto& stream_index : IMAGE_STREAMS) {
     if (enable_stream_[stream_index]) {
       save_images_count_[stream_index] = 0;
       save_images_[stream_index].store(true, std::memory_order_release);
     }
   }
-  response->success = true;
-  response->message = "Image saving started: " + std::to_string(request->data) +
-                      " frame(s) per enabled image stream";
-  RCLCPP_INFO_STREAM(logger_, response->message);
 }
 
 void OBCameraNode::savePointCloudCallback(

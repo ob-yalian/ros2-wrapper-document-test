@@ -560,8 +560,8 @@ class OBCameraNode {
 
   bool toggleSensor(const stream_index_pair& stream_index, bool enabled, std::string& msg);
 
-  void saveImageCallback(const std::shared_ptr<SetInt32::Request>& request,
-                         std::shared_ptr<SetInt32::Response>& response);
+  void saveImageCallback(const std::shared_ptr<std_srvs::srv::Empty::Request>& request,
+                         std::shared_ptr<std_srvs::srv::Empty::Response>& response);
 
   void savePointCloudCallback(const std::shared_ptr<std_srvs::srv::Empty::Request>& request,
                               std::shared_ptr<std_srvs::srv::Empty::Response>& response);
@@ -870,10 +870,10 @@ class OBCameraNode {
   std::map<stream_index_pair, std::atomic_bool> save_images_;
   std::map<stream_index_pair, int> save_images_count_;
   std::mutex save_images_mutex_;
-  int save_images_target_count_ = 0;
+  int max_save_images_count_ = 10;
   std::atomic_bool save_point_cloud_{false};
   std::atomic_bool save_colored_point_cloud_{false};
-  rclcpp::Service<SetInt32>::SharedPtr save_images_srv_;
+  rclcpp::Service<std_srvs::srv::Empty>::SharedPtr save_images_srv_;
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr save_point_cloud_srv_;
   std::string depth_filter_config_;
   bool enable_depth_filter_ = false;

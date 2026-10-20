@@ -170,8 +170,7 @@ services:
     request: {data: false}
 
   - name: /camera/save_images
-    type: orbbec_camera_msgs/srv/SetInt32
-    request: {data: 10}
+    type: std_srvs/srv/Empty
   - name: /camera/save_point_cloud
     type: std_srvs/srv/Empty
   - name: /camera/set_sync_interleaverlaser
