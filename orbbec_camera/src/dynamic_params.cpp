@@ -238,6 +238,28 @@ void Parameters::removeParam(const std::string &param_name) {
   dynamic_types_.erase(param_name);
 }
 
+void Parameters::updateDescription(const std::string &param_name, const std::string &description) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  if (!node_->has_parameter(param_name)) return;
+  const auto previous = node_->describe_parameter(param_name);
+  if (!previous.dynamic_typing || previous.read_only || previous.description == description) return;
+  const auto value = node_->get_parameter(param_name);
+  auto descriptor = previous;
+  descriptor.description = description;
+  // Humble has no descriptor-update API. Re-declare only device parameters during
+  // initialization, preserving the value, callbacks and reconnect intent.
+  ParameterRestore restore(this, value);
+  node_->undeclare_parameter(param_name);
+  try {
+    node_->declare_parameter(param_name, value.get_parameter_value(), descriptor, true);
+  } catch (...) {
+    if (!node_->has_parameter(param_name)) {
+      node_->declare_parameter(param_name, value.get_parameter_value(), previous, true);
+    }
+    throw;
+  }
+}
+
 void Parameters::setDeviceContext(const std::string &device_key) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   dynamic_types_.clear();

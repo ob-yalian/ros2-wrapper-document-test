@@ -43,6 +43,8 @@ class Parameters {
   void setParamValue(T& param, const T& value);  // function updates the parameter value both
                                                  // locally and in the parameters server
   void removeParam(const std::string& param_name);
+  // Update startup metadata without changing the value or invoking its device setter.
+  void updateDescription(const std::string& param_name, const std::string& description);
 
   using BatchSetter = std::function<rcl_interfaces::msg::SetParametersResult(
       const std::vector<rclcpp::Parameter>&)>;

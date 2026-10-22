@@ -884,13 +884,13 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
     const auto initial = rclcpp::ParameterValue(default_value);
     appendPropertyDescription(descriptor, property_id, initial.get_type());
     if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
-        initial.get<int64_t>() == -1) {
-      descriptor.description += " At startup, -1 keeps the current camera setting.";
+        initial.get<int64_t>() == -1 && param_name.find("_ae_roi_") == std::string::npos) {
+      descriptor.description += " -1 skips setting at startup.";
     }
     if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
       if (isDynamicProperty(property_id)) {
         descriptor.additional_constraints =
-            "Can be changed while streaming. Values must be within the camera's supported range.";
+            "Change while streaming within the camera's supported range.";
         if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
             initial.get<int64_t>() == -1) {
           descriptor.additional_constraints += " -1 is only accepted at startup.";
@@ -5659,6 +5659,7 @@ void OBCameraNode::setupTopics() {
         throw StreamConfigurationError(message);
       }
     }
+    setupFilterParameterDescriptions();
     setupCameraInfo();
     selectBaseStream();
     setupCameraCtrlServices();

@@ -7,6 +7,7 @@
 #include <cctype>
 #include <limits>
 #include <set>
+#include <sstream>
 
 namespace orbbec_camera {
 namespace {
@@ -99,6 +100,58 @@ const std::vector<RuntimeFilter> &runtimeFilters() {
   return filters;
 }
 
+std::vector<std::pair<std::string, OBPropertyID>> runtimeFilterProperties(
+    const RuntimeFilter &spec) {
+  std::vector<std::pair<std::string, OBPropertyID>> hardware;
+  if (spec.name == "NoiseRemovalFilter") {
+    hardware = {{spec.enable_parameter, OB_PROP_DEPTH_SOFT_FILTER_BOOL},
+                {"noise_removal_filter_min_diff", OB_PROP_DEPTH_MAX_DIFF_INT},
+                {"noise_removal_filter_max_size", OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT}};
+  } else if (spec.name == "HardwareNoiseRemovalFilter") {
+    hardware = {{spec.enable_parameter, OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL},
+                {"hardware_noise_removal_filter_threshold",
+                 OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT}};
+  } else if (spec.name == "DispOutliersFilter") {
+    hardware = {
+        {spec.enable_parameter, OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL},
+        {"disp_outliers_filter_search_mode", OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT}};
+  }
+  return hardware;
+}
+
+std::string filterRangeDescription(const std::string &name,
+                                   const OBFilterConfigSchemaItem &schema) {
+  if (!std::isfinite(schema.min) || !std::isfinite(schema.max) || !std::isfinite(schema.step) ||
+      !std::isfinite(schema.def) || schema.min > schema.max) {
+    return " SDK default/range unavailable.";
+  }
+  std::ostringstream text;
+  // ROS string selectors expose names, not the SDK's numeric enum codes.
+  if (name == "hole_filling_filter_mode" || name == "disp_outliers_filter_search_mode") {
+    const std::vector<std::string> choices =
+        name == "hole_filling_filter_mode"
+            ? std::vector<std::string>{"FILL_TOP", "FILL_NEAREST", "FILL_FAREST"}
+            : std::vector<std::string>{"FULL", "OFFSET_80"};
+    if (schema.def >= 0 && schema.def < choices.size() && std::floor(schema.def) == schema.def) {
+      text << " SDK default: " << choices[static_cast<size_t>(schema.def)] << ".";
+    }
+    text << " SDK choices:";
+    for (size_t i = 0; i < choices.size(); ++i) {
+      if (i >= schema.min && i <= schema.max &&
+          (schema.step <= 0 || std::fmod(i - schema.min, schema.step) == 0)) {
+        text << " " << choices[i];
+      }
+    }
+    text << ".";
+  } else {
+    text << " SDK default: " << schema.def << ". SDK range: [" << schema.min << ", " << schema.max
+         << "]";
+    if (schema.step > 0) text << ", step: " << schema.step;
+    text << ".";
+  }
+  return text.str();
+}
+
 int runtimeInt(const rclcpp::Parameter &value) {
   const auto requested = value.as_int();
   if (requested == -1 || requested < std::numeric_limits<int32_t>::min() ||
@@ -188,6 +241,87 @@ void OBCameraNode::addRuntimeControl(const std::vector<std::string> &names,
     }
   }
   runtime_control_setters_.emplace(names.front(), std::move(setter));
+}
+
+void OBCameraNode::setupFilterParameterDescriptions() {
+  // Read existing instances after preset/JSON initialization. Metadata never enables a
+  // stream, creates a filter, or replaces a requested ROS value with SDK readback.
+  const auto find_filter = [](const auto &filters,
+                              const std::string &type) -> std::shared_ptr<ob::Filter> {
+    for (const auto &filter : filters) {
+      if (filter && normalizeDepthFilterName(filter->type()) == type) return filter;
+    }
+    return nullptr;
+  };
+  const auto update = [this](const std::string &name, const std::string &metadata) {
+    if (!node_->has_parameter(name)) return;
+    try {
+      parameters_->updateDescription(name, describeCameraParameter(name).description + metadata);
+    } catch (const std::exception &e) {
+      RCLCPP_WARN_STREAM(logger_, "Could not update description for " << name << ": " << e.what());
+    }
+  };
+  const auto describe_filter = [&update](const std::string &name, const std::string &config,
+                                         const std::shared_ptr<ob::Filter> &filter) {
+    std::string metadata = " SDK default/range unavailable.";
+    const auto sdk_config = config == "scale" ? "decimate" : config;
+    if (filter) {
+      try {
+        for (const auto &schema : filter->getConfigSchemaVec()) {
+          if (schema.name && sdk_config == schema.name) {
+            metadata = filterRangeDescription(name, schema);
+            break;
+          }
+        }
+      } catch (const std::exception &) {
+        // Keep the basic description when a filter does not expose its schema.
+      }
+    }
+    update(name, metadata);
+  };
+  for (const auto &spec : runtimeFilters()) {
+    const auto hardware = runtimeFilterProperties(spec);
+    if (!hardware.empty()) {
+      for (const auto &binding : hardware) {
+        if (!node_->has_parameter(binding.first)) continue;
+        const auto type = node_->get_parameter(binding.first).get_type();
+        rcl_interfaces::msg::ParameterDescriptor metadata;
+        if (type == rclcpp::ParameterType::PARAMETER_STRING) {
+          try {
+            const auto range = device_->getIntPropertyRange(binding.second);
+            const OBFilterConfigSchemaItem schema{nullptr,
+                                                  OB_FILTER_CONFIG_VALUE_TYPE_INT,
+                                                  static_cast<double>(range.min),
+                                                  static_cast<double>(range.max),
+                                                  static_cast<double>(range.step),
+                                                  static_cast<double>(range.def),
+                                                  nullptr};
+            metadata.description = filterRangeDescription(binding.first, schema);
+          } catch (const std::exception &) {
+            metadata.description = " SDK default/range unavailable.";
+          }
+        } else {
+          appendPropertyDescription(metadata, binding.second, type);
+        }
+        update(binding.first, metadata.description);
+      }
+      continue;
+    }
+    const std::shared_ptr<ob::Filter> filter = spec.name == "EnhancedDepthFilter"
+                                                   ? enhanced_depth_filter_
+                                                   : find_filter(depth_filter_list_, spec.name);
+    for (const auto &config : spec.config) describe_filter(config.first, config.second, filter);
+  }
+  describe_filter("color_decimation_filter_scale", "scale",
+                  find_filter(color_filter_list_, "DecimationFilter"));
+  describe_filter("left_color_decimation_filter_scale", "scale",
+                  find_filter(left_color_filter_list_, "DecimationFilter"));
+  describe_filter("right_color_decimation_filter_scale", "scale",
+                  find_filter(right_color_filter_list_, "DecimationFilter"));
+  describe_filter("left_ir_sequence_id_filter_id", "sequenceid",
+                  find_filter(left_ir_filter_list_, "SequenceIdFilter"));
+  describe_filter("right_ir_sequence_id_filter_id", "sequenceid",
+                  find_filter(right_ir_filter_list_, "SequenceIdFilter"));
 }
 
 void OBCameraNode::setupRuntimeControls() {
@@ -560,20 +694,7 @@ void OBCameraNode::setupRuntimeControls() {
             return filter && normalizeDepthFilterName(filter->type()) == spec.name;
           });
     }
-    std::vector<std::pair<std::string, OBPropertyID>> hardware;
-    if (spec.name == "NoiseRemovalFilter") {
-      hardware = {{spec.enable_parameter, OB_PROP_DEPTH_SOFT_FILTER_BOOL},
-                  {"noise_removal_filter_min_diff", OB_PROP_DEPTH_MAX_DIFF_INT},
-                  {"noise_removal_filter_max_size", OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT}};
-    } else if (spec.name == "HardwareNoiseRemovalFilter") {
-      hardware = {{spec.enable_parameter, OB_PROP_HW_NOISE_REMOVE_FILTER_ENABLE_BOOL},
-                  {"hardware_noise_removal_filter_threshold",
-                   OB_PROP_HW_NOISE_REMOVE_FILTER_THRESHOLD_FLOAT}};
-    } else if (spec.name == "DispOutliersFilter") {
-      hardware = {
-          {spec.enable_parameter, OB_PROP_DEPTH_OUTLIERS_FILTER_BOOL},
-          {"disp_outliers_filter_search_mode", OB_PROP_DEPTH_OUTLIERS_FILTER_SEARCH_MODE_INT}};
-    }
+    const auto hardware = runtimeFilterProperties(spec);
     std::vector<std::string> names;
     if (!hardware.empty()) {
       for (const auto &binding : hardware) {

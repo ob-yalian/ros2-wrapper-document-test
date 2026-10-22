@@ -160,5 +160,48 @@ TEST_F(DynamicParametersTest, RetainedCommonParametersDoNotLeakBetweenDevices) {
   EXPECT_EQ(writes, 1);
 }
 
+TEST_F(DynamicParametersTest, DescriptionRefreshPreservesSentinelAndDoesNotWriteDevice) {
+  const auto original = node->describe_parameter("exposure");
+  manager->updateDescription("exposure", "Exposure. SDK range: [1, 100].");
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(node->describe_parameter("exposure").description, "Exposure. SDK range: [1, 100].");
+  EXPECT_EQ(node->describe_parameter("exposure").additional_constraints,
+            original.additional_constraints);
+  EXPECT_EQ(writes, 0);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+  EXPECT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
+  EXPECT_EQ(writes, 1);
+}
+
+TEST_F(DynamicParametersTest, DescriptionRefreshPreservesRuntimeValueAndReconnectIntent) {
+  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
+  manager->updateDescription("exposure", "Exposure with SDK metadata.");
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
+  EXPECT_EQ(writes, 1);
+  EXPECT_TRUE(manager->hasRuntimeOverride("exposure"));
+  manager->clearDynamicParameters();
+  manager->removeParam("exposure");
+  EXPECT_EQ(
+      manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor).get<int64_t>(), 40);
+  EXPECT_EQ(writes, 1);
+}
+
+TEST_F(DynamicParametersTest, FailedDescriptionRefreshRestoresOriginalDeclaration) {
+  const auto original = node->describe_parameter("exposure");
+  bool reject_once = true;
+  auto callback = node->add_on_set_parameters_callback([&reject_once](const auto &) {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = !reject_once;
+    reject_once = false;
+    result.reason = "simulated metadata rejection";
+    return result;
+  });
+  EXPECT_THROW(manager->updateDescription("exposure", "New description."), std::exception);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(node->describe_parameter("exposure").description, original.description);
+  EXPECT_EQ(writes, 0);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
 }  // namespace
 }  // namespace orbbec_camera

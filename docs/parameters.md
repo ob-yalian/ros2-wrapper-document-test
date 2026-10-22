@@ -11,8 +11,8 @@ ros2 param get /camera/camera color_exposure
 For supported numeric camera settings, it also includes the camera default, range and step
 when available. Boolean defaults are shown as `true` or `false`; named choices are described
 without internal numeric codes. SDK property IDs and internal names are not displayed.
-These values are queried at declaration, after selecting the device preset;
-they are not a table of defaults for every module and are not refreshed when auto-exposure
+Property metadata is queried at declaration, after selecting the device preset;
+these values are not a table of defaults for every module and are not refreshed when auto-exposure
 changes a measurement. Firmware, presets and SDK versions
 can change them without requiring a hard-coded default update in this package.
 
@@ -22,6 +22,20 @@ the hardware default is `-1`. Enum descriptions use the values accepted by the R
 for example, disparity range uses 64/128/256. Structured properties such as ROI have no scalar range.
 An unavailable default/range is reported as unavailable; startup continues with the basic
 description. Range text does not impose the raw SDK range on launch sentinels.
+
+Filter descriptions also include SDK defaults, ranges and steps when available. These are
+read from existing filter instances after startup configuration, or from the corresponding
+camera properties for property-based filters. Missing instances or schemas are reported as
+unavailable; metadata queries do not create or enable filters. String modes show named choices.
+Descriptions are a startup snapshot, including when a filter is first enabled later at runtime.
+The SDK range can include values reserved by the ROS interface, such as `-1`; the stated
+ROS startup-only rules still apply. Range metadata does not change parameter validation.
+
+`depth_filter_config` is reserved and currently has no effect.
+
+On Humble, updating filter descriptions during initialization requires re-declaring those
+device parameters. This preserves their values, callbacks and reconnect overrides without
+calling a device setter; parameter-event subscribers may observe the re-declarations.
 
 Device-dependent parameters are omitted only when the device explicitly lacks the required
 sensor or SDK capability. Failed capability queries retain parameters and log a warning;

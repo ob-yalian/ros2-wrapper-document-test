@@ -387,6 +387,7 @@ class OBCameraNode {
   bool isDynamicProperty(OBPropertyID property_id) const;
   void setupDynamicParameters();
   void setupRuntimeControls();
+  void setupFilterParameterDescriptions();
   void setupPointCloudPublishers();
   void addRuntimeControl(const std::vector<std::string>& names, Parameters::BatchSetter setter);
   rcl_interfaces::msg::SetParametersResult setDynamicParameters(
