@@ -396,6 +396,30 @@ DepthFilterState OBCameraNode::buildDepthFilterState(
     return ss.str();
   };
 
+  if (normalized_filter_name == "HDRMerge") {
+    // HDR exposure and gain belong to the device, not the merge filter's config schema.
+    try {
+      if (device_->isPropertySupported(OB_STRUCT_DEPTH_HDR_CONFIG, OB_PERMISSION_READ)) {
+        OBHdrConfig config{};
+        uint32_t config_size = sizeof(config);
+        device_->getStructuredData(OB_STRUCT_DEPTH_HDR_CONFIG, reinterpret_cast<uint8_t *>(&config),
+                                   &config_size);
+        if (config_size != sizeof(config)) {
+          RCLCPP_WARN(logger_, "Unexpected HDR config size: %u (expected %zu)", config_size,
+                      sizeof(config));
+          return filter_state;
+        }
+        appendDepthFilterParam(filter_state, "exposure_1", to_param_value(config.exposure_1));
+        appendDepthFilterParam(filter_state, "gain_1", to_param_value(config.gain_1));
+        appendDepthFilterParam(filter_state, "exposure_2", to_param_value(config.exposure_2));
+        appendDepthFilterParam(filter_state, "gain_2", to_param_value(config.gain_2));
+      }
+    } catch (const std::exception &e) {
+      RCLCPP_WARN(logger_, "Failed to read HDR config for depth filter status: %s", e.what());
+    }
+    return filter_state;
+  }
+
   if (normalized_filter_name == "NoiseRemovalFilter") {
     appendDepthFilterParam(filter_state, "min_diff",
                            to_param_value(noise_removal_filter_min_diff_));
