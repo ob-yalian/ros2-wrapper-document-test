@@ -4008,9 +4008,32 @@ bool OBCameraNode::applyStreamProfiles(const std::vector<PendingStreamProfile> &
   }
 
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  const bool restart_pipeline = pipeline_started_.load();
+  const bool interleave_frame_enable = interleave_frame_enable_;
+  const auto old_stream_profile = stream_profile_;
+  const auto old_width = width_;
+  const auto old_height = height_;
+  const auto old_fps = fps_;
+  const auto old_format = format_;
+  const auto old_format_str = format_str_;
+  const auto old_image_format = image_format_;
+  const auto old_encoding = encoding_;
+  const auto old_unit_step_size = unit_step_size_;
+  const auto old_pipeline_config = pipeline_config_;
+
+  auto clear_failed_pipeline = [this]() {
+    // startStreams() can throw after SDK streaming starts but before setting this flag.
+    // Stop SDK callbacks and color workers before destroying their pipeline and buffers.
+    pipeline_started_.store(false);
+    if (pipeline_) {
+      TRY_EXECUTE_BLOCK(pipeline_->stop());
+    }
+    stopColorFrameThreads();
+    pipeline_.reset();
+    clearColorFrameQueues();
+  };
+
   try {
-    const bool restart_pipeline = pipeline_started_.load();
-    const bool interleave_frame_enable = interleave_frame_enable_;
     if (restart_pipeline) {
       stopStreams();
       RCLCPP_DEBUG_STREAM(logger_, "Wait 1 second for streams to stop before applying profiles");
@@ -4077,6 +4100,68 @@ bool OBCameraNode::applyStreamProfiles(const std::vector<PendingStreamProfile> &
   } catch (...) {
     message = "unknown error";
   }
+
+  const std::string error_message = "Failed to set stream profiles: " + message;
+  try {
+    clear_failed_pipeline();
+    if (restart_pipeline) {
+      std::this_thread::sleep_for(std::chrono::seconds(1));
+    }
+
+    std::vector<stream_index_pair> publishers_to_restore;
+    for (const auto &pending_profile : pending_profiles) {
+      const auto &stream_index = pending_profile.stream_index;
+      if (format_.at(stream_index) != old_format.at(stream_index)) {
+        publishers_to_restore.push_back(stream_index);
+      }
+    }
+    stream_profile_ = old_stream_profile;
+    width_ = old_width;
+    height_ = old_height;
+    fps_ = old_fps;
+    format_ = old_format;
+    format_str_ = old_format_str;
+    image_format_ = old_image_format;
+    encoding_ = old_encoding;
+    unit_step_size_ = old_unit_step_size;
+    pipeline_config_ = old_pipeline_config;
+    interleave_frame_enable_ = interleave_frame_enable;
+
+    for (const auto &pending_profile : pending_profiles) {
+      const auto &stream_index = pending_profile.stream_index;
+      images_[stream_index] = cv::Mat(height_.at(stream_index), width_.at(stream_index),
+                                      image_format_.at(stream_index), cv::Scalar(0, 0, 0, 0));
+    }
+    for (const auto &stream_index : publishers_to_restore) {
+      setupImagePublisher(stream_index);
+    }
+    setupImageBuffers();
+    // A partially started pipeline may have configured this filter with the new intrinsics.
+    hw_d2c_color_undistortion_configured_ = false;
+    {
+      std::lock_guard<std::mutex> frame_info_lock(frame_info_logged_mutex_);
+      frame_info_logged_.clear();
+    }
+    if (restart_pipeline) {
+      try {
+        startStreams();
+      } catch (...) {
+        clear_failed_pipeline();
+        throw;
+      }
+      message = error_message + ". Rolled back to previous stream profiles; streams restarted";
+    } else {
+      message = error_message + ". Rolled back to previous stream profiles; streams remain stopped";
+    }
+  } catch (const ob::Error &e) {
+    message =
+        error_message + ". Rollback also failed: " + orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception &e) {
+    message = error_message + ". Rollback also failed: " + e.what();
+  } catch (...) {
+    message = error_message + ". Rollback also failed: unknown error";
+  }
+  RCLCPP_ERROR_STREAM(logger_, message);
   return false;
 }
 
@@ -4360,13 +4445,7 @@ void OBCameraNode::startStreams() {
   } catch (const ob::Error &e) {
     RCLCPP_ERROR_STREAM(logger_,
                         "Failed to start pipeline: " << orbbec_camera::formatObErrorWithStatus(e));
-    RCLCPP_INFO_STREAM(logger_, "try to disable ir stream and try again");
-    enable_stream_[INFRA0] = false;
-    setupImagePublisher(INFRA0);
-    setupPipelineConfig();
-    pipeline_->start(pipeline_config_, [this](const std::shared_ptr<ob::FrameSet> &frame_set) {
-      onNewFrameSetCallback(frame_set);
-    });
+    throw;
   } catch (...) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to start pipeline");
     throw std::runtime_error("Failed to start pipeline");
