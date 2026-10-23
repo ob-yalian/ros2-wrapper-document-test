@@ -790,12 +790,8 @@ class OBCameraNode {
   std::atomic_bool pipeline_started_{false};
   std::string camera_name_ = "camera";
   std::string accel_gyro_frame_id_ = "camera_accel_gyro_optical_frame";
-  const std::string imu_frame_id_ = "camera_gyro_frame";
   std::shared_ptr<ob::Config> pipeline_config_ = nullptr;
   std::map<stream_index_pair, std::shared_ptr<ob::Sensor>> sensors_;
-  std::map<stream_index_pair, ob_camera_intrinsic> stream_intrinsics_;
-  std::map<stream_index_pair, sensor_msgs::msg::CameraInfo> camera_infos_;
-  std::map<stream_index_pair, OBCameraParam> ob_camera_param_;
   std::map<stream_index_pair, OBExtrinsic> depth_to_other_extrinsics_;
   std::map<stream_index_pair, rclcpp::Publisher<orbbec_camera_msgs::msg::Extrinsics>::SharedPtr>
       depth_to_other_extrinsics_publishers_;
@@ -822,7 +818,6 @@ class OBCameraNode {
       supported_profiles_;
   std::map<stream_index_pair, std::shared_ptr<ob::StreamProfile>> stream_profile_;
   stream_index_pair base_stream_ = DEPTH;
-  std::map<stream_index_pair, uint32_t> seq_;
   std::map<stream_index_pair, cv::Mat> images_;
   std::map<stream_index_pair, std::string> encoding_;
   std::map<stream_index_pair, int> unit_step_size_;
@@ -883,7 +878,6 @@ class OBCameraNode {
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ptp_config_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_flood_enable_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_fan_work_mode_srv_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr toggle_sensors_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_lrm_measure_distance_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_reset_timestamp_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_interleaver_laser_sync_srv_;
@@ -929,7 +923,6 @@ class OBCameraNode {
   std::unique_ptr<camera_info_manager::CameraInfoManager> color_info_manager_ = nullptr;
   std::string color_info_url_;
   std::string ir_info_url_;
-  std::optional<OBCameraParam> camera_param_;
   std::string colorizer_mode_ = "none";
   bool enable_d2c_viewer_ = false;
   std::unique_ptr<D2CViewer> d2c_viewer_ = nullptr;
@@ -951,7 +944,6 @@ class OBCameraNode {
   bool enable_ir_long_exposure_ = false;
   bool enable_ldp_ = true;
   int ldp_power_level_ = -1;
-  int color_rotation_ = -1;
   // color ae roi
   int color_ae_roi_left_ = -1;
   int color_ae_roi_top_ = -1;
@@ -1019,7 +1011,6 @@ class OBCameraNode {
   bool enable_ptp_config_ = false;
   std::string depth_precision_str_;
   OB_DEPTH_PRECISION_LEVEL depth_precision_ = OB_PRECISION_0MM8;
-  double depth_precision_float_ = 0.10;
   // IMU
   std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> imu_publishers_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_gyro_accel_publisher_;
@@ -1179,17 +1170,6 @@ class OBCameraNode {
   int laser_energy_level_ = -1;
   ob::PointCloudFilter depth_point_cloud_filter_;
   ob::PointCloudFilter color_point_cloud_filter_;
-  std::optional<OBCalibrationParam> calibration_param_;
-  std::optional<OBXYTables> xy_tables_;
-  float* xy_table_data_ = nullptr;
-  uint32_t xy_table_data_size_ = 0;
-  uint8_t* rgb_point_cloud_buffer_ = nullptr;
-  uint32_t rgb_point_cloud_buffer_size_ = 0;
-  std::optional<OBXYTables> depth_xy_tables_;
-  float* depth_xy_table_data_ = nullptr;
-  uint32_t depth_xy_table_data_size_ = 0;
-  uint8_t* depth_point_cloud_buffer_ = nullptr;
-  uint32_t depth_point_cloud_buffer_size_ = 0;
   int min_depth_limit_ = 0;
   int max_depth_limit_ = 0;
   std::string time_domain_ = "global";  // device, system, global
@@ -1213,7 +1193,6 @@ class OBCameraNode {
   std::map<stream_index_pair, bool> enable_undistortion_;
   std::shared_ptr<ob::UnDistortionFilter> hw_d2c_color_undistortion_filter_;
   bool hw_d2c_color_undistortion_configured_ = false;
-  bool has_first_color_frame_ = false;
   bool use_intra_process_ = false;
   // True when device_ is an ob::PlaybackDevice. Real-device-only hardware
   // tuning (heartbeat, USB3 retry, laser, sync config, etc.) is skipped in

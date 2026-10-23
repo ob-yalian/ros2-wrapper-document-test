@@ -4414,12 +4414,6 @@ void OBCameraNode::setupImageBuffers() {
     rgb_buffer_right_size_ = static_cast<size_t>(width_[COLOR_RIGHT]) * height_[COLOR_RIGHT] * 4;
     rgb_buffer_right_ = new uint8_t[rgb_buffer_right_size_];
   }
-  rgb_point_cloud_buffer_size_ = 0;
-  xy_table_data_size_ = 0;
-  if (enable_colored_point_cloud_ && enable_stream_[DEPTH] && enable_stream_[COLOR]) {
-    rgb_point_cloud_buffer_size_ = width_[COLOR] * height_[COLOR] * sizeof(OBColorPoint);
-    xy_table_data_size_ = width_[DEPTH] * height_[DEPTH] * 2;
-  }
 }
 
 void OBCameraNode::updateImageConfig(const stream_index_pair &stream_index) {

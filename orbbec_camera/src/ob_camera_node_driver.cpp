@@ -245,9 +245,6 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
   }
 
   // Now stop threads
-  if (device_count_update_thread_ && device_count_update_thread_->joinable()) {
-    device_count_update_thread_->join();
-  }
   if (query_thread_ && query_thread_->joinable()) {
     query_thread_->join();
   }
