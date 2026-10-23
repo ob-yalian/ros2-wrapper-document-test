@@ -33,6 +33,11 @@ ROS startup-only rules still apply. Range metadata does not change parameter val
 
 `depth_filter_config` is reserved and currently has no effect.
 
+For devices with fixed depth precision levels, `depth_precision` accepts `1mm`, `0.8mm`,
+`0.5mm`, `0.4mm`, `0.2mm`, `0.1mm` or `0.05mm`, subject to device support. Empty skips setting;
+unrecognized strings log an error and leave the setting unchanged. The floating-point depth
+unit path continues to use the device's supported range.
+
 On Humble, updating filter descriptions during initialization requires re-declaring those
 device parameters. This preserves their values, callbacks and reconnect overrides without
 calling a device setter; parameter-event subscribers may observe the re-declarations.

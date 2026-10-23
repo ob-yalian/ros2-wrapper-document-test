@@ -1010,7 +1010,6 @@ class OBCameraNode {
   int frames_per_trigger_ = 1;
   bool enable_ptp_config_ = false;
   std::string depth_precision_str_;
-  OB_DEPTH_PRECISION_LEVEL depth_precision_ = OB_PRECISION_0MM8;
   // IMU
   std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> imu_publishers_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_gyro_accel_publisher_;

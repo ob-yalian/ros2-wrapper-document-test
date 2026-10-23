@@ -1477,15 +1477,23 @@ void OBCameraNode::setupDevices() {
 
   if (device_->isPropertySupported(OB_PROP_DEPTH_PRECISION_LEVEL_INT, OB_PERMISSION_READ_WRITE) &&
       !depth_precision_str_.empty()) {
-    auto default_precision_level = device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
-    if (default_precision_level != depth_precision_) {
-      TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_PRECISION_LEVEL_INT, depth_precision_);
-      TRY_EXECUTE_BLOCK({
-        const auto current_depth_precision =
-            device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
-        RCLCPP_INFO_STREAM(logger_, "Current depth precision: "
-                                        << depthPrecisionLevelToString(current_depth_precision));
-      });
+    const auto depth_precision = depthPrecisionLevelFromString(depth_precision_str_);
+    if (depth_precision == OB_PRECISION_UNKNOWN) {
+      RCLCPP_ERROR_STREAM(logger_,
+                          "Invalid depth_precision: " << depth_precision_str_
+                                                      << ". Keeping current depth precision.");
+    } else {
+      const auto current_precision_level =
+          device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
+      if (current_precision_level != depth_precision) {
+        TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_DEPTH_PRECISION_LEVEL_INT, depth_precision);
+        TRY_EXECUTE_BLOCK({
+          const auto current_depth_precision =
+              device_->getIntProperty(OB_PROP_DEPTH_PRECISION_LEVEL_INT);
+          RCLCPP_INFO_STREAM(logger_, "Current depth precision: "
+                                          << depthPrecisionLevelToString(current_depth_precision));
+        });
+      }
     }
   } else if (device_->isPropertySupported(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT,
                                           OB_PERMISSION_READ_WRITE) &&
