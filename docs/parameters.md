@@ -64,6 +64,22 @@ imply runtime mutability.
 
 Device-dependent declarations are cleared on disconnect and evaluated again on reconnect.
 
+## Legacy launch arguments
+
+The following obsolete launch names were not read by the driver. Use the current names in
+launch commands and YAML files; the old names are not aliases.
+
+| Obsolete name | Current name |
+| --- | --- |
+| `use_hardware_time` | `time_domain`; the affected OpenNI launch files default to `system` |
+| `flip_color`, `flip_depth`, `flip_ir` | `color_mirror`, `depth_mirror`, `ir_mirror`, matching the old mirror behavior |
+| `enable_soft_filter` | `enable_noise_removal_filter` |
+| `soft_filter_max_diff` | `noise_removal_filter_min_diff` |
+| `soft_filter_speckle_size` | `noise_removal_filter_max_size` |
+
+Unused `product_id`, `vendor_id` and `industry_mode` launch arguments have been removed.
+Select a camera with the existing `serial_number` or `usb_port` options.
+
 ## Runtime controls and service compatibility
 
 Runtime-writable means that a setting can be applied while camera streams keep running.

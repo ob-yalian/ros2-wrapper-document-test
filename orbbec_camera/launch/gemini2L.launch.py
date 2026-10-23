@@ -84,7 +84,6 @@ def generate_launch_description():
         DeclareLaunchArgument("bag_filename", default_value=""),
         DeclareLaunchArgument("bag_loop", default_value="false"),
         DeclareLaunchArgument("uvc_backend", default_value="libuvc"),  # libuvc or v4l2
-        DeclareLaunchArgument("product_id", default_value=""),
         DeclareLaunchArgument("enable_point_cloud", default_value="true"),
         DeclareLaunchArgument("cloud_frame_id", default_value=""),
         DeclareLaunchArgument("enable_colored_point_cloud", default_value="false"),
