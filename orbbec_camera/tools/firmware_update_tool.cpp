@@ -81,6 +81,7 @@ struct DeviceIdentity {
   std::string uid;
   std::string ip_address;
   bool is_network = false;
+  bool is_gmsl = false;
 };
 
 std::string trim(std::string value) {
@@ -420,7 +421,9 @@ DeviceIdentity getDeviceIdentity(const std::shared_ptr<ob::DeviceInfo> &device_i
   DeviceIdentity identity;
   identity.serial_number = safeString(device_info->getSerialNumber());
   identity.uid = safeString(device_info->getUid());
-  identity.is_network = safeString(device_info->getConnectionType()) == "Ethernet";
+  const auto connection_type = safeString(device_info->getConnectionType());
+  identity.is_network = connection_type == "Ethernet";
+  identity.is_gmsl = connection_type == "GMSL2";
   if (identity.is_network) {
     identity.ip_address = safeString(device_info->getIpAddress());
   }
@@ -435,7 +438,7 @@ void logRebootReconnectElapsed(const rclcpp::Logger &logger, const FirmwareUpdat
   const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                               std::chrono::steady_clock::now() - result.reboot_started_at)
                               .count();
-  RCLCPP_INFO(logger, "[%s] Device detected after reboot in %lld ms", stage,
+  RCLCPP_INFO(logger, "[%s] Device recovery check completed in %lld ms", stage,
               static_cast<long long>(elapsed_ms));
 }
 
@@ -594,7 +597,7 @@ std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,
                                              bool require_reboot_transition = false) {
   const auto deadline =
       std::chrono::steady_clock::now() + std::chrono::seconds(args.reconnect_timeout_sec);
-  bool reboot_transition_observed = !require_reboot_transition;
+  bool reboot_transition_observed = !require_reboot_transition || identity.is_gmsl;
   while (std::chrono::steady_clock::now() < deadline) {
     try {
       auto list = ctx->queryDeviceList();
@@ -618,25 +621,46 @@ std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,
           std::this_thread::sleep_for(std::chrono::milliseconds(args.reconnect_poll_ms));
           continue;
         }
-        RCLCPP_INFO(logger, "Device reconnected: %s (%s)", name.c_str(), serial.c_str());
+        if (identity.is_gmsl) {
+          if (!identity.serial_number.empty() && serial != identity.serial_number) {
+            throw std::runtime_error("Device serial number changed during recovery");
+          }
+          // DeviceInfo may be cached. This public property performs a live device
+          // protocol read; one complete response is sufficient to confirm access.
+          OBDeviceTemperature temperature{};
+          uint32_t data_size = sizeof(temperature);
+          device->getStructuredData(OB_STRUCT_DEVICE_TEMPERATURE,
+                                    reinterpret_cast<uint8_t *>(&temperature), &data_size);
+          if (data_size != sizeof(temperature)) {
+            throw std::runtime_error("Incomplete device temperature response during recovery");
+          }
+          if (std::chrono::steady_clock::now() >= deadline) {
+            break;
+          }
+          RCLCPP_INFO(logger, "GMSL device responded successfully: %s (%s)", name.c_str(),
+                      serial.c_str());
+        } else {
+          RCLCPP_INFO(logger, "Device reconnected: %s (%s)", name.c_str(), serial.c_str());
+        }
         return device;
       }
       reboot_transition_observed = true;
     } catch (const ob::Error &e) {
       reboot_transition_observed = true;
-      RCLCPP_WARN(logger, "Reconnect attempt failed (SDK): %s",
+      RCLCPP_WARN(logger, "Device recovery check failed (SDK): %s",
                   orbbec_camera::formatObErrorWithStatus(e).c_str());
     } catch (const std::exception &e) {
       reboot_transition_observed = true;
-      RCLCPP_WARN(logger, "Reconnect attempt failed: %s", e.what());
+      RCLCPP_WARN(logger, "Device recovery check failed: %s", e.what());
     } catch (...) {
       reboot_transition_observed = true;
-      RCLCPP_WARN(logger, "Reconnect attempt failed: unknown error");
+      RCLCPP_WARN(logger, "Device recovery check failed: unknown error");
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(args.reconnect_poll_ms));
   }
 
-  throw std::runtime_error("Timeout waiting for device reconnection");
+  throw std::runtime_error(identity.is_gmsl ? "Timeout waiting for GMSL device response"
+                                            : "Timeout waiting for device reconnection");
 }
 
 std::shared_ptr<ob::Device> waitForReconnectUntil(
@@ -645,7 +669,8 @@ std::shared_ptr<ob::Device> waitForReconnectUntil(
     const std::chrono::steady_clock::time_point &deadline, bool require_reboot_transition = false) {
   const auto now = std::chrono::steady_clock::now();
   if (now >= deadline) {
-    throw std::runtime_error("Timeout waiting for device reconnection");
+    throw std::runtime_error(identity.is_gmsl ? "Timeout waiting for GMSL device response"
+                                              : "Timeout waiting for device reconnection");
   }
 
   const auto remaining_ms =
@@ -790,11 +815,16 @@ FirmwareUpdateResult updateFirmware(const rclcpp::Logger &logger,
   if (firmware_log_enabled) {
     waitForFirmwareLogDrain(logger);
   }
+  const bool is_gmsl = safeString(device->getDeviceInfo()->getConnectionType()) == "GMSL2";
   RCLCPP_INFO(logger, "Rebooting device after firmware update...");
   result.reboot_started_at = std::chrono::steady_clock::now();
   device->reboot();
   result.reboot_command_sent = true;
   RCLCPP_INFO(logger, "Device reboot command sent.");
+  if (is_gmsl) {
+    RCLCPP_INFO(logger, "Waiting 1 second for GMSL device recovery...");
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
   return result;
 }
 
@@ -889,13 +919,13 @@ int main(int argc, char **argv) {
           if (first_update.need_reupdate) {
             RCLCPP_INFO(
                 logger,
-                "Firmware requires reboot and second update. Waiting for device reconnect...");
+                "Firmware requires reboot and second update. Waiting for device recovery...");
             const auto second_deadline = std::chrono::steady_clock::now() +
                                          std::chrono::seconds(run_args.reconnect_timeout_sec);
             device.reset();
             device = waitForReconnectUntil(logger, ctx, run_args, device_identity, true,
                                            second_deadline, true);
-            logRebootReconnectElapsed(logger, first_update, "first update reconnect");
+            logRebootReconnectElapsed(logger, first_update, "first update recovery");
             firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
             bool second_ok = false;
             while (std::chrono::steady_clock::now() < second_deadline) {
@@ -927,7 +957,7 @@ int main(int argc, char **argv) {
                   device.reset();
                   device = waitForReconnectUntil(logger, ctx, run_args, device_identity, true,
                                                  second_deadline, true);
-                  logRebootReconnectElapsed(logger, second_update, "reupdate reconnect");
+                  logRebootReconnectElapsed(logger, second_update, "reupdate recovery");
                   firmware_log_enabled = enable_firmware_log && enableFirmwareLog(logger, device);
                   continue;
                 }
@@ -947,12 +977,12 @@ int main(int argc, char **argv) {
             }
           }
 
-          RCLCPP_INFO(logger, "Waiting for device to reconnect after final reboot...");
+          RCLCPP_INFO(logger, "Waiting for device recovery after final reboot...");
           device.reset();
           device = waitForReconnect(logger, ctx, run_args, device_identity, true, true);
-          logRebootReconnectElapsed(logger, final_update, "final reconnect");
+          logRebootReconnectElapsed(logger, final_update, "final recovery");
           device_info = device->getDeviceInfo();
-          RCLCPP_INFO(logger, "Device is online after firmware update: %s, SN: %s, firmware: %s",
+          RCLCPP_INFO(logger, "Device is available after firmware update: %s, SN: %s, firmware: %s",
                       device_info->getName(), device_info->getSerialNumber(),
                       device_info->getFirmwareVersion());
         }
