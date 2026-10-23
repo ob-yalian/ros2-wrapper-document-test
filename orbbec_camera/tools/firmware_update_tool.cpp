@@ -623,7 +623,13 @@ std::shared_ptr<ob::Device> waitForReconnect(const rclcpp::Logger &logger,
         }
         if (identity.is_gmsl) {
           if (!identity.serial_number.empty() && serial != identity.serial_number) {
-            throw std::runtime_error("Device serial number changed during recovery");
+            RCLCPP_DEBUG(logger,
+                         "Device identity not ready: serial number mismatch, retrying... "
+                         "expected: %s, actual: %s",
+                         identity.serial_number.c_str(),
+                         serial.empty() ? "<empty>" : serial.c_str());
+            std::this_thread::sleep_for(std::chrono::milliseconds(args.reconnect_poll_ms));
+            continue;
           }
           // DeviceInfo may be cached. This public property performs a live device
           // protocol read; one complete response is sufficient to confirm access.
