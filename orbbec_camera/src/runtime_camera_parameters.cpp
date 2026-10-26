@@ -243,6 +243,88 @@ void OBCameraNode::addRuntimeControl(const std::vector<std::string> &names,
   runtime_control_setters_.emplace(names.front(), std::move(setter));
 }
 
+bool OBCameraNode::isFilterParameterSupported(const std::string &name) const {
+  const auto found = filter_parameter_support_.find(name);
+  return found != filter_parameter_support_.end() && found->second;
+}
+
+void OBCameraNode::setupFilterParameterSupport() {
+  filter_parameter_support_.clear();
+  const bool has_depth = sensors_.count(DEPTH) != 0;
+  const bool supports_hdr_config =
+      has_depth && isPropertyParameterSupported("HDR configuration", OB_STRUCT_DEPTH_HDR_CONFIG,
+                                                OB_PERMISSION_READ_WRITE);
+  const bool supports_hdr_merge =
+      has_depth && queryDeviceCapability("HDR merge", [this]() {
+        if (device_->isFrameInterleaveSupported()) return true;
+        if (!is_playback_device_) {
+          return device_->isPropertySupported(OB_STRUCT_DEPTH_HDR_CONFIG, OB_PERMISSION_READ_WRITE);
+        }
+        if (!device_->isPropertySupported(OB_STRUCT_DEPTH_HDR_CONFIG, OB_PERMISSION_READ))
+          return false;
+        OBHdrConfig config{};
+        uint32_t size = sizeof(config);
+        device_->getStructuredData(OB_STRUCT_DEPTH_HDR_CONFIG, reinterpret_cast<uint8_t *>(&config),
+                                   &size);
+        return config.enable != 0;
+      });
+
+  for (const auto &spec : runtimeFilters()) {
+    const auto hardware = runtimeFilterProperties(spec);
+    if (!hardware.empty()) {
+      // OBV exposes the group through its switch property and checks each child property.
+      // ROS settings require write permission; runtime read-modify-write checks remain separate.
+      const bool supported =
+          has_depth && isPropertyParameterSupported(spec.enable_parameter, hardware.front().second);
+      for (const auto &binding : hardware) {
+        filter_parameter_support_[binding.first] =
+            supported && (binding.first == spec.enable_parameter ||
+                          isPropertyParameterSupported(binding.first, binding.second));
+      }
+      continue;
+    }
+
+    bool supported = supportsRecommendedFilter(DEPTH, spec.name);
+    if (spec.name == "DecimationFilter" && (pid_ == GEMINI2_PID || pid_ == GEMINI2L_PID)) {
+      // These devices have an existing software fallback outside the recommendation list.
+      supported = has_depth;
+    } else if (spec.name == "HDRMerge") {
+      supported = supported && supports_hdr_merge;
+    } else if (spec.name == "EnhancedDepthFilter") {
+      supported = has_depth && !is_playback_device_ && isLingBotSupportedPID(pid_) &&
+                  queryDeviceCapability("enhanced depth filter", [this]() {
+                    return device_->isLicenseAuthorizationSupported();
+                  });
+    }
+    filter_parameter_support_[spec.enable_parameter] = supported;
+    for (const auto &config : spec.config) {
+      filter_parameter_support_[config.first] =
+          supported && (spec.name != "HDRMerge" || supports_hdr_config);
+    }
+  }
+  filter_parameter_support_["enhanced_depth_model_path"] =
+      isFilterParameterSupported("enable_enhanced_depth");
+
+  for (const auto &stream : {COLOR, COLOR_LEFT, COLOR_RIGHT}) {
+    // Runtime color decimation can already create a software filter when none was recommended.
+    const auto &name = stream_name_.at(stream);
+    filter_parameter_support_["enable_" + name + "_decimation_filter"] =
+        sensors_.count(stream) != 0;
+    filter_parameter_support_[name + "_decimation_filter_scale"] = sensors_.count(stream) != 0;
+  }
+  for (const auto &stream : {INFRA1, INFRA2}) {
+    const auto &name = stream_name_.at(stream);
+    const bool supported = supportsRecommendedFilter(stream, "SequenceIdFilter");
+    filter_parameter_support_["enable_" + name + "_sequence_id_filter"] = supported;
+    filter_parameter_support_[name + "_sequence_id_filter_id"] = supported;
+  }
+  for (const auto &stream : IMAGE_STREAMS) {
+    // Like OBV, the driver supplies undistortion independently of recommendations.
+    filter_parameter_support_["enable_" + stream_name_.at(stream) + "_undistortion"] =
+        sensors_.count(stream) != 0;
+  }
+}
+
 void OBCameraNode::setupFilterParameterDescriptions() {
   // Read existing instances after preset/JSON initialization. Metadata never enables a
   // stream, creates a filter, or replaces a requested ROS value with SDK readback.
@@ -555,6 +637,7 @@ void OBCameraNode::setupRuntimeControls() {
     const auto prefix = stream_name_.at(stream);
     const auto enabled_name = "enable_" + prefix + "_decimation_filter";
     const auto scale_name = prefix + "_decimation_filter_scale";
+    if (!isFilterParameterSupported(enabled_name)) continue;
     addRuntimeControl(
         {enabled_name, scale_name}, [this, stream, enabled_name, scale_name](const auto &values) {
           std::lock_guard<std::mutex> lock(image_filter_mutex_);
@@ -616,6 +699,7 @@ void OBCameraNode::setupRuntimeControls() {
     const auto prefix = stream_name_.at(stream);
     const auto enabled_name = "enable_" + prefix + "_sequence_id_filter";
     const auto id_name = prefix + "_sequence_id_filter_id";
+    if (!isFilterParameterSupported(enabled_name)) continue;
     addRuntimeControl({enabled_name, id_name},
                       [this, filter, enabled_name, id_name](const auto &values) {
                         std::lock_guard<std::mutex> lock(image_filter_mutex_);
@@ -686,6 +770,9 @@ void OBCameraNode::setupRuntimeControls() {
   }
 
   for (const auto &spec : runtimeFilters()) {
+    if (!isFilterParameterSupported(spec.enable_parameter) ||
+        !node_->has_parameter(spec.enable_parameter))
+      continue;
     bool supported = false;
     {
       std::lock_guard<std::mutex> lock(depth_filter_mutex_);
@@ -698,18 +785,26 @@ void OBCameraNode::setupRuntimeControls() {
     std::vector<std::string> names;
     if (!hardware.empty()) {
       for (const auto &binding : hardware) {
+        if (!isFilterParameterSupported(binding.first) || !node_->has_parameter(binding.first))
+          continue;
         const auto permission =
             spec.name == "NoiseRemovalFilter" && binding.first != spec.enable_parameter
                 ? OB_PERMISSION_WRITE
                 : OB_PERMISSION_READ_WRITE;
-        if (device_->isPropertySupported(binding.second, permission))
+        if (queryDeviceCapability(binding.first, [&]() {
+              return device_->isPropertySupported(binding.second, permission);
+            }))
           names.push_back(binding.first);
       }
     } else {
-      if (spec.name == "EnhancedDepthFilter") supported = isLingBotSupportedPID(pid_);
+      if (spec.name == "EnhancedDepthFilter")
+        supported = isFilterParameterSupported(spec.enable_parameter);
       if (supported) {
         names.push_back(spec.enable_parameter);
-        for (const auto &config : spec.config) names.push_back(config.first);
+        for (const auto &config : spec.config) {
+          if (isFilterParameterSupported(config.first) && node_->has_parameter(config.first))
+            names.push_back(config.first);
+        }
       }
     }
     if (names.empty()) continue;
@@ -750,6 +845,10 @@ void OBCameraNode::setupRuntimeControls() {
       }
       if (spec.name == "HDRMerge" && !request->filter_config.empty()) {
         for (const auto &config : spec.config) {
+          if (!node_->has_parameter(config.first)) {
+            return runtimeResult(false,
+                                 "HDR exposure configuration is not supported by this device.");
+          }
           auto value = node_->get_parameter(config.first);
           for (const auto &requested : values) {
             if (requested.get_name() == config.first) {

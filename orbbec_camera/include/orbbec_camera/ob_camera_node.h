@@ -21,10 +21,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <queue>
 #include <rclcpp/rclcpp.hpp>
+#include <set>
 #include <string>
 #include <stdexcept>
 #include <unordered_map>
@@ -356,6 +358,8 @@ class OBCameraNode {
 
   void getImageStreamParameters();
 
+  void getFilterParameters();
+
   void getPropertyParameters();
 
   void validateParameters();
@@ -380,6 +384,17 @@ class OBCameraNode {
   template <class T>
   void setAndGetPropertyParameter(T& param, const std::string& param_name, const T& default_value,
                                   OBPropertyID property_id);
+
+  template <class T>
+  void setAndGetFilterParameter(T& param, const std::string& param_name, const T& default_value);
+
+  void initializeRecommendedFilters();
+  void loadRecommendedFilters(const stream_index_pair& stream,
+                              std::vector<std::shared_ptr<ob::Filter>>& filters);
+  bool supportsRecommendedFilter(const stream_index_pair& stream,
+                                 const std::string& filter_name) const;
+  void setupFilterParameterSupport();
+  bool isFilterParameterSupported(const std::string& name) const;
 
   void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
                                  OBPropertyID property_id, rclcpp::ParameterType type) const;
@@ -1208,6 +1223,9 @@ class OBCameraNode {
   std::vector<std::shared_ptr<ob::Filter>> ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> right_ir_filter_list_;
+  // An absent entry means the recommendation query failed; an empty set is a known empty list.
+  std::map<stream_index_pair, std::set<std::string>> recommended_filter_names_;
+  std::map<std::string, bool> filter_parameter_support_;
 
   // interleave AE
   std::string interleave_ae_mode_;  // hdr or laser

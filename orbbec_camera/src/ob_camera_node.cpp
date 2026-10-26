@@ -874,6 +874,13 @@ void OBCameraNode::setAndGetDeviceParameter(T &param, const std::string &param_n
 }
 
 template <class T>
+void OBCameraNode::setAndGetFilterParameter(T &param, const std::string &param_name,
+                                            const T &default_value) {
+  setAndGetDeviceParameter(param, param_name, default_value,
+                           isFilterParameterSupported(param_name));
+}
+
+template <class T>
 void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param_name,
                                               const T &default_value, OBPropertyID property_id) {
   param = default_value;
@@ -3162,26 +3169,58 @@ void OBCameraNode::syncConfigJsonFilterSettings(
   }
 }
 
+void OBCameraNode::loadRecommendedFilters(const stream_index_pair &stream,
+                                          std::vector<std::shared_ptr<ob::Filter>> &filters) {
+  if (recommended_filter_names_.count(stream) != 0 || sensors_.count(stream) == 0) {
+    return;
+  }
+  auto recommended = sensors_.at(stream)->createRecommendedFilters();
+  std::set<std::string> names;
+  for (const auto &filter : recommended) {
+    if (filter) names.insert(normalizeDepthFilterName(filter->getName()));
+  }
+  filters = std::move(recommended);
+  recommended_filter_names_.emplace(stream, std::move(names));
+}
+
+void OBCameraNode::initializeRecommendedFilters() {
+  recommended_filter_names_.clear();
+  const std::map<stream_index_pair, std::vector<std::shared_ptr<ob::Filter>> *> filter_lists = {
+      {DEPTH, &depth_filter_list_},
+      {COLOR, &color_filter_list_},
+      {COLOR_LEFT, &left_color_filter_list_},
+      {COLOR_RIGHT, &right_color_filter_list_},
+      {INFRA0, &ir_filter_list_},
+      {INFRA1, &left_ir_filter_list_},
+      {INFRA2, &right_ir_filter_list_}};
+  for (const auto &entry : filter_lists) {
+    const auto &stream = entry.first;
+    auto &filters = *entry.second;
+    filters.clear();
+    if (sensors_.count(stream) == 0) continue;
+    queryDeviceCapability(stream_name_.at(stream) + " recommended filters", [&]() {
+      loadRecommendedFilters(stream, filters);
+      return true;
+    });
+  }
+}
+
+bool OBCameraNode::supportsRecommendedFilter(const stream_index_pair &stream,
+                                             const std::string &filter_name) const {
+  if (sensors_.count(stream) == 0) return false;
+  const auto found = recommended_filter_names_.find(stream);
+  return found == recommended_filter_names_.end() || found->second.count(filter_name) != 0;
+}
+
 void OBCameraNode::setupColorPostProcessFilter() {
   if (!enable_stream_[COLOR] && !enable_stream_[COLOR_LEFT] && !enable_stream_[COLOR_RIGHT]) {
     return;
   }
-  try {
-    auto color_sensor = device_->getSensor(OB_SENSOR_COLOR);
-    if (color_sensor) {
-      color_filter_list_ = color_sensor->createRecommendedFilters();
-    }
-  } catch (const std::exception &e) {
-    RCLCPP_DEBUG_STREAM(logger_, "Main color sensor not found, trying left/right color sensors");
-    auto left_color_sensor = device_->getSensor(OB_SENSOR_COLOR_LEFT);
-    if (left_color_sensor) {
-      left_color_filter_list_ = left_color_sensor->createRecommendedFilters();
-    }
-    auto right_color_sensor = device_->getSensor(OB_SENSOR_COLOR_RIGHT);
-    if (right_color_sensor) {
-      right_color_filter_list_ = right_color_sensor->createRecommendedFilters();
-    }
-  }
+  // Successful capability queries already supplied these instances. Retry failed queries
+  // here so an enabled stream retains the original initialization error handling.
+  loadRecommendedFilters(COLOR, color_filter_list_);
+  loadRecommendedFilters(COLOR_LEFT, left_color_filter_list_);
+  loadRecommendedFilters(COLOR_RIGHT, right_color_filter_list_);
   if (color_filter_list_.empty() && left_color_filter_list_.empty() &&
       right_color_filter_list_.empty()) {
     RCLCPP_DEBUG_STREAM(logger_, "Color sensor filter lists are empty");
@@ -3197,6 +3236,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
     std::string filter_name = filter->type();
     RCLCPP_DEBUG_STREAM(logger_, "Configuring color filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end() &&
+        isFilterParameterSupported(filter_param_names[filter_name]) &&
         isLaunchParamProvided(filter_param_names[filter_name])) {
       const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
       RCLCPP_INFO_STREAM(logger_, "Set color filter " << filter_name << " to " << value);
@@ -3230,6 +3270,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
     std::string filter_name = filter->type();
     RCLCPP_DEBUG_STREAM(logger_, "Configuring left color filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end() &&
+        isFilterParameterSupported(filter_param_names[filter_name]) &&
         isLaunchParamProvided(filter_param_names[filter_name])) {
       const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
       RCLCPP_INFO_STREAM(logger_, "Set left color filter " << filter_name << " to " << value);
@@ -3265,6 +3306,7 @@ void OBCameraNode::setupColorPostProcessFilter() {
     std::string filter_name = filter->type();
     RCLCPP_DEBUG_STREAM(logger_, "Configuring right color filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end() &&
+        isFilterParameterSupported(filter_param_names[filter_name]) &&
         isLaunchParamProvided(filter_param_names[filter_name])) {
       const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
       RCLCPP_INFO_STREAM(logger_, "Set right color filter " << filter_name << " to " << value);
@@ -3317,8 +3359,7 @@ void OBCameraNode::setupIrPostProcessFilter() {
     return;
   }
   try {
-    auto ir_sensor = device_->getSensor(OB_SENSOR_IR);
-    ir_filter_list_ = ir_sensor->createRecommendedFilters();
+    loadRecommendedFilters(INFRA0, ir_filter_list_);
     if (ir_filter_list_.empty()) {
       RCLCPP_DEBUG_STREAM(logger_, "IR sensor filter list is empty");
     }
@@ -3452,39 +3493,35 @@ void OBCameraNode::setupLeftIrPostProcessFilter() {
   if (!enable_stream_[INFRA1]) {
     return;
   }
-  auto device_info = device_->getDeviceInfo();
-  CHECK_NOTNULL(device_info);
-  if (isGemini330SeriesPID(pid_) || isGemini301SeriesPID(pid_)) {
-    auto left_ir_sensor = device_->getSensor(OB_SENSOR_IR_LEFT);
-    left_ir_filter_list_ = left_ir_sensor->createRecommendedFilters();
-    if (left_ir_filter_list_.empty()) {
-      RCLCPP_DEBUG_STREAM(logger_, "Left IR sensor filter list is empty");
-      return;
+  loadRecommendedFilters(INFRA1, left_ir_filter_list_);
+  if (left_ir_filter_list_.empty()) {
+    RCLCPP_DEBUG_STREAM(logger_, "Left IR sensor filter list is empty");
+    return;
+  }
+  for (size_t i = 0; i < left_ir_filter_list_.size(); i++) {
+    auto filter = left_ir_filter_list_[i];
+    std::map<std::string, bool> filter_params = {
+        {"SequenceIdFilter", enable_left_ir_sequence_id_filter_},
+    };
+    std::map<std::string, std::string> filter_param_names = {
+        {"SequenceIdFilter", "enable_left_ir_sequence_id_filter"},
+    };
+    std::string filter_name = filter->type();
+    RCLCPP_DEBUG_STREAM(logger_, "Configuring left IR filter: " << filter_name);
+    if (filter_params.find(filter_name) != filter_params.end() &&
+        isFilterParameterSupported(filter_param_names[filter_name]) &&
+        isLaunchParamProvided(filter_param_names[filter_name])) {
+      const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+      RCLCPP_INFO_STREAM(logger_, "Set left IR filter " << filter_name << " to " << value);
+      filter->enable(filter_params[filter_name]);
     }
-    for (size_t i = 0; i < left_ir_filter_list_.size(); i++) {
-      auto filter = left_ir_filter_list_[i];
-      std::map<std::string, bool> filter_params = {
-          {"SequenceIdFilter", enable_left_ir_sequence_id_filter_},
-      };
-      std::map<std::string, std::string> filter_param_names = {
-          {"SequenceIdFilter", "enable_left_ir_sequence_id_filter"},
-      };
-      std::string filter_name = filter->type();
-      RCLCPP_DEBUG_STREAM(logger_, "Configuring left IR filter: " << filter_name);
-      if (filter_params.find(filter_name) != filter_params.end() &&
-          isLaunchParamProvided(filter_param_names[filter_name])) {
-        const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
-        RCLCPP_INFO_STREAM(logger_, "Set left IR filter " << filter_name << " to " << value);
-        filter->enable(filter_params[filter_name]);
+    if (filter_name == "SequenceIdFilter" && enable_left_ir_sequence_id_filter_) {
+      auto sequenced_filter = filter->as<ob::SequenceIdFilter>();
+      if (left_ir_sequence_id_filter_id_ != -1) {
+        sequenced_filter->selectSequenceId(left_ir_sequence_id_filter_id_);
       }
-      if (filter_name == "SequenceIdFilter" && enable_left_ir_sequence_id_filter_) {
-        auto sequenced_filter = filter->as<ob::SequenceIdFilter>();
-        if (left_ir_sequence_id_filter_id_ != -1) {
-          sequenced_filter->selectSequenceId(left_ir_sequence_id_filter_id_);
-        }
-        RCLCPP_INFO_STREAM(logger_, "Current left ir SequenceIdFilter ID: "
-                                        << sequenced_filter->getSelectSequenceId());
-      }
+      RCLCPP_INFO_STREAM(logger_, "Current left ir SequenceIdFilter ID: "
+                                      << sequenced_filter->getSelectSequenceId());
     }
   }
 }
@@ -3493,52 +3530,48 @@ void OBCameraNode::setupRightIrPostProcessFilter() {
   if (!enable_stream_[INFRA2]) {
     return;
   }
-  auto device_info = device_->getDeviceInfo();
-  CHECK_NOTNULL(device_info);
-  if (isGemini330SeriesPID(pid_) || isGemini301SeriesPID(pid_)) {
-    auto right_ir_sensor = device_->getSensor(OB_SENSOR_IR_RIGHT);
-    right_ir_filter_list_ = right_ir_sensor->createRecommendedFilters();
-    if (right_ir_filter_list_.empty()) {
-      RCLCPP_DEBUG_STREAM(logger_, "Right IR sensor filter list is empty");
-      return;
+  loadRecommendedFilters(INFRA2, right_ir_filter_list_);
+  if (right_ir_filter_list_.empty()) {
+    RCLCPP_DEBUG_STREAM(logger_, "Right IR sensor filter list is empty");
+    return;
+  }
+  for (size_t i = 0; i < right_ir_filter_list_.size(); i++) {
+    auto filter = right_ir_filter_list_[i];
+    std::map<std::string, bool> filter_params = {
+        {"SequenceIdFilter", enable_right_ir_sequence_id_filter_},
+    };
+    std::map<std::string, std::string> filter_param_names = {
+        {"SequenceIdFilter", "enable_right_ir_sequence_id_filter"},
+    };
+    std::string filter_name = filter->type();
+    RCLCPP_DEBUG_STREAM(logger_, "Configuring right IR filter: " << filter_name);
+    if (filter_params.find(filter_name) != filter_params.end() &&
+        isFilterParameterSupported(filter_param_names[filter_name]) &&
+        isLaunchParamProvided(filter_param_names[filter_name])) {
+      const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
+      RCLCPP_INFO_STREAM(logger_, "Set right IR filter " << filter_name << " to " << value);
+      filter->enable(filter_params[filter_name]);
     }
-    for (size_t i = 0; i < right_ir_filter_list_.size(); i++) {
-      auto filter = right_ir_filter_list_[i];
-      std::map<std::string, bool> filter_params = {
-          {"SequenceIdFilter", enable_right_ir_sequence_id_filter_},
-      };
-      std::map<std::string, std::string> filter_param_names = {
-          {"SequenceIdFilter", "enable_right_ir_sequence_id_filter"},
-      };
-      std::string filter_name = filter->type();
-      RCLCPP_DEBUG_STREAM(logger_, "Configuring right IR filter: " << filter_name);
-      if (filter_params.find(filter_name) != filter_params.end() &&
-          isLaunchParamProvided(filter_param_names[filter_name])) {
-        const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
-        RCLCPP_INFO_STREAM(logger_, "Set right IR filter " << filter_name << " to " << value);
-        filter->enable(filter_params[filter_name]);
+    if (filter_name == "SequenceIdFilter" && enable_right_ir_sequence_id_filter_) {
+      auto sequenced_filter = filter->as<ob::SequenceIdFilter>();
+      if (right_ir_sequence_id_filter_id_ != -1) {
+        sequenced_filter->selectSequenceId(right_ir_sequence_id_filter_id_);
       }
-      if (filter_name == "SequenceIdFilter" && enable_right_ir_sequence_id_filter_) {
-        auto sequenced_filter = filter->as<ob::SequenceIdFilter>();
-        if (right_ir_sequence_id_filter_id_ != -1) {
-          sequenced_filter->selectSequenceId(right_ir_sequence_id_filter_id_);
-        }
-        RCLCPP_INFO_STREAM(logger_, "Current right ir SequenceIdFilter ID: "
-                                        << sequenced_filter->getSelectSequenceId());
-      }
+      RCLCPP_INFO_STREAM(logger_, "Current right ir SequenceIdFilter ID: "
+                                      << sequenced_filter->getSelectSequenceId());
     }
   }
 }
+
 void OBCameraNode::setupDepthPostProcessFilter() {
   if (!enable_stream_[DEPTH]) {
     return;
   }
-  auto depth_sensor = device_->getSensor(OB_SENSOR_DEPTH);
-  // set depth sensor to filter
-  depth_filter_list_ = depth_sensor->createRecommendedFilters();
+  loadRecommendedFilters(DEPTH, depth_filter_list_);
   if (depth_filter_list_.empty()) {
     RCLCPP_DEBUG_STREAM(logger_, "Depth sensor filter list is empty");
-    return;
+    // A known empty recommendation list must not suppress the existing software fallback.
+    if (!enable_decimation_filter_ || (pid_ != GEMINI2_PID && pid_ != GEMINI2L_PID)) return;
   }
   std::map<std::string, bool> filter_params = {
       {"DecimationFilter", enable_decimation_filter_},
@@ -3578,6 +3611,7 @@ void OBCameraNode::setupDepthPostProcessFilter() {
     std::string filter_name = filter->type();
     RCLCPP_DEBUG_STREAM(logger_, "Configuring depth filter: " << filter_name);
     if (filter_params.find(filter_name) != filter_params.end() &&
+        isFilterParameterSupported(filter_param_names[filter_name]) &&
         isLaunchParamProvided(filter_param_names[filter_name])) {
       const auto *value = filter_params[filter_name] ? "enabled" : "disabled";
       RCLCPP_INFO_STREAM(logger_, "Set depth filter " << filter_name << " to " << value);
@@ -5001,7 +5035,6 @@ void OBCameraNode::getCommonParameters() {
       isPropertyParameterSupported("disparity_to_depth_mode", OB_PROP_SDK_DISPARITY_TO_DEPTH_BOOL);
   const bool supports_lrm = isPropertyParameterSupported(
       "LRM obstacle distance", OB_PROP_LDP_MEASURE_DISTANCE_INT, OB_PERMISSION_READ);
-  const bool supports_enhanced_depth = isLingBotSupportedPID(pid_);
 
   setAndGetNodeParameter<std::string>(camera_name_, "camera_name", "camera");
   camera_link_frame_id_ = camera_name_ + "_link";
@@ -5055,14 +5088,6 @@ void OBCameraNode::getCommonParameters() {
   setAndGetNodeParameter<bool>(publish_tf_, "publish_tf", true);
   setAndGetNodeParameter<double>(tf_publish_rate_, "tf_publish_rate", 0.0);
   setAndGetNodeParameter<bool>(depth_registration_, "depth_registration", false);
-  bool enable_enhanced_depth = false;
-  setAndGetDeviceParameter<bool>(enable_enhanced_depth, "enable_enhanced_depth", false,
-                                 supports_enhanced_depth);
-  enable_enhanced_depth_.store(enable_enhanced_depth);
-  setAndGetDeviceParameter<std::string>(enhanced_depth_model_path_, "enhanced_depth_model_path", "",
-                                        supports_enhanced_depth);
-  setAndGetDeviceParameter<int>(enhanced_depth_confidence_threshold_,
-                                "enhanced_depth_confidence_threshold", 51, supports_enhanced_depth);
   setAndGetNodeParameter<bool>(enable_point_cloud_, "enable_point_cloud", false);
   setAndGetNodeParameter<std::string>(ir_info_url_, "ir_info_url", "");
   setAndGetNodeParameter<std::string>(color_info_url_, "color_info_url", "");
@@ -5114,86 +5139,6 @@ void OBCameraNode::getCommonParameters() {
   setAndGetNodeParameter<bool>(ordered_pc_, "ordered_pc", false);
   setAndGetNodeParameter<int>(max_save_images_count_, "max_save_images_count", 10);
   setAndGetNodeParameter<bool>(enable_depth_scale_, "enable_depth_scale", true);
-  // A missing depth sensor is definitive; omissions from a recommended filter list are not.
-  // Keep software/fallback filter controls whenever a depth sensor may be available.
-  setAndGetDeviceParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false, has_depth);
-  setAndGetDeviceParameter<bool>(enable_sequence_id_filter_, "enable_sequence_id_filter", false,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_disparity_to_depth_, "enable_disparity_to_depth", true,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_threshold_filter_, "enable_threshold_filter", false,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_hardware_noise_removal_filter_,
-                                 "enable_hardware_noise_removal_filter", true, has_depth);
-  setAndGetDeviceParameter<bool>(enable_noise_removal_filter_, "enable_noise_removal_filter", true,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_spatial_filter_, "enable_spatial_filter", false, has_depth);
-  setAndGetDeviceParameter<bool>(enable_temporal_filter_, "enable_temporal_filter", false,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_hole_filling_filter_, "enable_hole_filling_filter", false,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_edge_noise_removal_filter_,
-                                 "enable_edge_noise_removal_filter", false, has_depth);
-  setAndGetDeviceParameter<bool>(enable_spatial_fast_filter_, "enable_spatial_fast_filter", false,
-                                 has_depth);
-  setAndGetDeviceParameter<bool>(enable_spatial_moderate_filter_, "enable_spatial_moderate_filter",
-                                 false, has_depth);
-  setAndGetDeviceParameter<bool>(enable_mgc_noise_removal_filter_,
-                                 "enable_mgc_noise_removal_filter", false, has_depth);
-  setAndGetDeviceParameter<bool>(enable_lut_noise_removal_filter_,
-                                 "enable_lut_noise_removal_filter", false, has_depth);
-  setAndGetDeviceParameter<bool>(enable_disp_outliers_filter_, "enable_disp_outliers_filter", false,
-                                 has_depth);
-  std::string disp_outliers_filter_search_mode;
-  setAndGetDeviceParameter<std::string>(disp_outliers_filter_search_mode,
-                                        "disp_outliers_filter_search_mode", "", has_depth);
-  std::string disp_outliers_filter_search_mode_message;
-  if (!parseDispOutliersSearchMode(disp_outliers_filter_search_mode,
-                                   disp_outliers_filter_search_mode_,
-                                   disp_outliers_filter_search_mode_message, true)) {
-    RCLCPP_WARN_STREAM(logger_, "Invalid disp_outliers_filter_search_mode value "
-                                    << disp_outliers_filter_search_mode << ". "
-                                    << disp_outliers_filter_search_mode_message << "; using empty");
-    disp_outliers_filter_search_mode_ = -1;
-  }
-  setAndGetDeviceParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1, has_depth);
-  setAndGetDeviceParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1, has_depth);
-  setAndGetDeviceParameter<int>(threshold_filter_max_, "threshold_filter_max", -1, has_depth);
-  setAndGetDeviceParameter<int>(threshold_filter_min_, "threshold_filter_min", -1, has_depth);
-  setAndGetDeviceParameter<float>(hardware_noise_removal_filter_threshold_,
-                                  "hardware_noise_removal_filter_threshold", -1.0, has_depth);
-  setAndGetDeviceParameter<int>(noise_removal_filter_min_diff_, "noise_removal_filter_min_diff", -1,
-                                has_depth);
-  setAndGetDeviceParameter<int>(noise_removal_filter_max_size_, "noise_removal_filter_max_size", -1,
-                                has_depth);
-  setAndGetDeviceParameter<float>(spatial_filter_alpha_, "spatial_filter_alpha", -1.0, has_depth);
-  setAndGetDeviceParameter<int>(spatial_filter_diff_threshold_, "spatial_filter_diff_threshold", -1,
-                                has_depth);
-  setAndGetDeviceParameter<int>(spatial_filter_magnitude_, "spatial_filter_magnitude", -1,
-                                has_depth);
-  setAndGetDeviceParameter<int>(spatial_filter_radius_, "spatial_filter_radius", -1, has_depth);
-  setAndGetDeviceParameter<int>(spatial_fast_filter_radius_, "spatial_fast_filter_radius", -1,
-                                has_depth);
-  setAndGetDeviceParameter<int>(spatial_moderate_filter_diff_threshold_,
-                                "spatial_moderate_filter_diff_threshold", -1, has_depth);
-  setAndGetDeviceParameter<int>(spatial_moderate_filter_magnitude_,
-                                "spatial_moderate_filter_magnitude", -1, has_depth);
-  setAndGetDeviceParameter<int>(spatial_moderate_filter_radius_, "spatial_moderate_filter_radius",
-                                -1, has_depth);
-  setAndGetDeviceParameter<float>(temporal_filter_diff_threshold_, "temporal_filter_diff_threshold",
-                                  -1.0, has_depth);
-  setAndGetDeviceParameter<float>(temporal_filter_weight_, "temporal_filter_weight", -1.0,
-                                  has_depth);
-  setAndGetDeviceParameter<std::string>(hole_filling_filter_mode_, "hole_filling_filter_mode", "",
-                                        has_depth);
-  setAndGetDeviceParameter<bool>(enable_false_positive_filter_, "enable_false_positive_filter",
-                                 false, has_depth);
-  setAndGetDeviceParameter<int>(hdr_merge_exposure_1_, "hdr_merge_exposure_1", -1, has_depth);
-  setAndGetDeviceParameter<int>(hdr_merge_gain_1_, "hdr_merge_gain_1", -1, has_depth);
-  setAndGetDeviceParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1, has_depth);
-  setAndGetDeviceParameter<int>(hdr_merge_gain_2_, "hdr_merge_gain_2", -1, has_depth);
   setAndGetNodeParameter<std::string>(align_mode_, "align_mode", "HW");
   align_mode_ =
       normalizeClosedSetParameterValue(logger_, "align_mode", align_mode_, {"HW", "SW"}, "HW");
@@ -5416,13 +5361,6 @@ void OBCameraNode::getImageStreamParameters() {
     }
     param_name = stream_name_[stream_index] + "_camera_info_qos";
     setAndGetDeviceParameter<std::string>(camera_info_qos_[stream_index], param_name, "default");
-    param_name = "enable_" + stream_name_[stream_index] + "_undistortion";
-    setAndGetDeviceParameter<bool>(enable_undistortion_[stream_index], param_name,
-                                   enable_undistortion_[stream_index]);
-    if (device_preset_ == "Dual Color Streams" && stream_index == COLOR &&
-        isLaunchParamProvided(param_name)) {
-      enable_undistortion_[stream_index] = false;
-    }
   }
 
   for (auto stream_index : IMAGE_STREAMS) {
@@ -5433,10 +5371,6 @@ void OBCameraNode::getImageStreamParameters() {
     if (color_frame_queue_max_frames_ < 1) {
       throw StreamConfigurationError("color_frame_queue_max_frames must be greater than zero");
     }
-    setAndGetDeviceParameter<bool>(enable_color_decimation_filter_,
-                                   "enable_color_decimation_filter", false);
-    setAndGetDeviceParameter<int>(color_decimation_filter_scale_, "color_decimation_filter_scale",
-                                  -1);
   }
   if (sensors_.count(COLOR_LEFT) != 0) {
     setAndGetDeviceParameter<int>(left_color_frame_queue_max_frames_,
@@ -5444,10 +5378,6 @@ void OBCameraNode::getImageStreamParameters() {
     if (left_color_frame_queue_max_frames_ < 1) {
       throw StreamConfigurationError("left_color_frame_queue_max_frames must be greater than zero");
     }
-    setAndGetDeviceParameter<bool>(enable_left_color_decimation_filter_,
-                                   "enable_left_color_decimation_filter", false);
-    setAndGetDeviceParameter<int>(left_color_decimation_filter_scale_,
-                                  "left_color_decimation_filter_scale", -1);
   }
   if (sensors_.count(COLOR_RIGHT) != 0) {
     setAndGetDeviceParameter<int>(right_color_frame_queue_max_frames_,
@@ -5456,23 +5386,11 @@ void OBCameraNode::getImageStreamParameters() {
       throw StreamConfigurationError(
           "right_color_frame_queue_max_frames must be greater than zero");
     }
-    setAndGetDeviceParameter<bool>(enable_right_color_decimation_filter_,
-                                   "enable_right_color_decimation_filter", false);
-    setAndGetDeviceParameter<int>(right_color_decimation_filter_scale_,
-                                  "right_color_decimation_filter_scale", -1);
   }
   if (sensors_.count(INFRA2) != 0) {
-    setAndGetDeviceParameter<bool>(enable_right_ir_sequence_id_filter_,
-                                   "enable_right_ir_sequence_id_filter", false);
-    setAndGetDeviceParameter<int>(right_ir_sequence_id_filter_id_, "right_ir_sequence_id_filter_id",
-                                  -1);
     setAndGetDeviceParameter<int>(right_ir_decimation_factor_, "right_ir_decimation_factor", 1);
   }
   if (sensors_.count(INFRA1) != 0) {
-    setAndGetDeviceParameter<bool>(enable_left_ir_sequence_id_filter_,
-                                   "enable_left_ir_sequence_id_filter", false);
-    setAndGetDeviceParameter<int>(left_ir_sequence_id_filter_id_, "left_ir_sequence_id_filter_id",
-                                  -1);
     setAndGetDeviceParameter<int>(left_ir_decimation_factor_, "left_ir_decimation_factor", 1);
   }
   if (sensors_.count(DEPTH) != 0) {
@@ -5480,9 +5398,123 @@ void OBCameraNode::getImageStreamParameters() {
   }
 }
 
+void OBCameraNode::getFilterParameters() {
+  setAndGetFilterParameter<bool>(enable_decimation_filter_, "enable_decimation_filter", false);
+  // Preserve the application_config value without changing the requested ROS default.
+  const bool config_hdr_merge_enabled = enable_hdr_merge_;
+  setAndGetFilterParameter<bool>(enable_hdr_merge_, "enable_hdr_merge", false);
+  if (!isLaunchParamProvided("enable_hdr_merge") &&
+      isFilterParameterSupported("enable_hdr_merge")) {
+    enable_hdr_merge_ = config_hdr_merge_enabled;
+  }
+  setAndGetFilterParameter<bool>(enable_sequence_id_filter_, "enable_sequence_id_filter", false);
+  setAndGetFilterParameter<bool>(enable_disparity_to_depth_, "enable_disparity_to_depth", true);
+  setAndGetFilterParameter<bool>(enable_threshold_filter_, "enable_threshold_filter", false);
+  setAndGetFilterParameter<bool>(enable_hardware_noise_removal_filter_,
+                                 "enable_hardware_noise_removal_filter", true);
+  setAndGetFilterParameter<bool>(enable_noise_removal_filter_, "enable_noise_removal_filter", true);
+  setAndGetFilterParameter<bool>(enable_spatial_filter_, "enable_spatial_filter", false);
+  setAndGetFilterParameter<bool>(enable_temporal_filter_, "enable_temporal_filter", false);
+  setAndGetFilterParameter<bool>(enable_hole_filling_filter_, "enable_hole_filling_filter", false);
+  setAndGetFilterParameter<bool>(enable_edge_noise_removal_filter_,
+                                 "enable_edge_noise_removal_filter", false);
+  setAndGetFilterParameter<bool>(enable_spatial_fast_filter_, "enable_spatial_fast_filter", false);
+  setAndGetFilterParameter<bool>(enable_spatial_moderate_filter_, "enable_spatial_moderate_filter",
+                                 false);
+  setAndGetFilterParameter<bool>(enable_mgc_noise_removal_filter_,
+                                 "enable_mgc_noise_removal_filter", false);
+  setAndGetFilterParameter<bool>(enable_lut_noise_removal_filter_,
+                                 "enable_lut_noise_removal_filter", false);
+  setAndGetFilterParameter<bool>(enable_disp_outliers_filter_, "enable_disp_outliers_filter",
+                                 false);
+  std::string disp_outliers_filter_search_mode;
+  setAndGetFilterParameter<std::string>(disp_outliers_filter_search_mode,
+                                        "disp_outliers_filter_search_mode", "");
+  std::string disp_outliers_filter_search_mode_message;
+  if (!parseDispOutliersSearchMode(disp_outliers_filter_search_mode,
+                                   disp_outliers_filter_search_mode_,
+                                   disp_outliers_filter_search_mode_message, true)) {
+    RCLCPP_WARN_STREAM(logger_, "Invalid disp_outliers_filter_search_mode value "
+                                    << disp_outliers_filter_search_mode << ". "
+                                    << disp_outliers_filter_search_mode_message << "; using empty");
+    disp_outliers_filter_search_mode_ = -1;
+  }
+  setAndGetFilterParameter<int>(decimation_filter_scale_, "decimation_filter_scale", -1);
+  setAndGetFilterParameter<int>(sequence_id_filter_id_, "sequence_id_filter_id", -1);
+  setAndGetFilterParameter<int>(threshold_filter_max_, "threshold_filter_max", -1);
+  setAndGetFilterParameter<int>(threshold_filter_min_, "threshold_filter_min", -1);
+  setAndGetFilterParameter<float>(hardware_noise_removal_filter_threshold_,
+                                  "hardware_noise_removal_filter_threshold", -1.0);
+  setAndGetFilterParameter<int>(noise_removal_filter_min_diff_, "noise_removal_filter_min_diff",
+                                -1);
+  setAndGetFilterParameter<int>(noise_removal_filter_max_size_, "noise_removal_filter_max_size",
+                                -1);
+  setAndGetFilterParameter<float>(spatial_filter_alpha_, "spatial_filter_alpha", -1.0);
+  setAndGetFilterParameter<int>(spatial_filter_diff_threshold_, "spatial_filter_diff_threshold",
+                                -1);
+  setAndGetFilterParameter<int>(spatial_filter_magnitude_, "spatial_filter_magnitude", -1);
+  setAndGetFilterParameter<int>(spatial_filter_radius_, "spatial_filter_radius", -1);
+  setAndGetFilterParameter<int>(spatial_fast_filter_radius_, "spatial_fast_filter_radius", -1);
+  setAndGetFilterParameter<int>(spatial_moderate_filter_diff_threshold_,
+                                "spatial_moderate_filter_diff_threshold", -1);
+  setAndGetFilterParameter<int>(spatial_moderate_filter_magnitude_,
+                                "spatial_moderate_filter_magnitude", -1);
+  setAndGetFilterParameter<int>(spatial_moderate_filter_radius_, "spatial_moderate_filter_radius",
+                                -1);
+  setAndGetFilterParameter<float>(temporal_filter_diff_threshold_, "temporal_filter_diff_threshold",
+                                  -1.0);
+  setAndGetFilterParameter<float>(temporal_filter_weight_, "temporal_filter_weight", -1.0);
+  setAndGetFilterParameter<std::string>(hole_filling_filter_mode_, "hole_filling_filter_mode", "");
+  setAndGetFilterParameter<bool>(enable_false_positive_filter_, "enable_false_positive_filter",
+                                 false);
+  setAndGetFilterParameter<int>(hdr_merge_exposure_1_, "hdr_merge_exposure_1", -1);
+  setAndGetFilterParameter<int>(hdr_merge_gain_1_, "hdr_merge_gain_1", -1);
+  setAndGetFilterParameter<int>(hdr_merge_exposure_2_, "hdr_merge_exposure_2", -1);
+  setAndGetFilterParameter<int>(hdr_merge_gain_2_, "hdr_merge_gain_2", -1);
+
+  bool enable_enhanced_depth = false;
+  setAndGetFilterParameter<bool>(enable_enhanced_depth, "enable_enhanced_depth", false);
+  enable_enhanced_depth_.store(enable_enhanced_depth);
+  setAndGetFilterParameter<std::string>(enhanced_depth_model_path_, "enhanced_depth_model_path",
+                                        "");
+  setAndGetFilterParameter<int>(enhanced_depth_confidence_threshold_,
+                                "enhanced_depth_confidence_threshold", 51);
+
+  setAndGetFilterParameter<bool>(enable_color_decimation_filter_, "enable_color_decimation_filter",
+                                 false);
+  setAndGetFilterParameter<int>(color_decimation_filter_scale_, "color_decimation_filter_scale",
+                                -1);
+  setAndGetFilterParameter<bool>(enable_left_color_decimation_filter_,
+                                 "enable_left_color_decimation_filter", false);
+  setAndGetFilterParameter<int>(left_color_decimation_filter_scale_,
+                                "left_color_decimation_filter_scale", -1);
+  setAndGetFilterParameter<bool>(enable_right_color_decimation_filter_,
+                                 "enable_right_color_decimation_filter", false);
+  setAndGetFilterParameter<int>(right_color_decimation_filter_scale_,
+                                "right_color_decimation_filter_scale", -1);
+  setAndGetFilterParameter<bool>(enable_right_ir_sequence_id_filter_,
+                                 "enable_right_ir_sequence_id_filter", false);
+  setAndGetFilterParameter<int>(right_ir_sequence_id_filter_id_, "right_ir_sequence_id_filter_id",
+                                -1);
+  setAndGetFilterParameter<bool>(enable_left_ir_sequence_id_filter_,
+                                 "enable_left_ir_sequence_id_filter", false);
+  setAndGetFilterParameter<int>(left_ir_sequence_id_filter_id_, "left_ir_sequence_id_filter_id",
+                                -1);
+
+  for (const auto &stream_index : IMAGE_STREAMS) {
+    if (sensors_.count(stream_index) == 0) continue;
+    const std::string param_name = "enable_" + stream_name_[stream_index] + "_undistortion";
+    setAndGetFilterParameter<bool>(enable_undistortion_[stream_index], param_name,
+                                   enable_undistortion_[stream_index]);
+    if (device_preset_ == "Dual Color Streams" && stream_index == COLOR &&
+        isLaunchParamProvided(param_name)) {
+      enable_undistortion_[stream_index] = false;
+    }
+  }
+}
+
 void OBCameraNode::getPropertyParameters() {
-  // Keep mappings next to declarations. Capability selectors and filters with software
-  // fallbacks remain in getCommonParameters() until their module-specific capabilities are known.
+  // Keep property mappings next to declarations.
   // IR controls are shared by single-IR and stereo devices; do not require an INFRA0 stream.
   setAndGetPropertyParameter<bool>(enable_color_auto_exposure_priority_,
                                    "enable_color_auto_exposure_priority", false,
@@ -5637,7 +5669,10 @@ void OBCameraNode::setupTopics() {
     syncConfigJsonApplicationConfig();
     setupDevicePreset();
     enumerateStreams();
+    initializeRecommendedFilters();
+    setupFilterParameterSupport();
     getImageStreamParameters();
+    getFilterParameters();
     getPropertyParameters();
     validateParameters();
     setupDevices();
