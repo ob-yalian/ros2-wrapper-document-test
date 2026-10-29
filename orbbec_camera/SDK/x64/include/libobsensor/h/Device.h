@@ -247,9 +247,15 @@ OB_EXPORT void ob_device_get_raw_data(ob_device *device, ob_property_id property
 /**
  * @brief Set customer data.
  *
+ * @deprecated This function is deprecated, please use @ref ob_device_write_device_user_data()
+ * instead. The legacy customer data area is the same storage as the device user ID on all models:
+ * setting either one overwrites the other; on network models writing data also changes the name
+ * shown by network discovery (first 16 visible characters).
+ *
  * @param[in] device The device object.
  * @param[in] data The property data to be set.
- * @param[in] data_size The size of the property to be set,the maximum length cannot exceed 65532 bytes.
+ * @param[in] data_size The size of the property to be set,the maximum length cannot exceed 65532
+ * bytes.
  * @param[out] error Log error messages.
  */
 OB_EXPORT void ob_device_write_customer_data(ob_device *device, const void *data, uint32_t data_size, ob_error **error);
@@ -257,12 +263,72 @@ OB_EXPORT void ob_device_write_customer_data(ob_device *device, const void *data
 /**
  * @brief Get customer data of a device property.
  *
+ * @deprecated This function is deprecated, please use @ref ob_device_read_device_user_data()
+ * instead. The legacy customer data area is the same storage as the device user ID on ALL models:
+ * the returned data is whatever was last written through either API.
+ *
  * @param[in] device The device object.
  * @param[out] data The obtained property data.
- * @param[out] data_size The size of the obtained property data.
+ * @param[out] data_size The size of the obtained property data. (Legacy OUT-only semantics: the
+ * caller-provided value is ignored, the full content is copied and the actual length returned.)
  * @param[out] error Log error messages.
  */
 OB_EXPORT void ob_device_read_customer_data(ob_device *device, void *data, uint32_t *data_size, ob_error **error);
+
+/**
+ * @brief Write user data to the dedicated device user data area of the device.
+ *
+ * @param[in] device The device object.
+ * @param[in] data The data to be written.
+ * @param[in] data_size The size of the data to be written,the maximum length cannot exceed 16384
+ * bytes.
+ * @param[out] error Log error messages.
+ */
+OB_EXPORT void ob_device_write_device_user_data(ob_device *device, const void *data,
+                                                uint32_t data_size, ob_error **error);
+
+/**
+ * @brief Read user data from the dedicated user data area of the device.
+ *
+ * @param[in] device The device object.
+ * @param[out] data The buffer to receive the data.
+ * @param[in] buffer_size The capacity of the buffer in bytes.
+ * @param[out] data_size The number of bytes actually copied (at most buffer_size).
+ * @param[out] error Log error messages.
+ */
+OB_EXPORT void ob_device_read_device_user_data(ob_device *device, void *data, uint32_t buffer_size,
+                                               uint32_t *data_size, ob_error **error);
+
+/**
+ * @brief Set the device user ID, a user-defined name identifying the device.
+ *
+ * The user ID is the user-defined device name shown by network discovery (the 16-byte field
+ * of the GVCP discovery acknowledgement); it is at most 16 characters and is always read back
+ * as written.
+ *
+ * @param[in] device The device object.
+ * @param[in] user_id Null-terminated user ID string, at most 16 characters.
+ * @param[out] error Log error messages.
+ */
+OB_EXPORT void ob_device_write_device_user_id(ob_device *device, const char *user_id,
+                                              ob_error **error);
+
+/**
+ * @brief Get the device user ID of the device.
+ *
+ * Returns the stored user ID, at most the 16 characters of the user-defined name field of the
+ * GVCP discovery acknowledgement (on network models the same value appears as the discovery
+ * user-defined name).
+ *
+ * @param[in] device The device object.
+ * @param[out] user_id The buffer that receives the user ID bytes (at least 16 bytes; no NUL
+ * terminator is appended).
+ * @param[in] buffer_size The capacity of the buffer in bytes.
+ * @param[out] user_id_size The number of bytes actually copied (at most buffer_size).
+ * @param[out] error Log error messages.
+ */
+OB_EXPORT void ob_device_read_device_user_id(ob_device *device, char *user_id, uint32_t buffer_size,
+                                             uint32_t *user_id_size, ob_error **error);
 
 /**
  * @brief Get the number of properties supported by the device.

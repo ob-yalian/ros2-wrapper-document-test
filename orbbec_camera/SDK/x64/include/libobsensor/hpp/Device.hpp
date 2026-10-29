@@ -350,6 +350,8 @@ public:
     /**
      * @brief Set the customer data type of a device property
      *
+     * @deprecated This function is deprecated, please use @ref writeDeviceUserData() instead.
+     *
      * @param[in] data The data to set
      * @param[in] dataSize The size of the data to set,the maximum length cannot exceed 65532 bytes.
      */
@@ -362,6 +364,8 @@ public:
     /**
      * @brief Get the customer data type of a device property
      *
+     * @deprecated This function is deprecated, please use @ref readDeviceUserData() instead.
+     *
      * @param[in] data The property data obtained
      * @param[in] dataSize The size of the data obtained
      */
@@ -369,6 +373,64 @@ public:
         ob_error *error = nullptr;
         ob_device_read_customer_data(impl_, data, dataSize, &error);
         Error::handle(&error);
+    }
+
+    /**
+     * @brief Write user data to the dedicated user data area of the device
+     *
+     * @param[in] data The data to set
+     * @param[in] dataSize The size of the data to set,the maximum length cannot exceed 16384 bytes.
+     */
+    void writeDeviceUserData(const void *data, uint32_t dataSize) {
+      ob_error *error = nullptr;
+      ob_device_write_device_user_data(impl_, data, dataSize, &error);
+      Error::handle(&error);
+    }
+
+    /**
+     * @brief Read user data from the dedicated user data area of the device
+     *
+     * @param[out] data The buffer to receive the data
+     * @param[in] bufferSize The capacity of the buffer in bytes
+     * @param[out] dataSize The number of bytes actually copied (at most bufferSize)
+     */
+    void readDeviceUserData(void *data, uint32_t bufferSize, uint32_t *dataSize) {
+      ob_error *error = nullptr;
+      ob_device_read_device_user_data(impl_, data, bufferSize, dataSize, &error);
+      Error::handle(&error);
+    }
+
+    /**
+     * @brief Set the device user ID, a user-defined name identifying the device
+     *
+     * The user ID is the user-defined device name shown by network discovery (the 16-byte
+     * field of the GVCP discovery acknowledgement); it is at most 16 characters and is always
+     * read back as written.
+     *
+     * @param[in] userId The null-terminated user ID string, at most 16 characters
+     */
+    void writeDeviceUserId(const std::string &userId) {
+      ob_error *error = nullptr;
+      ob_device_write_device_user_id(impl_, userId.c_str(), &error);
+      Error::handle(&error);
+    }
+
+    /**
+     * @brief Get the device user ID of the device
+     *
+     * Returns the stored user ID, at most the 16 characters of the user-defined name field of
+     * the GVCP discovery acknowledgement.
+     *
+     * @return std::string The device user ID
+     */
+    std::string readDeviceUserId() {
+      ob_error *error = nullptr;
+      char userId[17] = {};
+      uint32_t size = 0;
+      ob_device_read_device_user_id(impl_, userId, sizeof(userId), &size, &error);
+      Error::handle(&error);
+      userId[16] = '\0';
+      return std::string(userId);
     }
 
     /**
