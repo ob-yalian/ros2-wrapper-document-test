@@ -398,10 +398,21 @@ void OBCameraNodeDriver::init() {
   device_num_ = static_cast<int>(declare_parameter<int>("device_num", 1));
   usb_port_ = declare_parameter<std::string>("usb_port", "");
   net_device_ip_ = declare_parameter<std::string>("net_device_ip", "");
-  net_device_port_ = static_cast<int>(declare_parameter<int>("net_device_port", 0));
+  const auto net_device_port = declare_parameter<int64_t>("net_device_port", 0);
+  validateNetDeviceParameters(net_device_ip_, net_device_port);
+  net_device_port_ = static_cast<int>(net_device_port);
   enumerate_net_device_ = declare_parameter<bool>("enumerate_net_device", false);
   uvc_backend_ = declare_parameter<std::string>("uvc_backend", "libuvc");
-  const bool use_explicit_net_device = !net_device_ip_.empty() && net_device_port_ != 0;
+  const bool use_explicit_net_device = !enumerate_net_device_ && !net_device_ip_.empty();
+  if (use_explicit_net_device) {
+    RCLCPP_INFO_STREAM(logger_, "Using direct network connection to " << net_device_ip_ << ":"
+                                                                      << net_device_port_);
+  } else if (enumerate_net_device_ && !net_device_ip_.empty()) {
+    RCLCPP_WARN_STREAM(logger_, "Selecting " << net_device_ip_
+                                             << " through network enumeration; set "
+                                                "enumerate_net_device=false for direct IP/port "
+                                                "connection across subnets or VLANs");
+  }
   device_access_mode_str_ = declare_parameter<std::string>("device_access_mode", "Default");
   device_access_mode_ = stringToAccessMode(device_access_mode_str_);
   RCLCPP_INFO_STREAM(logger_, "Device access mode: " << device_access_mode_str_ << " ("
@@ -1456,7 +1467,7 @@ bool OBCameraNodeDriver::applyForceIpConfig() {
 }
 
 void OBCameraNodeDriver::connectNetDevice(const std::string &net_device_ip, int net_device_port) {
-  if (net_device_ip.empty() || net_device_port == 0) {
+  if (net_device_ip.empty() || net_device_port <= 0 || net_device_port > 65535) {
     RCLCPP_ERROR_STREAM(logger_, "Invalid net device ip or port");
     return;
   }
@@ -1475,8 +1486,8 @@ void OBCameraNodeDriver::connectNetDevice(const std::string &net_device_ip, int 
   std::this_thread::sleep_for(std::chrono::milliseconds(connection_delay_));
   try {
     // The device may still be rebooting; let queryDevice retry connection failures.
-    auto device =
-        ctx_->createNetDevice(net_device_ip.c_str(), net_device_port, device_access_mode_);
+    auto device = ctx_->createNetDevice(
+        net_device_ip.c_str(), static_cast<uint16_t>(net_device_port), device_access_mode_);
     if (device == nullptr) {
       RCLCPP_ERROR_STREAM(logger_, "Failed to connect to net device " << net_device_ip);
       return;

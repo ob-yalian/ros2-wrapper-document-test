@@ -22,6 +22,7 @@
 #include <mutex>
 #include <regex>
 #include <sstream>
+#include <stdexcept>
 #include <vector>
 #include <magic_enum/magic_enum.hpp>
 #include "orbbec_camera/utils.h"
@@ -968,6 +969,15 @@ bool isValidJPEG(const std::shared_ptr<ob::ColorFrame> &frame) {
 
   // Check for JPEG end marker after trimming zero padding.
   return jpeg_size >= 4 && data[jpeg_size - 2] == 0xFF && data[jpeg_size - 1] == 0xD9;
+}
+
+void validateNetDeviceParameters(const std::string &address, int64_t port) {
+  if (port < 0 || port > 65535) {
+    throw std::invalid_argument("net_device_port must be 0 (unset) or between 1 and 65535");
+  }
+  if (address.empty() != (port == 0)) {
+    throw std::invalid_argument("net_device_ip and a nonzero net_device_port must be set together");
+  }
 }
 
 std::string metaDataTypeToString(const OBFrameMetadataType &meta_data_type) {

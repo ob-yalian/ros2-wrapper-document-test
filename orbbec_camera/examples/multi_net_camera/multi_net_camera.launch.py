@@ -16,6 +16,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "camera_name": "camera_01",
+            "enumerate_net_device": "false",
             "net_device_ip": "192.168.1.10",
             "net_device_port": "8090",
             "sync_mode": "standalone",
@@ -28,6 +29,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "camera_name": "camera_02",
+            "enumerate_net_device": "false",
             "net_device_ip": "192.168.1.11",
             "net_device_port": "8090",
             "sync_mode": "standalone",
