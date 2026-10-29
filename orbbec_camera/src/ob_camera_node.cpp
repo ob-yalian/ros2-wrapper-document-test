@@ -782,7 +782,6 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     d2c_viewer_ = std::make_unique<D2CViewer>(node_, rgb_qos, depth_qos, use_intra_process_);
   }
   setupImageBuffers();
-  is_camera_node_initialized_ = true;
 
   fps_counter_color_ = std::make_unique<FpsCounter>("Color", logger_, 1);
   fps_counter_left_color_ = std::make_unique<FpsCounter>("Left Color", logger_, 1);
@@ -805,6 +804,7 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   // A constructor that throws must never leave Parameters holding a dangling camera capture.
   try {
     setupDynamicParameters();
+    is_camera_node_initialized_.store(true);
   } catch (...) {
     clearDeviceParameters();
     throw;
@@ -910,6 +910,8 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
       }
     }
     setAndGetNodeParameter(param, param_name, default_value, descriptor);
+    property_parameters_[param_name] = {property_id, initial.get_type()};
+    parameters_->registerParameterReader(param_name, {});
   } else {
     RCLCPP_DEBUG_STREAM(logger_, "Skip unsupported property parameter: " << param_name);
   }
@@ -978,6 +980,7 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
 void OBCameraNode::clearDeviceParameters() noexcept {
   parameters_->clearDynamicParameters();
   dynamic_properties_.clear();
+  property_parameters_.clear();
   for (const auto &name : device_param_names_) {
     try {
       if (node_->has_parameter(name)) {

@@ -16,6 +16,8 @@
 #include "orbbec_camera/dynamic_params.h"
 #include "orbbec_camera/parameter_descriptions.h"
 
+#include <stdexcept>
+
 namespace orbbec_camera {
 namespace {
 struct ParameterRestore;
@@ -100,6 +102,7 @@ Parameters::Parameters(rclcpp::Node *node)
 }
 
 Parameters::~Parameters() noexcept {
+  parameter_services_.clear();
   for (auto const &param : param_functions_) {
     try {
       node_->undeclare_parameter(param.first);
@@ -264,6 +267,7 @@ void Parameters::setDeviceContext(const std::string &device_key) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   dynamic_types_.clear();
   batch_setter_ = {};
+  parameter_readers_.clear();
   device_key_ = device_key;
 }
 
@@ -281,6 +285,32 @@ void Parameters::clearDynamicParameters() {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   dynamic_types_.clear();
   batch_setter_ = {};
+  parameter_readers_.clear();
+}
+
+void Parameters::registerParameterReader(const std::string &name, ParameterReader reader) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  device_readback_names_.insert(name);
+  parameter_readers_[name] = std::move(reader);
+}
+
+rclcpp::Parameter Parameters::getParameter(const std::string &name) const {
+  // Do not hold callback_mutex_ while acquiring rclcpp's parameter mutex: setters
+  // acquire these locks in the opposite order before entering our callback.
+  const auto configured = node_->get_parameter(name);
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  const auto reader = parameter_readers_.find(name);
+  if (reader == parameter_readers_.end() || !reader->second) {
+    if (device_readback_names_.count(name) != 0) {
+      throw std::runtime_error("Camera is initializing or disconnected: " + name);
+    }
+    return configured;
+  }
+  const auto value = reader->second();
+  if (value.get_type() != configured.get_type()) {
+    throw std::runtime_error("Invalid readback type for " + name);
+  }
+  return rclcpp::Parameter(name, value);
 }
 
 bool Parameters::hasRuntimeOverride(const std::string &name) const {

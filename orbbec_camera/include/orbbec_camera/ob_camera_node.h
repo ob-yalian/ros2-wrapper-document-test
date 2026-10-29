@@ -403,6 +403,11 @@ class OBCameraNode {
   void setupDynamicParameters();
   void setupRuntimeControls();
   void setupFilterParameterDescriptions();
+  void setupParameterReaders();
+  void setupFilterParameterReaders();
+  void addParameterReader(const std::string& name, Parameters::ParameterReader reader);
+  rclcpp::ParameterValue readPropertyParameter(const std::string& name, OBPropertyID id,
+                                               rclcpp::ParameterType type) const;
   void setupPointCloudPublishers();
   void addRuntimeControl(const std::vector<std::string>& names, Parameters::BatchSetter setter);
   rcl_interfaces::msg::SetParametersResult setDynamicParameters(
@@ -1177,6 +1182,7 @@ class OBCameraNode {
   std::unordered_set<std::string> initial_ros_params_;
   std::unordered_set<std::string> device_param_names_;
   std::map<std::string, DynamicProperty> dynamic_properties_;
+  std::map<std::string, std::pair<OBPropertyID, rclcpp::ParameterType>> property_parameters_;
   std::map<std::string, std::string> runtime_control_groups_;
   std::map<std::string, Parameters::BatchSetter> runtime_control_setters_;
   bool enable_depth_auto_exposure_ = true;

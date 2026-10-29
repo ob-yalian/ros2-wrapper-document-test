@@ -125,14 +125,35 @@ keeps the filter disabled until it is explicitly enabled.
 MJPEG quality remains initialization-only because Gemini 336 firmware rejects writes while
 streaming. SDK read/write permission alone does not establish streaming mutability.
 
-`param get` returns the requested configuration: the launch value or the last accepted runtime
-setting. Initialization does not replace it with a device reading. For example, launching with
-`color_exposure:=-1` skips the startup exposure write and leaves the ROS parameter at `-1`.
-A successful runtime setting replaces that value; a failed setting leaves it unchanged.
-Parameter dumps therefore retain the launch sentinel until an explicit runtime update.
-The device may further constrain a valid request according to the active profile; for example,
-firmware can cap an AE exposure limit. The stored ROS value remains the accepted request,
-and device readback may differ.
+`param get` reads mapped camera properties from the SDK on every request, including exposure,
+gain, AE/AWB, white balance, orientation, ROI and device controls. Thus `color_exposure:=-1`
+still skips the startup write, but a query returns the SDK exposure property. Firmware clipping
+and changes made through legacy services are visible when reflected in that property. While
+automatic exposure is enabled, some devices report a different exposure or gain in frame
+metadata; use the corresponding metadata topic for the values associated with each frame.
+
+Filter queries read the existing SDK instance or corresponding device property. An absent
+software filter reports disabled; its configuration is unavailable until an instance exists.
+Reading never creates a filter or changes its enable state. Presets, depth precision and
+synchronization settings use SDK readback; stream profiles use the selected SDK profiles.
+Software-only settings use driver state or their stored configuration.
+
+Unreadable properties, disconnected devices and SDK failures return `NOT_SET` (the CLI prints
+`Parameter not set`) and log the reason. They do not fall back to the launch or last requested
+value. Other values in the same query remain available. Interleave bank settings also report
+unavailable because reading a different bank would require writing the device selector.
+
+The driver provides the standard parameter service endpoints with a live `get_parameters`
+handler. List, type, description and write requests continue to use rclcpp's parameter backend.
+In-process `node->get_parameter()` retains the requested configuration for initialization,
+partial updates and reconnect recovery; external clients and compatible getter services use
+the shared live reader. Reads do not write hardware, update reconnect intent or publish parameter
+events. Events still describe explicit parameter writes rather than camera-internal changes.
+Parameter dumps contain readback values and therefore do not preserve launch sentinels. On Humble,
+`NOT_SET` is dumped as YAML `null` but is interpreted as a string when read as a ROS parameter
+override. Remove unavailable values before reusing a dump. Some image transport plugin names
+also produce an empty YAML key in `ros2 param dump`; that key must be corrected before the ROS
+parameter-file parser can read the file.
 
 Successful parameter writes become reconnect overrides for the same camera serial number,
 within the current driver process. Legacy services do not update ROS parameters or these
@@ -140,28 +161,30 @@ overrides. Without a parameter override, reconnect uses the launch configuration
 `-1`. A new process starts from its launch configuration. Devices without a serial number do
 not persist overrides.
 
-The ROS parameter is not a live exposure/gain measurement while automatic control is active.
-Existing getter services continue to read the device, and `param describe` reports SDK default
-and range metadata. Depth/IR and left/right controls may share hardware on some modules;
-changing one can affect the other's actual value without changing its requested configuration.
+`param describe` continues to report SDK default and range metadata. Depth/IR and left/right
+controls may share hardware on some modules; querying either mapped property observes the SDK
+value without replacing either parameter's requested reconnect configuration.
 
 All existing service names, message types and device-setting implementations are retained.
-Services do not enter the dynamic parameter callback and do not mirror their requests into
-ROS parameters. Dynamic controls reuse existing service functions through local C++ calls
-where applicable; they do not send a ROS service request. Parameter-specific validation is
-performed before these calls, without imposing the new rules on service clients.
+Exposure, gain, white balance, AWB, laser enable, PTP and point-cloud decimation getter services
+use the same live reader as `param get`, through a local C++ call. Read failures return the
+existing service's `success=false` and error message. Status and information queries without
+equivalent parameters retain their semantics: in particular, `get_ldp_status` combines LDP
+enable and protection status, whereas `enable_ldp` reports only the device's enable property.
+Legacy setter services retain their existing path and reconnect behavior. Dynamic controls
+continue to reuse their local implementations where applicable.
 
 For example, setting `color_exposure` to `100` through the parameter interface and then
-setting exposure to `200` through a legacy service leaves the ROS parameter at `100`.
-The getter service reads the device value, and reconnect restores the explicit parameter
-configuration `100`. Use the parameter interface consistently for configuration that must
-appear in parameter dumps and be restored on reconnect.
+setting exposure to `200` through a legacy service makes both `param get` and the getter
+service read the device's resulting exposure. Reconnect still restores the explicit parameter
+configuration `100`: querying the camera does not turn a service write or AE adjustment into
+a new reconnect override.
 
 Service request representations remain compatible. The disparity-range service and
 `disparity_range_mode` both accept 64/128/256, matching the existing launch parameter.
 Only the underlying SDK property uses indices 0/1/2.
 ROI services keep their existing float-array order `[left, right, top, bottom]`, clipping
-and readback. ROS parameters are not refreshed by legacy service calls or periodic device reads.
+and readback. Parameter queries read back ROI coordinates without periodic polling.
 Left/right IR exposure controls still map to `ir_*`, and left/right color controls to `color_*`.
 
 ```sh
@@ -170,7 +193,7 @@ ros2 param set /camera/camera color_white_balance 4500
 ros2 param get /camera/camera color_white_balance
 ```
 
-To compare the requested exposure with the current device value:
+To query exposure through both interfaces (automatic exposure can change it between calls):
 
 ```sh
 ros2 param get /camera/camera color_exposure
@@ -208,11 +231,14 @@ callback before destroying the camera.
 launch-sentinel preservation, per-device restore and callback detachment using a fake
 device apply callback. It also covers exceptions from device setters and retained parameters
 being restored without another device write or permitting startup-only runtime updates.
-It does not exercise SDK writes or legacy service implementations.
+Live-read tests cover changing device readings, failures without cached fallback, type checks,
+reader detachment and unchanged reconnect intent. Service tests cover remote reads, mixed
+successful/unavailable results, and the standard list/type/description/write endpoints.
+They do not exercise real SDK writes or legacy service implementations.
 
 Hardware validation should cover Gemini 330, Gemini 336 and Gemini 305 (including Dual Color Streams):
-launch with `color_exposure:=-1` and verify that `param get` and parameter dumps retain `-1`
-while the getter service reports the actual exposure; compare parameter and legacy service
+launch with `color_exposure:=-1` and verify that `param get`, parameter dumps and the getter
+service report device exposure without a startup write; compare parameter and legacy service
 writes/readback with AE disabled; reject out-of-range and runtime `-1` writes;
 disable AWB and set WB atomically; unplug during a write; reconnect after both inherited and
 explicit settings; and verify absent-stream parameters remain filtered. Also check SDK range
@@ -225,7 +251,7 @@ stop/start occurs. Start with SDK-supported values and inspect the relevant gett
 ros2 param set /camera/camera color_mirror true
 ros2 param get /camera/camera color_mirror
 ros2 service call /camera/set_color_mirror std_srvs/srv/SetBool "{data: false}"
-# Still true: legacy services do not synchronize ROS parameters.
+# Reads the device's resulting mirror setting (false when the write takes effect).
 ros2 param get /camera/camera color_mirror
 
 ros2 param set /camera/camera point_cloud_decimation_filter_factor 2
@@ -241,12 +267,13 @@ ROI coordinates can be updated individually, including the first update when all
 are `-1`. As with launch configuration, unspecified left/top coordinates use zero and
 unspecified right/bottom coordinates use the active stream's width/height minus one. Other
 explicitly configured coordinates are retained. Unchanged ROS parameters and their reconnect
-configuration retain `-1`; only the SDK request resolves these values to frame boundaries.
+configuration retain `-1`; SDK requests resolve these values to frame boundaries, and external
+parameter queries return the resulting camera ROI.
 
 ```sh
 ros2 param set /camera/camera color_ae_roi_left 10
 ros2 param set /camera/camera depth_ae_roi_top 20
-# Remains -1 if it has not been explicitly configured.
+# Reads the actual right boundary reported by the camera.
 ros2 param get /camera/camera color_ae_roi_right
 ```
 
@@ -259,7 +286,7 @@ ros2 param set /camera/camera decimation_filter_scale 2
 ros2 param set /camera/camera enable_decimation_filter true
 ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter \
   "{filter_name: DecimationFilter, filter_enable: false, filter_config: [{name: scale, value: '2'}]}"
-# Still true and 2: inspect depth_filters/status for the effective service result.
+# Reads the resulting filter state and scale (false and 2 when the write takes effect).
 ros2 param get /camera/camera enable_decimation_filter
 ros2 param get /camera/camera decimation_filter_scale
 ```

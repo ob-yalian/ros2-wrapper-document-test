@@ -189,6 +189,8 @@ set(EXTRA_TARGETS
 set(SOURCE_FILES
   src/d2c_viewer.cpp
   src/dynamic_params.cpp
+  src/parameter_services.cpp
+  src/camera_parameter_readback.cpp
   src/dynamic_camera_parameters.cpp
   src/runtime_camera_parameters.cpp
   src/parameter_descriptions.cpp

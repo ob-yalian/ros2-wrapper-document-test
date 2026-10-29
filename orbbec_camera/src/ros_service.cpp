@@ -26,6 +26,38 @@ namespace orbbec_camera {
 
 namespace {
 
+template <typename Response>
+void getParameterResponse(const std::shared_ptr<Parameters>& parameters, const std::string& name,
+                          std::shared_ptr<Response>& response) {
+  try {
+    const auto value = parameters->getParameter(name);
+    // GetAutoWhiteBalance retains its legacy integer response for a boolean parameter.
+    if (value.get_type() == rclcpp::ParameterType::PARAMETER_BOOL) {
+      response->data = value.as_bool();
+    } else {
+      response->data = value.as_int();
+    }
+    response->success = true;
+  } catch (const ob::Error& e) {
+    response->success = false;
+    response->message = orbbec_camera::formatObErrorWithStatus(e);
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
+  } catch (...) {
+    response->success = false;
+    response->message = "unknown error";
+  }
+}
+
+std::string sensorParameterName(const stream_index_pair& stream, const std::string& setting) {
+  if (stream.first == OB_STREAM_DEPTH) return "depth_" + setting;
+  if (stream.first == OB_STREAM_IR || stream.first == OB_STREAM_IR_LEFT ||
+      stream.first == OB_STREAM_IR_RIGHT)
+    return "ir_" + setting;
+  return "color_" + setting;
+}
+
 bool isGemini330SeriesForDisparity(uint32_t pid) {
   return pid == GEMINI_335_PID || pid == GEMINI_336_PID || pid == GEMINI_330_PID ||
          pid == GEMINI_335L_PID || pid == GEMINI_336L_PID || pid == GEMINI_330L_PID ||
@@ -589,16 +621,7 @@ void OBCameraNode::getPointCloudDecimationCallback(
     const std::shared_ptr<GetInt32::Request>& request,
     std::shared_ptr<GetInt32::Response>& response) {
   (void)request;
-  try {
-    response->data = point_cloud_decimation_filter_factor_;
-    response->success = true;
-  } catch (const std::exception& e) {
-    response->success = false;
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
+  getParameterResponse(parameters_, "point_cloud_decimation_filter_factor", response);
 }
 
 void OBCameraNode::setPointCloudDecimationCallback(
@@ -1035,37 +1058,7 @@ void OBCameraNode::getGainCallback(const std::shared_ptr<GetInt32::Request>& req
                                    std::shared_ptr<GetInt32::Response>& response,
                                    const stream_index_pair& stream_index) {
   (void)request;
-  auto stream = stream_index.first;
-  try {
-    switch (stream) {
-      case OB_STREAM_IR_LEFT:
-      case OB_STREAM_IR_RIGHT:
-      case OB_STREAM_IR:
-        response->data = device_->getIntProperty(OB_PROP_IR_GAIN_INT);
-        break;
-      case OB_STREAM_DEPTH:
-        response->data = device_->getIntProperty(OB_PROP_DEPTH_GAIN_INT);
-        break;
-      case OB_STREAM_COLOR:
-      case OB_STREAM_COLOR_LEFT:
-      case OB_STREAM_COLOR_RIGHT:
-        response->data = device_->getIntProperty(OB_PROP_COLOR_GAIN_INT);
-        break;
-      default:
-        RCLCPP_ERROR(logger_, " %s NOT a video stream", __FUNCTION__);
-        break;
-    }
-    response->success = true;
-  } catch (ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->success = false;
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
+  getParameterResponse(parameters_, sensorParameterName(stream_index, "gain"), response);
 }
 
 void OBCameraNode::setGainCallback(const std::shared_ptr<SetInt32 ::Request>& request,
@@ -1248,19 +1241,7 @@ void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& 
 void OBCameraNode::getWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                            std::shared_ptr<GetInt32::Response>& response) {
   (void)request;
-  try {
-    response->data = device_->getIntProperty(OB_PROP_COLOR_WHITE_BALANCE_INT);
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->success = false;
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
+  getParameterResponse(parameters_, "color_white_balance", response);
 }
 
 void OBCameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Request>& request,
@@ -1358,18 +1339,7 @@ void OBCameraNode::setColorWbCtrlCallback(const std::shared_ptr<SetInt32::Reques
 void OBCameraNode::getAutoWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                                std::shared_ptr<GetInt32::Response>& response) {
   (void)request;
-  try {
-    response->data = device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL);
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
+  getParameterResponse(parameters_, "enable_color_auto_white_balance", response);
 }
 
 void OBCameraNode::setAutoWhiteBalanceCallback(const std::shared_ptr<SetBool::Request>& request,
@@ -1644,37 +1614,7 @@ void OBCameraNode::getExposureCallback(const std::shared_ptr<GetInt32::Request>&
                                        std::shared_ptr<GetInt32 ::Response>& response,
                                        const stream_index_pair& stream_index) {
   (void)request;
-  auto stream = stream_index.first;
-  try {
-    switch (stream) {
-      case OB_STREAM_IR_LEFT:
-      case OB_STREAM_IR_RIGHT:
-      case OB_STREAM_IR:
-        response->data = device_->getIntProperty(OB_PROP_IR_EXPOSURE_INT);
-        break;
-      case OB_STREAM_DEPTH:
-        response->data = device_->getIntProperty(OB_PROP_DEPTH_EXPOSURE_INT);
-        break;
-      case OB_STREAM_COLOR:
-      case OB_STREAM_COLOR_LEFT:
-      case OB_STREAM_COLOR_RIGHT:
-        response->data = device_->getIntProperty(OB_PROP_COLOR_EXPOSURE_INT);
-        break;
-      default:
-        RCLCPP_ERROR(logger_, " %s NOT a video stream", __FUNCTION__);
-        break;
-    }
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-    response->success = false;
-  } catch (const std::exception& e) {
-    response->message = e.what();
-    response->success = false;
-  } catch (...) {
-    response->message = "unknown error";
-    response->success = false;
-  }
+  getParameterResponse(parameters_, sensorParameterName(stream_index, "exposure"), response);
 }
 
 void OBCameraNode::getDeviceInfoCallback(const std::shared_ptr<GetDeviceInfo::Request>& request,
@@ -2179,27 +2119,7 @@ void OBCameraNode::getLdpStatusCallback(const std::shared_ptr<GetBool::Request>&
 void OBCameraNode::getLaserStatusCallback(const std::shared_ptr<GetBool::Request>& request,
                                           std::shared_ptr<GetBool::Response>& response) {
   (void)request;
-  try {
-    if (isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT)) {
-      response->data = device_->getBoolProperty(OB_PROP_LASER_CONTROL_INT);
-    } else if (isPropertyReadable(device_, OB_PROP_LASER_BOOL)) {
-      response->data = device_->getBoolProperty(OB_PROP_LASER_BOOL);
-    } else {
-      response->success = false;
-      response->message = "Laser property is not supported";
-      return;
-    }
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-    response->success = false;
-  } catch (const std::exception& e) {
-    response->message = e.what();
-    response->success = false;
-  } catch (...) {
-    response->message = "unknown error";
-    response->success = false;
-  }
+  getParameterResponse(parameters_, "enable_laser", response);
 }
 
 void OBCameraNode::setPtpConfigCallback(
@@ -2233,19 +2153,7 @@ void OBCameraNode::setPtpConfigCallback(
 void OBCameraNode::getPtpConfigCallback(const std::shared_ptr<GetBool::Request>& request,
                                         std::shared_ptr<GetBool::Response>& response) {
   (void)request;
-  try {
-    response->data = device_->getBoolProperty(OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL);
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-    response->success = false;
-  } catch (const std::exception& e) {
-    response->message = e.what();
-    response->success = false;
-  } catch (...) {
-    response->message = "unknown error";
-    response->success = false;
-  }
+  getParameterResponse(parameters_, "enable_ptp_config", response);
 }
 
 void OBCameraNode::getLrmMeasureDistanceCallback(const std::shared_ptr<GetInt32::Request>& request,

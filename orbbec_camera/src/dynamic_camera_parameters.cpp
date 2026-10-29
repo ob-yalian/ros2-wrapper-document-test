@@ -82,6 +82,8 @@ void OBCameraNode::setupDynamicParameters() {
   // ROS parameters represent requested configuration, including launch-only sentinels.
   // Do not replace configured values with device readings here.
   setupRuntimeControls();
+  setupParameterReaders();
+  setupFilterParameterReaders();
   std::map<std::string, rclcpp::ParameterType> types;
   for (const auto &entry : dynamic_properties_) {
     types.emplace(entry.first, entry.second.type);

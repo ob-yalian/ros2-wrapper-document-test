@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <chrono>
+#include <rclcpp/parameter_service.hpp>
 #include <stdexcept>
 
 #include "orbbec_camera/dynamic_params.h"
@@ -201,6 +204,176 @@ TEST_F(DynamicParametersTest, FailedDescriptionRefreshRestoresOriginalDeclaratio
   EXPECT_EQ(node->describe_parameter("exposure").description, original.description);
   EXPECT_EQ(writes, 0);
   EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
+TEST_F(DynamicParametersTest, ReadsDeviceEveryTimeWithoutReplacingLaunchIntent) {
+  int actual = 120;
+  int reads = 0;
+  manager->registerParameterReader("exposure", [&] {
+    ++reads;
+    return rclcpp::ParameterValue(actual);
+  });
+  EXPECT_EQ(manager->getParameter("exposure").as_int(), 120);
+  actual = 135;
+  EXPECT_EQ(manager->getParameter("exposure").as_int(), 135);
+  EXPECT_EQ(reads, 2);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(writes, 0);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
+TEST_F(DynamicParametersTest, DeviceReadbackDoesNotReplaceSuccessfulReconnectIntent) {
+  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
+  manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(30); });
+  EXPECT_EQ(manager->getParameter("exposure").as_int(), 30);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
+  manager->clearDynamicParameters();
+  manager->removeParam("exposure");
+  manager->setDeviceContext("camera-A");
+  EXPECT_EQ(
+      manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor).get<int64_t>(), 40);
+  EXPECT_EQ(writes, 1);
+}
+
+TEST_F(DynamicParametersTest, FailedReadDoesNotSubstituteConfiguredValue) {
+  manager->registerParameterReader("exposure", []() -> rclcpp::ParameterValue {
+    throw std::runtime_error("simulated read failure");
+  });
+  EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(manager->getParameter("width").as_int(), 640);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
+TEST_F(DynamicParametersTest, DetachedReaderNeverReturnsStaleValueOrCapturesOldCamera) {
+  int reads = 0;
+  manager->registerParameterReader("exposure", [&] {
+    ++reads;
+    return rclcpp::ParameterValue(200);
+  });
+  manager->clearDynamicParameters();
+  EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
+  manager->setDeviceContext("camera-B");
+  EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
+  manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(300); });
+  EXPECT_EQ(manager->getParameter("exposure").as_int(), 300);
+  EXPECT_EQ(reads, 0);
+}
+
+TEST_F(DynamicParametersTest, RejectsInvalidReadbackTypeAndPendingReader) {
+  manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(true); });
+  EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
+  manager->registerParameterReader("exposure", {});
+  EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
+}
+
+class LiveParameterServicesTest : public DynamicParametersTest {
+ protected:
+  void SetUp() override {
+    rclcpp::NodeOptions options;
+    options.start_parameter_services(false);
+    node = std::make_shared<rclcpp::Node>("live_parameter_test", "/camera", options);
+    manager = std::make_unique<Parameters>(node.get());
+    manager->setDeviceContext("camera-A");
+    descriptor.dynamic_typing = true;
+    manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor);
+    manager->setParam("width", rclcpp::ParameterValue(640));
+    enableUpdates();
+    manager->startParameterServices();
+    client_node = std::make_shared<rclcpp::Node>("live_parameter_client");
+    executor.add_node(node);
+    executor.add_node(client_node);
+  }
+
+  template <typename Service>
+  std::shared_ptr<typename Service::Response> call(const std::string &name,
+                                                   const typename Service::Request &request) {
+    auto client = client_node->create_client<Service>("/camera/live_parameter_test/" + name);
+    if (!client->wait_for_service(std::chrono::seconds(2))) {
+      throw std::runtime_error("Parameter service unavailable: " + name);
+    }
+    auto future = client->async_send_request(std::make_shared<typename Service::Request>(request));
+    if (executor.spin_until_future_complete(future, std::chrono::seconds(2)) !=
+        rclcpp::FutureReturnCode::SUCCESS) {
+      throw std::runtime_error("Parameter service timed out: " + name);
+    }
+    return future.get();
+  }
+
+  std::shared_ptr<rclcpp::Node> client_node;
+  rclcpp::executors::SingleThreadedExecutor executor;
+};
+
+TEST_F(LiveParameterServicesTest, RemoteGetReadsDeviceAndPreservesBatchOrderOnFailure) {
+  int actual = 120;
+  bool readable = true;
+  manager->registerParameterReader("exposure", [&] {
+    if (!readable) throw std::runtime_error("simulated disconnected camera");
+    return rclcpp::ParameterValue(actual);
+  });
+  rcl_interfaces::srv::GetParameters::Request request;
+  request.names = {"width", "exposure", "missing", "exposure"};
+  auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", request);
+  ASSERT_EQ(response->values.size(), 4u);
+  EXPECT_EQ(response->values[0].integer_value, 640);
+  EXPECT_EQ(response->values[1].integer_value, 120);
+  EXPECT_EQ(response->values[2].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  EXPECT_EQ(response->values[3].integer_value, 120);
+  actual = 150;
+  response = call<rcl_interfaces::srv::GetParameters>("get_parameters", request);
+  EXPECT_EQ(response->values[1].integer_value, 150);
+  readable = false;
+  response = call<rcl_interfaces::srv::GetParameters>("get_parameters", request);
+  ASSERT_EQ(response->values.size(), 4u);
+  EXPECT_EQ(response->values[0].integer_value, 640);
+  EXPECT_EQ(response->values[1].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  EXPECT_EQ(response->values[3].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(writes, 0);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
+TEST_F(LiveParameterServicesTest, StandardWriteDescribeListAndTypeServicesRemainAvailable) {
+  rcl_interfaces::srv::SetParameters::Request set;
+  set.parameters = {rclcpp::Parameter("exposure", 40).to_parameter_msg(),
+                    rclcpp::Parameter("width", 1280).to_parameter_msg()};
+  const auto response = call<rcl_interfaces::srv::SetParameters>("set_parameters", set);
+  ASSERT_EQ(response->results.size(), 2u);
+  EXPECT_TRUE(response->results[0].successful);
+  EXPECT_FALSE(response->results[1].successful);
+  EXPECT_EQ(writes, 1);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
+  rcl_interfaces::srv::SetParametersAtomically::Request atomic;
+  atomic.parameters = set.parameters;
+  EXPECT_FALSE(
+      call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", atomic)
+          ->result.successful);
+  EXPECT_EQ(writes, 1);
+  atomic.parameters = {rclcpp::Parameter("exposure", 41).to_parameter_msg()};
+  EXPECT_TRUE(
+      call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", atomic)
+          ->result.successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 41);
+  EXPECT_EQ(writes, 2);
+  rcl_interfaces::srv::DescribeParameters::Request describe;
+  describe.names = {"exposure"};
+  const auto descriptions =
+      call<rcl_interfaces::srv::DescribeParameters>("describe_parameters", describe);
+  ASSERT_EQ(descriptions->descriptors.size(), 1u);
+  EXPECT_EQ(descriptions->descriptors[0].name, "exposure");
+  rcl_interfaces::srv::GetParameterTypes::Request types;
+  types.names = {"exposure", "width"};
+  const auto typed = call<rcl_interfaces::srv::GetParameterTypes>("get_parameter_types", types);
+  ASSERT_EQ(typed->types.size(), 2u);
+  EXPECT_EQ(typed->types[0], rclcpp::ParameterType::PARAMETER_INTEGER);
+  rcl_interfaces::srv::ListParameters::Request list;
+  const auto listed = call<rcl_interfaces::srv::ListParameters>("list_parameters", list);
+  EXPECT_NE(std::find(listed->result.names.begin(), listed->result.names.end(), "exposure"),
+            listed->result.names.end());
+}
+
+TEST_F(DynamicParametersTest, RejectsInstallingDuplicateDefaultParameterServices) {
+  EXPECT_THROW(manager->startParameterServices(), std::logic_error);
 }
 
 }  // namespace

@@ -178,6 +178,28 @@ std::string filterConfigValue(const rclcpp::Parameter &value) {
   return value.get_type() == rclcpp::ParameterType::PARAMETER_STRING ? value.as_string()
                                                                      : value.value_to_string();
 }
+
+rclcpp::ParameterValue readFilterConfig(const std::shared_ptr<ob::Filter> &filter,
+                                        const std::string &key, rclcpp::ParameterType type) {
+  if (!filter)
+    throw std::runtime_error("Filter has not been created; configuration is unavailable.");
+  const double value = filter->getConfigValue(key == "scale" ? "decimate" : key);
+  if (!std::isfinite(value)) throw std::runtime_error("Filter returned a nonfinite value.");
+  if (type == rclcpp::ParameterType::PARAMETER_STRING) {
+    const std::vector<std::string> modes = {"FILL_TOP", "FILL_NEAREST", "FILL_FAREST"};
+    if (key != "hole_filling_mode" || value < 0 || value >= modes.size() ||
+        std::floor(value) != value) {
+      throw std::runtime_error("Filter returned an unknown mode.");
+    }
+    return rclcpp::ParameterValue(modes[static_cast<size_t>(value)]);
+  }
+  if (type == rclcpp::ParameterType::PARAMETER_DOUBLE) return rclcpp::ParameterValue(value);
+  if (std::floor(value) != value || value < std::numeric_limits<int32_t>::min() ||
+      value > std::numeric_limits<int32_t>::max()) {
+    throw std::runtime_error("Filter value cannot be represented as an integer.");
+  }
+  return rclcpp::ParameterValue(static_cast<int>(value));
+}
 }  // namespace
 
 bool isRuntimeCameraParameter(const std::string &name) {
@@ -404,6 +426,83 @@ void OBCameraNode::setupFilterParameterDescriptions() {
                   find_filter(left_ir_filter_list_, "SequenceIdFilter"));
   describe_filter("right_ir_sequence_id_filter_id", "sequenceid",
                   find_filter(right_ir_filter_list_, "SequenceIdFilter"));
+}
+
+void OBCameraNode::setupFilterParameterReaders() {
+  for (const auto &spec : runtimeFilters()) {
+    std::vector<std::pair<std::string, std::string>> bindings = spec.config;
+    bindings.emplace_back(spec.enable_parameter, "");
+    for (const auto &binding : bindings) {
+      if (!node_->has_parameter(binding.first)) continue;
+      const auto type = node_->get_parameter(binding.first).get_type();
+      addParameterReader(binding.first, [this, spec, binding, type] {
+        const bool enable = binding.first == spec.enable_parameter;
+        for (const auto &property : runtimeFilterProperties(spec)) {
+          if (property.first == binding.first &&
+              device_->isPropertySupported(property.second, OB_PERMISSION_READ)) {
+            return readPropertyParameter(binding.first, property.second, type);
+          }
+        }
+        if (spec.name == "HDRMerge" && !enable) {
+          OBHdrConfig config{};
+          uint32_t size = sizeof(config);
+          device_->getStructuredData(OB_STRUCT_DEPTH_HDR_CONFIG,
+                                     reinterpret_cast<uint8_t *>(&config), &size);
+          if (size != sizeof(config)) throw std::runtime_error("Invalid HDR configuration size.");
+          if (binding.second == "exposure_1")
+            return rclcpp::ParameterValue(static_cast<int64_t>(config.exposure_1));
+          if (binding.second == "gain_1")
+            return rclcpp::ParameterValue(static_cast<int64_t>(config.gain_1));
+          if (binding.second == "exposure_2")
+            return rclcpp::ParameterValue(static_cast<int64_t>(config.exposure_2));
+          return rclcpp::ParameterValue(static_cast<int64_t>(config.gain_2));
+        }
+        if (spec.name == "EnhancedDepthFilter") {
+          std::lock_guard<std::mutex> lock(enhanced_depth_filter_mutex_);
+          if (enable) return rclcpp::ParameterValue(enable_enhanced_depth_.load());
+          return readFilterConfig(enhanced_depth_filter_, binding.second, type);
+        }
+        std::lock_guard<std::mutex> lock(depth_filter_mutex_);
+        const auto found = std::find_if(
+            depth_filter_list_.begin(), depth_filter_list_.end(), [&](const auto &filter) {
+              return filter && normalizeDepthFilterName(filter->type()) == spec.name;
+            });
+        const auto filter = found == depth_filter_list_.end() ? nullptr : *found;
+        if (enable) {
+          // Property-backed controls without read access cannot be inferred from absence.
+          if (!filter && !runtimeFilterProperties(spec).empty()) {
+            throw std::runtime_error("Filter property is not readable.");
+          }
+          return rclcpp::ParameterValue(filter && filter->isEnabled());
+        }
+        return readFilterConfig(filter, binding.second, type);
+      });
+    }
+  }
+  for (const auto &stream : {COLOR, COLOR_LEFT, COLOR_RIGHT, INFRA1, INFRA2}) {
+    const bool color = stream == COLOR || stream == COLOR_LEFT || stream == COLOR_RIGHT;
+    const auto prefix = stream_name_.at(stream);
+    const auto enable = "enable_" + prefix + (color ? "_decimation_filter" : "_sequence_id_filter");
+    const auto config = prefix + (color ? "_decimation_filter_scale" : "_sequence_id_filter_id");
+    for (const auto &name : {enable, config}) {
+      addParameterReader(name, [this, stream, color, name, enable] {
+        std::lock_guard<std::mutex> lock(image_filter_mutex_);
+        const auto &filters = stream == COLOR         ? color_filter_list_
+                              : stream == COLOR_LEFT  ? left_color_filter_list_
+                              : stream == COLOR_RIGHT ? right_color_filter_list_
+                              : stream == INFRA1      ? left_ir_filter_list_
+                                                      : right_ir_filter_list_;
+        const auto found = std::find_if(filters.begin(), filters.end(), [&](const auto &filter) {
+          return filter && normalizeDepthFilterName(filter->type()) ==
+                               (color ? "DecimationFilter" : "SequenceIdFilter");
+        });
+        const auto filter = found == filters.end() ? nullptr : *found;
+        if (name == enable) return rclcpp::ParameterValue(filter && filter->isEnabled());
+        return readFilterConfig(filter, color ? "scale" : "sequenceid",
+                                rclcpp::ParameterType::PARAMETER_INTEGER);
+      });
+    }
+  }
 }
 
 void OBCameraNode::setupRuntimeControls() {

@@ -173,7 +173,8 @@ int rosLogSeverityFromString(const std::string_view &log_level) {
 }  // namespace
 
 OBCameraNodeDriver::OBCameraNodeDriver(const rclcpp::NodeOptions &node_options)
-    : Node("orbbec_camera_node", "/", node_options),
+    : Node("orbbec_camera_node", "/",
+           rclcpp::NodeOptions(node_options).start_parameter_services(false)),
       node_options_(node_options),
       config_path_(
           (getPackageSharePath("orbbec_camera") / "config" / "OrbbecSDKConfig_v2.0.xml").string()),
@@ -185,7 +186,7 @@ OBCameraNodeDriver::OBCameraNodeDriver(const rclcpp::NodeOptions &node_options)
 
 OBCameraNodeDriver::OBCameraNodeDriver(const std::string &node_name, const std::string &ns,
                                        const rclcpp::NodeOptions &node_options)
-    : Node(node_name, ns, node_options),
+    : Node(node_name, ns, rclcpp::NodeOptions(node_options).start_parameter_services(false)),
       node_options_(node_options),
       config_path_(
           (getPackageSharePath("orbbec_camera") / "config" / "OrbbecSDKConfig_v2.0.xml").string()),
@@ -329,6 +330,7 @@ void OBCameraNodeDriver::init() {
   if (!bag_filename_.empty()) {
     is_alive_.store(true);
     parameters_ = std::make_shared<Parameters>(this);
+    if (node_options_.start_parameter_services()) parameters_->startParameterServices();
     initializeBagPlayback();
     return;
   }
@@ -405,6 +407,7 @@ void OBCameraNodeDriver::init() {
   // Initialize the reset device completion time to allow immediate device connection on startup
   last_reset_device_completion_time_ = std::chrono::steady_clock::now() - std::chrono::seconds(10);
   parameters_ = std::make_shared<Parameters>(this);
+  if (node_options_.start_parameter_services()) parameters_->startParameterServices();
   serial_number_ =
       declare_parameter<std::string>("serial_number", "", describeCameraParameter("serial_number"));
   bag_record_filename_ = declare_parameter<std::string>(

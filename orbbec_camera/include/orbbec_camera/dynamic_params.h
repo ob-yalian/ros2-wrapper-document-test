@@ -56,8 +56,18 @@ class Parameters {
   bool hasRuntimeOverride(const std::string& name) const;
   void rememberRuntimeConfiguration(const std::vector<rclcpp::Parameter>& values);
 
+  using ParameterReader = std::function<rclcpp::ParameterValue()>;
+  void registerParameterReader(const std::string& name, ParameterReader reader);
+  // Read device state without changing the requested configuration or reconnect overrides.
+  rclcpp::Parameter getParameter(const std::string& name) const;
+  // The driver disables rclcpp's default services before creating these endpoints.
+  void startParameterServices();
+
  private:
   mutable std::recursive_mutex callback_mutex_;
+  std::map<std::string, ParameterReader> parameter_readers_;
+  std::set<std::string> device_readback_names_;
+  std::vector<rclcpp::ServiceBase::SharedPtr> parameter_services_;
   std::map<std::string, rclcpp::ParameterType> dynamic_types_;
   BatchSetter batch_setter_;
   std::string device_key_;
