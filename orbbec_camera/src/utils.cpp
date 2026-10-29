@@ -1040,6 +1040,8 @@ std::string metaDataTypeToString(const OBFrameMetadataType &meta_data_type) {
       return "disparity_search_offset";
     case OBFrameMetadataType::OB_FRAME_METADATA_TYPE_DISPARITY_SEARCH_RANGE:
       return "disparity search range";
+    case OBFrameMetadataType::OB_FRAME_METADATA_TYPE_FSIN_TIMESTAMP:
+      return "fsin_timestamp";
     default:
       return "unknown_field";
   }
