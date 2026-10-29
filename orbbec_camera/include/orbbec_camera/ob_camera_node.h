@@ -37,6 +37,7 @@
 #include <sensor_msgs/point_cloud2_iterator.hpp>
 #include <std_srvs/srv/set_bool.hpp>
 #include <std_srvs/srv/empty.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <diagnostic_updater/diagnostic_updater.hpp>
 #include <std_msgs/msg/int32.hpp>
 
@@ -247,19 +248,7 @@ class OBCameraNode {
   }
   void fillStreamStatus(orbbec_camera_msgs::msg::DeviceStatus& status_msg);
 
-  bool checkUserCalibrationReady() {
-    static bool first_check = true;
-    if (first_check) {
-      first_check = false;
-      std::string data_read;
-      if (readCustomerData(data_read)) {
-        user_calibration_ready_ = true;
-      } else {
-        user_calibration_ready_ = false;
-      }
-    }
-    return user_calibration_ready_;
-  }
+  bool checkUserCalibrationReady();
 
  private:
   struct IMUData {
@@ -572,9 +561,12 @@ class OBCameraNode {
   void exportConfigJsonCallback(const std::shared_ptr<SetString::Request>& request,
                                 std::shared_ptr<SetString::Response>& response);
 
-  bool writeCustomerData(const std::string& data);
+  bool writeDeviceUserData(const std::string& data);
 
-  bool readCustomerData(std::string& out_data);
+  bool readDeviceUserData(std::string& out_data);
+
+  void migrateCustomerDataCallback(const std::shared_ptr<std_srvs::srv::Trigger::Request>& request,
+                                   std::shared_ptr<std_srvs::srv::Trigger::Response>& response);
 
   void writeCustomerDataCallback(const std::shared_ptr<SetString::Request>& request,
                                  std::shared_ptr<SetString::Response>& response);
@@ -713,6 +705,7 @@ class OBCameraNode {
  private:
   std::atomic_bool write_customer_data_success_{false};
   std::atomic_bool user_calibration_ready_{false};
+  bool user_calibration_checked_ = false;  // Protected by device_lock_.
   // New state flags to make clean() and rebootDevice() idempotent and thread-safe
   std::atomic_bool cleaning_{false};
   rclcpp::Node* node_ = nullptr;
@@ -837,6 +830,7 @@ class OBCameraNode {
   rclcpp::Service<SetStreamProfile>::SharedPtr set_stream_profile_srv_;
   rclcpp::Service<GetUserCalibParams>::SharedPtr get_user_calib_params_srv_;
   rclcpp::Service<SetUserCalibParams>::SharedPtr set_user_calib_params_srv_;
+  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr migrate_customer_data_srv_;
   rclcpp::Service<SetString>::SharedPtr set_ae_reference_stream_srv_;
   rclcpp::Service<SetString>::SharedPtr set_ae_strategy_srv_;
 
