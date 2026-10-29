@@ -65,7 +65,7 @@ def load_parameters(context, args):
         yaml_params = load_yaml(config_file_path)
         default_params = merge_params(default_params, yaml_params)
     skip_convert = {'config_file_path', 'usb_port', 'serial_number', 'bag_record_filename', 'bag_filename',
-                    'depth_colorizer_mode'}
+                    'depth_colorizer_mode', 'device_preset_version'}
 
     result = {}
     for key, value in default_params.items():
@@ -269,6 +269,7 @@ def generate_launch_description():
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'), # seconds
         DeclareLaunchArgument('device_preset', default_value='Default'), # Default, High Accuracy, Close Range High Accuracy, Factory Calib, Dual Color Streams, Custom
+        DeclareLaunchArgument('device_preset_version', default_value=''),
         DeclareLaunchArgument('color_preset', default_value='Default'), # color preset: Default, Warm Biased AWB, Cold Biased AWB
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),
         DeclareLaunchArgument('enable_sync_host_time', default_value='false'),
