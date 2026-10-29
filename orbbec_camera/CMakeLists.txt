@@ -441,11 +441,17 @@ install(TARGETS list_devices_node list_depth_work_mode_node list_camera_profile_
 if(BUILD_TESTING)
     find_package(ament_lint_auto REQUIRED)
     find_package(ament_cmake_gtest REQUIRED)
+    find_package(ament_cmake_pytest REQUIRED)
     ament_lint_auto_find_test_dependencies()
 
     ament_add_gtest(camera_info_distortion_test test/camera_info_distortion_test.cpp)
     target_link_directories(camera_info_distortion_test PRIVATE ${ORBBEC_LIBS_DIR})
     target_link_libraries(camera_info_distortion_test ${PROJECT_NAME})
+
+    ament_add_gtest(net_device_parameters_test test/net_device_parameters_test.cpp)
+    target_link_directories(net_device_parameters_test PRIVATE ${ORBBEC_LIBS_DIR})
+    target_link_libraries(net_device_parameters_test ${PROJECT_NAME})
+    ament_add_pytest_test(net_camera_launch_test test/test_net_camera_launch.py)
 endif()
 
 ament_export_include_directories(include)

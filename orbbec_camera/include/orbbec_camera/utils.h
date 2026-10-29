@@ -233,6 +233,8 @@ bool isValidJPEG(const std::shared_ptr<ob::ColorFrame>& frame);
 
 std::string metaDataTypeToString(const OBFrameMetadataType& meta_data_type);
 
+void validateNetDeviceParameters(const std::string& address, int64_t port);
+
 std::ostream& operator<<(std::ostream& os, const OBFrameMetadataType& rhs);
 
 OBHoleFillingMode holeFillingModeFromString(const std::string& hole_filling_mode);
