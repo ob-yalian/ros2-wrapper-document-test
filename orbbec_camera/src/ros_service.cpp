@@ -1592,6 +1592,7 @@ void OBCameraNode::setLdpEnableCallback(
     const std::shared_ptr<rmw_request_id_t>& request_header,
     const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
     std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
   (void)request_header;
   (void)response;
   bool ldp_enable = request->data;
