@@ -727,13 +727,14 @@ void OBCameraNode::publishLrmObstacleDistance() {
   if (lrm_obstacle_distance_pub_->get_subscription_count() == 0) {
     return;
   }
+  std_msgs::msg::Int32 msg;
+  msg.data = 0;
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
   try {
-    std_msgs::msg::Int32 msg;
-    {
-      std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+    if (!device_->isPropertySupported(OB_PROP_LDP_BOOL, OB_PERMISSION_READ) ||
+        device_->getBoolProperty(OB_PROP_LDP_BOOL)) {
       msg.data = device_->getIntProperty(OB_PROP_LDP_MEASURE_DISTANCE_INT);
     }
-    lrm_obstacle_distance_pub_->publish(msg);
   } catch (const ob::Error &e) {
     auto message = orbbec_camera::formatObErrorWithStatus(e);
     RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
@@ -745,6 +746,7 @@ void OBCameraNode::publishLrmObstacleDistance() {
     RCLCPP_WARN_THROTTLE(logger_, *node_->get_clock(), 5000,
                          "Failed to publish LRM obstacle distance: unknown error");
   }
+  lrm_obstacle_distance_pub_->publish(msg);
 }
 
 OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> device,
