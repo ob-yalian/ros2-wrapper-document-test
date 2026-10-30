@@ -20,7 +20,6 @@ class DynamicParametersTest : public ::testing::Test {
     options.parameter_overrides({rclcpp::Parameter("exposure", -1)});
     node = std::make_shared<rclcpp::Node>("dynamic_parameter_test", options);
     manager = std::make_unique<Parameters>(node.get());
-    manager->setDeviceContext("camera-A");
     descriptor.dynamic_typing = true;
     manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor);
     manager->setParam("width", rclcpp::ParameterValue(640));
@@ -44,6 +43,14 @@ class DynamicParametersTest : public ::testing::Test {
   int writes = 0;
   bool accept = true;
 };
+
+TEST_F(DynamicParametersTest, IdentifiesOnlyRegisteredDynamicParameters) {
+  EXPECT_TRUE(manager->isDynamicParameter("exposure"));
+  EXPECT_FALSE(manager->isDynamicParameter("width"));
+  EXPECT_FALSE(manager->isDynamicParameter("missing"));
+  manager->clearDynamicParameters();
+  EXPECT_FALSE(manager->isDynamicParameter("exposure"));
+}
 
 TEST_F(DynamicParametersTest, RejectsWholeMixedRequestBeforeWriting) {
   const auto result = node->set_parameters_atomically(
@@ -99,8 +106,7 @@ TEST_F(DynamicParametersTest, PreservesLaunchSentinelAcrossReconnect) {
   EXPECT_EQ(writes, 0);
   EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
   manager->clearDynamicParameters();
-  manager->removeParam("exposure");
-  manager->setDeviceContext("camera-A");
+  EXPECT_TRUE(node->has_parameter("exposure"));
   const auto initial = manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor);
   EXPECT_EQ(initial.get<int64_t>(), -1);
   enableUpdates();
@@ -108,7 +114,7 @@ TEST_F(DynamicParametersTest, PreservesLaunchSentinelAcrossReconnect) {
   EXPECT_EQ(writes, 0);
 }
 
-TEST_F(DynamicParametersTest, RestoresOnlyExplicitSuccessfulUpdatesForSameDevice) {
+TEST_F(DynamicParametersTest, ReconnectUsesRetainedRosValueWithoutAnotherDeviceWrite) {
   ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
   EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
   EXPECT_TRUE(manager->hasRuntimeOverride("exposure"));
@@ -116,14 +122,25 @@ TEST_F(DynamicParametersTest, RestoresOnlyExplicitSuccessfulUpdatesForSameDevice
   EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("exposure", 41)).successful);
   EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
   manager->clearDynamicParameters();
-  manager->removeParam("exposure");
-  manager->setDeviceContext("camera-A");
+  EXPECT_TRUE(node->has_parameter("exposure"));
   EXPECT_EQ(
       manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor).get<int64_t>(), 40);
+  EXPECT_TRUE(manager->hasRuntimeOverride("exposure"));
+  EXPECT_EQ(writes, 2);
+  accept = true;
+  enableUpdates();
+  EXPECT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 42)).successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 42);
+}
+
+TEST_F(DynamicParametersTest, RemovedParameterDoesNotRecoverAHiddenRuntimeValue) {
+  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("exposure", 40)).successful);
+  manager->clearDynamicParameters();
   manager->removeParam("exposure");
-  manager->setDeviceContext("camera-B");
   EXPECT_EQ(
       manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor).get<int64_t>(), -1);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+  EXPECT_EQ(writes, 1);
 }
 
 TEST_F(DynamicParametersTest, DetachingCallbackRejectsFurtherHardwareUpdates) {
@@ -140,7 +157,7 @@ TEST_F(DynamicParametersTest, RejectsMixingHardwareAndRosClockUpdates) {
   EXPECT_FALSE(node->get_parameter("use_sim_time").as_bool());
 }
 
-TEST_F(DynamicParametersTest, RetainedCommonParametersDoNotLeakBetweenDevices) {
+TEST_F(DynamicParametersTest, RetainsSoftwareConfigurationAcrossReconnect) {
   manager->registerDynamicParameters({{"width", rclcpp::ParameterType::PARAMETER_INTEGER}},
                                      [this](const auto &) {
                                        ++writes;
@@ -150,17 +167,11 @@ TEST_F(DynamicParametersTest, RetainedCommonParametersDoNotLeakBetweenDevices) {
                                      });
   ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("width", 1280)).successful);
   manager->clearDynamicParameters();
-  manager->setDeviceContext("camera-B");
-  EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(640)).get<int64_t>(), 640);
-  EXPECT_EQ(node->get_parameter("width").as_int(), 640);
-  EXPECT_EQ(writes, 1);
-  EXPECT_FALSE(manager->hasRuntimeOverride("width"));
-  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("width", 1920)).successful);
-  manager->clearDynamicParameters();
-  manager->setDeviceContext("camera-A");
   EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(640)).get<int64_t>(), 1280);
   EXPECT_EQ(node->get_parameter("width").as_int(), 1280);
   EXPECT_EQ(writes, 1);
+  EXPECT_TRUE(manager->hasRuntimeOverride("width"));
+  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("width", 1920)).successful);
 }
 
 TEST_F(DynamicParametersTest, DescriptionRefreshPreservesSentinelAndDoesNotWriteDevice) {
@@ -183,7 +194,6 @@ TEST_F(DynamicParametersTest, DescriptionRefreshPreservesRuntimeValueAndReconnec
   EXPECT_EQ(writes, 1);
   EXPECT_TRUE(manager->hasRuntimeOverride("exposure"));
   manager->clearDynamicParameters();
-  manager->removeParam("exposure");
   EXPECT_EQ(
       manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor).get<int64_t>(), 40);
   EXPECT_EQ(writes, 1);
@@ -228,8 +238,6 @@ TEST_F(DynamicParametersTest, DeviceReadbackDoesNotReplaceSuccessfulReconnectInt
   EXPECT_EQ(manager->getParameter("exposure").as_int(), 30);
   EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
   manager->clearDynamicParameters();
-  manager->removeParam("exposure");
-  manager->setDeviceContext("camera-A");
   EXPECT_EQ(
       manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor).get<int64_t>(), 40);
   EXPECT_EQ(writes, 1);
@@ -253,8 +261,7 @@ TEST_F(DynamicParametersTest, DetachedReaderNeverReturnsStaleValueOrCapturesOldC
   });
   manager->clearDynamicParameters();
   EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
-  manager->setDeviceContext("camera-B");
-  EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
   manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(300); });
   EXPECT_EQ(manager->getParameter("exposure").as_int(), 300);
   EXPECT_EQ(reads, 0);
@@ -274,7 +281,6 @@ class LiveParameterServicesTest : public DynamicParametersTest {
     options.start_parameter_services(false);
     node = std::make_shared<rclcpp::Node>("live_parameter_test", "/camera", options);
     manager = std::make_unique<Parameters>(node.get());
-    manager->setDeviceContext("camera-A");
     descriptor.dynamic_typing = true;
     manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor);
     manager->setParam("width", rclcpp::ParameterValue(640));
@@ -333,6 +339,31 @@ TEST_F(LiveParameterServicesTest, RemoteGetReadsDeviceAndPreservesBatchOrderOnFa
   EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
 }
 
+TEST_F(LiveParameterServicesTest, DisconnectRetainsDeclarationButDisablesDeviceReadsAndWrites) {
+  manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(120); });
+  manager->clearDynamicParameters();
+  rcl_interfaces::srv::ListParameters::Request list;
+  const auto listed = call<rcl_interfaces::srv::ListParameters>("list_parameters", list);
+  EXPECT_NE(std::find(listed->result.names.begin(), listed->result.names.end(), "exposure"),
+            listed->result.names.end());
+  rcl_interfaces::srv::GetParameters::Request get;
+  get.names = {"exposure"};
+  const auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
+  ASSERT_EQ(response->values.size(), 1u);
+  EXPECT_EQ(response->values[0].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  rcl_interfaces::srv::SetParametersAtomically::Request set;
+  set.parameters = {rclcpp::Parameter("exposure", 40).to_parameter_msg()};
+  EXPECT_FALSE(call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", set)
+                   ->result.successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(writes, 0);
+  enableUpdates();
+  EXPECT_TRUE(call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", set)
+                  ->result.successful);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
+  EXPECT_EQ(writes, 1);
+}
+
 TEST_F(LiveParameterServicesTest, StandardWriteDescribeListAndTypeServicesRemainAvailable) {
   rcl_interfaces::srv::SetParameters::Request set;
   set.parameters = {rclcpp::Parameter("exposure", 40).to_parameter_msg(),
@@ -370,6 +401,98 @@ TEST_F(LiveParameterServicesTest, StandardWriteDescribeListAndTypeServicesRemain
   const auto listed = call<rcl_interfaces::srv::ListParameters>("list_parameters", list);
   EXPECT_NE(std::find(listed->result.names.begin(), listed->result.names.end(), "exposure"),
             listed->result.names.end());
+}
+
+TEST_F(LiveParameterServicesTest, ReadOnlyPropertyRemainsLiveAndRejectsMixedWrites) {
+  auto read_only = descriptor;
+  read_only.read_only = true;
+  manager->setParam("read_only_gain", rclcpp::ParameterValue(-1), {}, read_only);
+  int actual = 12;
+  manager->registerParameterReader("read_only_gain",
+                                   [&actual] { return rclcpp::ParameterValue(actual); });
+
+  rcl_interfaces::srv::GetParameters::Request get;
+  get.names = {"read_only_gain"};
+  auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
+  ASSERT_EQ(response->values.size(), 1u);
+  EXPECT_EQ(response->values[0].integer_value, 12);
+  actual = 15;
+  response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
+  EXPECT_EQ(response->values[0].integer_value, 15);
+  EXPECT_EQ(manager->getParameter("read_only_gain").as_int(), 15);
+  EXPECT_EQ(node->get_parameter("read_only_gain").as_int(), -1);
+
+  rcl_interfaces::srv::DescribeParameters::Request describe;
+  describe.names = {"read_only_gain"};
+  const auto described =
+      call<rcl_interfaces::srv::DescribeParameters>("describe_parameters", describe);
+  ASSERT_EQ(described->descriptors.size(), 1u);
+  EXPECT_TRUE(described->descriptors[0].read_only);
+  EXPECT_FALSE(manager->isDynamicParameter("read_only_gain"));
+
+  rcl_interfaces::srv::SetParametersAtomically::Request set;
+  set.parameters = {rclcpp::Parameter("exposure", 40).to_parameter_msg(),
+                    rclcpp::Parameter("read_only_gain", 20).to_parameter_msg()};
+  EXPECT_FALSE(call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", set)
+                   ->result.successful);
+  EXPECT_EQ(writes, 0);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
+  EXPECT_EQ(actual, 15);
+  EXPECT_FALSE(manager->hasRuntimeOverride("read_only_gain"));
+
+  manager->clearDynamicParameters();
+  EXPECT_TRUE(node->has_parameter("read_only_gain"));
+  EXPECT_THROW(manager->getParameter("read_only_gain"), std::runtime_error);
+  manager->setParam("read_only_gain", rclcpp::ParameterValue(-1), {}, read_only);
+  actual = 18;
+  manager->registerParameterReader("read_only_gain",
+                                   [&actual] { return rclcpp::ParameterValue(actual); });
+  EXPECT_EQ(manager->getParameter("read_only_gain").as_int(), 18);
+  EXPECT_TRUE(node->describe_parameter("read_only_gain").read_only);
+}
+
+TEST_F(LiveParameterServicesTest, WriteOnlyControlNeverReturnsRequestedConfigurationAsReadback) {
+  manager->setParam("write_only_control", rclcpp::ParameterValue(-1), {}, descriptor);
+  manager->registerParameterReader("write_only_control", []() -> rclcpp::ParameterValue {
+    throw std::runtime_error("Camera property is not readable.");
+  });
+  manager->registerDynamicParameters(
+      {{"write_only_control", rclcpp::ParameterType::PARAMETER_INTEGER}}, [this](const auto &) {
+        ++writes;
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        return result;
+      });
+
+  rcl_interfaces::srv::SetParametersAtomically::Request set;
+  set.parameters = {rclcpp::Parameter("write_only_control", 40).to_parameter_msg()};
+  EXPECT_TRUE(call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", set)
+                  ->result.successful);
+  EXPECT_EQ(writes, 1);
+  EXPECT_EQ(node->get_parameter("write_only_control").as_int(), 40);
+  EXPECT_THROW(manager->getParameter("write_only_control"), std::runtime_error);
+
+  rcl_interfaces::srv::GetParameters::Request get;
+  get.names = {"write_only_control"};
+  const auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
+  ASSERT_EQ(response->values.size(), 1u);
+  EXPECT_EQ(response->values[0].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+}
+
+TEST_F(LiveParameterServicesTest, UnsupportedPropertyCannotBeReadOrWritten) {
+  EXPECT_FALSE(node->has_parameter("unsupported_property"));
+  rcl_interfaces::srv::GetParameters::Request get;
+  get.names = {"unsupported_property"};
+  const auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
+  ASSERT_EQ(response->values.size(), 1u);
+  EXPECT_EQ(response->values[0].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+
+  rcl_interfaces::srv::SetParametersAtomically::Request set;
+  set.parameters = {rclcpp::Parameter("unsupported_property", 40).to_parameter_msg()};
+  EXPECT_FALSE(call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", set)
+                   ->result.successful);
+  EXPECT_FALSE(node->has_parameter("unsupported_property"));
+  EXPECT_EQ(writes, 0);
 }
 
 TEST_F(DynamicParametersTest, RejectsInstallingDuplicateDefaultParameterServices) {

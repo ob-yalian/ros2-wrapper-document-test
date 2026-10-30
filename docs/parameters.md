@@ -39,7 +39,7 @@ unrecognized strings log an error and leave the setting unchanged. The floating-
 unit path continues to use the device's supported range.
 
 On Humble, updating filter descriptions during initialization requires re-declaring those
-device parameters. This preserves their values, callbacks and reconnect overrides without
+device parameters. This preserves their values, callbacks and explicit-setting markers without
 calling a device setter; parameter-event subscribers may observe the re-declarations.
 
 Device-dependent parameters are omitted only when the device explicitly lacks the required
@@ -67,7 +67,9 @@ imply runtime mutability.
   reliable capability query remain declared. Camera connection type alone does not establish
   whether the host trigger driver is available.
 
-Device-dependent declarations are cleared on disconnect and evaluated again on reconnect.
+Device-dependent declarations and configured ROS values remain available during a disconnect.
+Device callbacks are detached until the selected camera reconnects. Initialization reuses the
+retained values and rebinds callbacks; it does not restore values from a separate device cache.
 
 ## Legacy launch arguments
 
@@ -117,7 +119,7 @@ parameter counterpart, and commands such as software trigger, reset and save, ar
 
 Gemini 330 SDK color orientation does not process MJPG frames. Dynamic mirror/flip/rotation
 requests that enable a transform require an uncompressed color profile on these devices;
-legacy services retain their existing behavior. Rotation parameters accept 0/90/180/270.
+mapped orientation services follow the same restriction. Rotation parameters accept 0/90/180/270.
 Changing color decimation dimensions while software alignment is active is rejected: the
 SDK Align filter retains its startup stream profiles and can crash if color dimensions change.
 Configure this combination at launch. With decimation disabled, updating only its scale
@@ -155,11 +157,14 @@ override. Remove unavailable values before reusing a dump. Some image transport 
 also produce an empty YAML key in `ros2 param dump`; that key must be corrected before the ROS
 parameter-file parser can read the file.
 
-Successful parameter writes become reconnect overrides for the same camera serial number,
-within the current driver process. Legacy services do not update ROS parameters or these
-overrides. Without a parameter override, reconnect uses the launch configuration, including
-`-1`. A new process starts from its launch configuration. Devices without a serial number do
-not persist overrides.
+Successful parameter writes, including mapped legacy setter requests, update the configuration
+stored in the ROS node. The selected camera reconnects using those retained values, including
+startup `-1` sentinels for properties that were never explicitly set. Only the names of explicitly
+updated parameters are tracked separately to preserve their priority over JSON/preset defaults;
+no second copy of the runtime parameter values is kept. Filter setter services and services without
+a dynamic parameter retain their existing path and do not update this configuration. A new process
+starts from its launch configuration. Switching to a different camera model should use a new
+driver process; this change does not alter the driver's device selection rules.
 
 `param describe` continues to report SDK default and range metadata. Depth/IR and left/right
 controls may share hardware on some modules; querying either mapped property observes the SDK
@@ -171,14 +176,24 @@ use the same live reader as `param get`, through a local C++ call. Read failures
 existing service's `success=false` and error message. Status and information queries without
 equivalent parameters retain their semantics: in particular, `get_ldp_status` combines LDP
 enable and protection status, whereas `enable_ldp` reports only the device's enable property.
-Legacy setter services retain their existing path and reconnect behavior. Dynamic controls
-continue to reuse their local implementations where applicable.
+Mapped legacy setter services submit dynamic parameters locally and follow the same validation
+and reconnect behavior. Filter setter services and services without an equivalent dynamic
+parameter retain their existing implementation. Dynamic controls reuse existing local
+implementations where applicable.
+
+Mapped setters include exposure, gain, AE, white balance, AWB, orientation, AE ROI, laser/LDP,
+PTP, IR long exposure, AE reference/strategy, disparity range/offset, sync I/O voltage and
+point-cloud decimation. They return the parameter result, including errors for unavailable
+or non-writable parameters, without falling back to a direct device write. Existing service
+names and message types are unchanged, but stricter dynamic validation can reject requests
+that a legacy setter previously accepted. ROI requests require four finite coordinates in
+the legacy int16 range; fractional coordinates are truncated and clipped to image boundaries
+before all four parameters are submitted together. Inverted rectangles are rejected.
 
 For example, setting `color_exposure` to `100` through the parameter interface and then
 setting exposure to `200` through a legacy service makes both `param get` and the getter
-service read the device's resulting exposure. Reconnect still restores the explicit parameter
-configuration `100`: querying the camera does not turn a service write or AE adjustment into
-a new reconnect override.
+service read the device's resulting exposure. Reconnect restores the last successful service
+request `200`; camera-internal AE adjustments do not change the reconnect configuration.
 
 Service request representations remain compatible. The disparity-range service and
 `disparity_range_mode` both accept 64/128/256, matching the existing launch parameter.
@@ -228,11 +243,11 @@ callback before destroying the camera.
 ## Verification
 
 `dynamic_params_test` covers batch prevalidation, fixed runtime types, SDK-error propagation,
-launch-sentinel preservation, per-device restore and callback detachment using a fake
+launch-sentinel preservation, retained ROS configuration and callback detachment using a fake
 device apply callback. It also covers exceptions from device setters and retained parameters
 being restored without another device write or permitting startup-only runtime updates.
 Live-read tests cover changing device readings, failures without cached fallback, type checks,
-reader detachment and unchanged reconnect intent. Service tests cover remote reads, mixed
+reader detachment and unchanged ROS configuration. Service tests cover remote reads, mixed
 successful/unavailable results, and the standard list/type/description/write endpoints.
 They do not exercise real SDK writes or legacy service implementations.
 

@@ -421,8 +421,6 @@ class OBCameraNode {
   rclcpp::ParameterValue readDynamicProperty(const DynamicProperty& property) const;
   void writeDynamicProperty(const DynamicProperty& property, const rclcpp::ParameterValue& value);
 
-  void clearDeviceParameters() noexcept;
-
   void setupTopics();
 
   void setupImagePublisher(const stream_index_pair& stream_index);
@@ -1232,6 +1230,7 @@ class OBCameraNode {
   // An absent entry means the recommendation query failed; an empty set is a known empty list.
   std::map<stream_index_pair, std::set<std::string>> recommended_filter_names_;
   std::map<std::string, bool> filter_parameter_support_;
+  std::map<std::string, OBPropertyID> filter_property_ids_;
 
   // interleave AE
   std::string interleave_ae_mode_;  // hdr or laser

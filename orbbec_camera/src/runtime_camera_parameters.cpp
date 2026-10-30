@@ -258,7 +258,7 @@ void OBCameraNode::addRuntimeControl(const std::vector<std::string> &names,
     return;
   }
   for (const auto &name : names) {
-    if (node_->has_parameter(name)) {
+    if (node_->has_parameter(name) && !node_->describe_parameter(name).read_only) {
       runtime_control_groups_.emplace(name, names.front());
     }
   }
@@ -272,6 +272,7 @@ bool OBCameraNode::isFilterParameterSupported(const std::string &name) const {
 
 void OBCameraNode::setupFilterParameterSupport() {
   filter_parameter_support_.clear();
+  filter_property_ids_.clear();
   const bool has_depth = sensors_.count(DEPTH) != 0;
   const bool supports_hdr_config =
       has_depth && isPropertyParameterSupported("HDR configuration", OB_STRUCT_DEPTH_HDR_CONFIG,
@@ -294,14 +295,12 @@ void OBCameraNode::setupFilterParameterSupport() {
   for (const auto &spec : runtimeFilters()) {
     const auto hardware = runtimeFilterProperties(spec);
     if (!hardware.empty()) {
-      // OBV exposes the group through its switch property and checks each child property.
-      // ROS settings require write permission; runtime read-modify-write checks remain separate.
-      const bool supported =
-          has_depth && isPropertyParameterSupported(spec.enable_parameter, hardware.front().second);
       for (const auto &binding : hardware) {
+        filter_property_ids_[binding.first] = binding.second;
         filter_parameter_support_[binding.first] =
-            supported && (binding.first == spec.enable_parameter ||
-                          isPropertyParameterSupported(binding.first, binding.second));
+            has_depth &&
+            (isPropertyParameterSupported(binding.first, binding.second) ||
+             isPropertyParameterSupported(binding.first, binding.second, OB_PERMISSION_READ));
       }
       continue;
     }
@@ -438,8 +437,7 @@ void OBCameraNode::setupFilterParameterReaders() {
       addParameterReader(binding.first, [this, spec, binding, type] {
         const bool enable = binding.first == spec.enable_parameter;
         for (const auto &property : runtimeFilterProperties(spec)) {
-          if (property.first == binding.first &&
-              device_->isPropertySupported(property.second, OB_PERMISSION_READ)) {
+          if (property.first == binding.first) {
             return readPropertyParameter(binding.first, property.second, type);
           }
         }
@@ -510,7 +508,7 @@ void OBCameraNode::setupRuntimeControls() {
     static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(*node_);
     dynamic_tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(*node_);
   }
-  // Reuse legacy implementations locally; service requests do not enter the parameter path.
+  // Reuse local device operations; mapped services enter through the parameter API.
   const auto add_int = [this](const std::string &name, auto apply) {
     addRuntimeControl({name}, [apply](const auto &values) {
       auto request = std::make_shared<SetInt32::Request>();
@@ -862,15 +860,16 @@ void OBCameraNode::setupRuntimeControls() {
           }
           setAeRoiCallback(request, response, stream);
           if (response->success) {
-            parameters_->rememberRuntimeConfiguration(configuration);
+            parameters_->markRuntimeParameters(configuration);
           }
           return runtimeResult(response->success, response->message);
         });
   }
 
   for (const auto &spec : runtimeFilters()) {
-    if (!isFilterParameterSupported(spec.enable_parameter) ||
-        !node_->has_parameter(spec.enable_parameter))
+    const auto hardware = runtimeFilterProperties(spec);
+    if (hardware.empty() && (!isFilterParameterSupported(spec.enable_parameter) ||
+                             !node_->has_parameter(spec.enable_parameter)))
       continue;
     bool supported = false;
     {
@@ -880,7 +879,6 @@ void OBCameraNode::setupRuntimeControls() {
             return filter && normalizeDepthFilterName(filter->type()) == spec.name;
           });
     }
-    const auto hardware = runtimeFilterProperties(spec);
     std::vector<std::string> names;
     if (!hardware.empty()) {
       for (const auto &binding : hardware) {
@@ -913,7 +911,8 @@ void OBCameraNode::setupRuntimeControls() {
       std::vector<rclcpp::Parameter> configuration;
       request->filter_name = spec.name;
       // Preserve the effective enable state when changing only filter configuration.
-      request->filter_enable = node_->get_parameter(spec.enable_parameter).as_bool();
+      request->filter_enable = node_->has_parameter(spec.enable_parameter) &&
+                               node_->get_parameter(spec.enable_parameter).as_bool();
       {
         std::lock_guard<std::mutex> lock(depth_filter_mutex_);
         for (const auto &filter : depth_filter_list_) {
@@ -961,7 +960,7 @@ void OBCameraNode::setupRuntimeControls() {
       }
       setFilterCallback(request, response);
       if (response->success && !configuration.empty()) {
-        parameters_->rememberRuntimeConfiguration(configuration);
+        parameters_->markRuntimeParameters(configuration);
       }
       return runtimeResult(response->success, response->message);
     });

@@ -17,6 +17,8 @@
 #include "orbbec_camera/ob_camera_node.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
+#include <limits>
 #include <rclcpp/rclcpp.hpp>
 #include <nlohmann/json.hpp>
 #include <thread>
@@ -47,6 +49,28 @@ void getParameterResponse(const std::shared_ptr<Parameters>& parameters, const s
   } catch (...) {
     response->success = false;
     response->message = "unknown error";
+  }
+}
+
+template <typename Response>
+void setParameterResponse(rclcpp::Node* node, const std::shared_ptr<Parameters>& parameters,
+                          const std::vector<rclcpp::Parameter>& values,
+                          std::shared_ptr<Response>& response) {
+  try {
+    for (const auto& value : values) {
+      if (!node->has_parameter(value.get_name()) ||
+          !parameters->isDynamicParameter(value.get_name())) {
+        response->success = false;
+        response->message = "Parameter " + value.get_name() + " is unavailable.";
+        return;
+      }
+    }
+    const auto result = node->set_parameters_atomically(values);
+    response->success = result.successful;
+    response->message = result.reason;
+  } catch (const std::exception& e) {
+    response->success = false;
+    response->message = e.what();
   }
 }
 
@@ -178,7 +202,10 @@ void OBCameraNode::setupCameraCtrlServices() {
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
                                             std::shared_ptr<SetInt32::Response> response) {
-          setExposureCallback(request, response, stream_index);
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter(sensorParameterName(stream_index, "exposure"), request->data)},
+              response);
         });
     service_name = "get_" + stream_name + "_gain";
     get_gain_srv_[stream_index] = node_->create_service<GetInt32>(
@@ -193,14 +220,21 @@ void OBCameraNode::setupCameraCtrlServices() {
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
                                             std::shared_ptr<SetInt32::Response> response) {
-          setGainCallback(request, response, stream_index);
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter(sensorParameterName(stream_index, "gain"), request->data)},
+              response);
         });
     service_name = "set_" + stream_name + "_auto_exposure";
     set_auto_exposure_srv_[stream_index] = node_->create_service<SetBool>(
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
                                             std::shared_ptr<SetBool::Response> response) {
-          setAutoExposureCallback(request, response, stream_index);
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter("enable_" + sensorParameterName(stream_index, "auto_exposure"),
+                                 request->data)},
+              response);
         });
 
     service_name = "set_" + stream_name + "_ae_roi";
@@ -208,7 +242,32 @@ void OBCameraNode::setupCameraCtrlServices() {
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetArrays::Request> request,
                                             std::shared_ptr<SetArrays::Response> response) {
-          setAeRoiCallback(request, response, stream_index);
+          if (request->data_param.size() != 4) {
+            response->success = false;
+            response->message = "ROI requires four coordinates.";
+            return;
+          }
+          const bool color = stream_index.first == OB_STREAM_COLOR ||
+                             stream_index.first == OB_STREAM_COLOR_LEFT ||
+                             stream_index.first == OB_STREAM_COLOR_RIGHT;
+          const auto stream = color ? COLOR : DEPTH;
+          const std::string prefix = color ? "color_ae_roi_" : "depth_ae_roi_";
+          const std::vector<std::string> names = {"left", "right", "top", "bottom"};
+          const std::vector<int> bounds = {width_[stream], width_[stream], height_[stream],
+                                           height_[stream]};
+          std::vector<rclcpp::Parameter> values;
+          for (size_t i = 0; i < names.size(); ++i) {
+            const auto value = request->data_param[i];
+            if (!std::isfinite(value) || value < std::numeric_limits<int16_t>::min() ||
+                value > std::numeric_limits<int16_t>::max() || bounds[i] <= 0) {
+              response->success = false;
+              response->message = "ROI coordinate or stream dimensions are invalid.";
+              return;
+            }
+            const int coordinate = std::clamp(static_cast<int>(value), 0, bounds[i] - 1);
+            values.emplace_back(prefix + names[i], coordinate);
+          }
+          setParameterResponse(node_, parameters_, values, response);
         });
 
     service_name = "toggle_" + stream_name;
@@ -224,21 +283,30 @@ void OBCameraNode::setupCameraCtrlServices() {
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
                                             std::shared_ptr<SetBool::Response> response) {
-          setMirrorCallback(request, response, stream_index);
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter(stream_name_.at(stream_index) + "_mirror", request->data)},
+              response);
         });
     service_name = "set_" + stream_name + "_flip";
     set_flip_srv_[stream_index] = node_->create_service<SetBool>(
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
                                             std::shared_ptr<SetBool::Response> response) {
-          setFlipCallback(request, response, stream_index);
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter(stream_name_.at(stream_index) + "_flip", request->data)},
+              response);
         });
     service_name = "set_" + stream_name + "_rotation";
     set_rotation_srv_[stream_index] = node_->create_service<SetInt32>(
         service_name,
         [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
                                             std::shared_ptr<SetInt32::Response> response) {
-          setRotationCallback(request, response, stream_index);
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter(stream_name_.at(stream_index) + "_rotation", request->data)},
+              response);
         });
   }
   if (isPropertyWritable(device_, OB_PROP_FAN_WORK_MODE_INT)) {
@@ -262,7 +330,9 @@ void OBCameraNode::setupCameraCtrlServices() {
         "set_laser_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                    const std::shared_ptr<SetBool::Request> request,
                                    std::shared_ptr<SetBool::Response> response) {
-          setLaserEnableCallback(request_header, request, response);
+          (void)request_header;
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("enable_laser", request->data)}, response);
         });
   }
   if (isPropertyWritable(device_, OB_PROP_LDP_BOOL) &&
@@ -274,7 +344,9 @@ void OBCameraNode::setupCameraCtrlServices() {
         "set_ldp_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                  const std::shared_ptr<SetBool::Request> request,
                                  std::shared_ptr<SetBool::Response> response) {
-          setLdpEnableCallback(request_header, request, response);
+          (void)request_header;
+          setParameterResponse(node_, parameters_, {rclcpp::Parameter("enable_ldp", request->data)},
+                               response);
         });
   }
   if (isPropertyReadable(device_, OB_PROP_LDP_BOOL) &&
@@ -303,7 +375,9 @@ void OBCameraNode::setupCameraCtrlServices() {
         "set_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                  const std::shared_ptr<SetBool::Request> request,
                                  std::shared_ptr<SetBool::Response> response) {
-          setPtpConfigCallback(request_header, request, response);
+          (void)request_header;
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("enable_ptp_config", request->data)}, response);
         });
   }
   if (isPropertyReadable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL)) {
@@ -325,7 +399,8 @@ void OBCameraNode::setupCameraCtrlServices() {
   set_white_balance_srv_ = node_->create_service<SetInt32>(
       "set_white_balance", [this](const std::shared_ptr<SetInt32::Request> request,
                                   std::shared_ptr<SetInt32::Response> response) {
-        setWhiteBalanceCallback(request, response);
+        setParameterResponse(node_, parameters_,
+                             {rclcpp::Parameter("color_white_balance", request->data)}, response);
       });
   if (isPropertyReadable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
     get_color_wb_ctrl_srv_ = node_->create_service<GetInt32>(
@@ -349,7 +424,9 @@ void OBCameraNode::setupCameraCtrlServices() {
   set_auto_white_balance_srv_ = node_->create_service<SetBool>(
       "set_auto_white_balance", [this](const std::shared_ptr<SetBool::Request> request,
                                        std::shared_ptr<SetBool::Response> response) {
-        setAutoWhiteBalanceCallback(request, response);
+        setParameterResponse(node_, parameters_,
+                             {rclcpp::Parameter("enable_color_auto_white_balance", request->data)},
+                             response);
       });
   if (isPropertyReadable(device_, OB_PROP_COLOR_AE_AWB_STAT_INT)) {
     get_ae_awb_status_srv_ = node_->create_service<GetInt32>(
@@ -434,7 +511,9 @@ void OBCameraNode::setupCameraCtrlServices() {
     set_ir_long_exposure_srv_ = node_->create_service<SetBool>(
         "set_ir_long_exposure", [this](const std::shared_ptr<SetBool::Request> request,
                                        std::shared_ptr<SetBool::Response> response) {
-          setIRLongExposureCallback(request, response);
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("enable_ir_long_exposure", request->data)},
+                               response);
         });
   }
   if (isPropertyReadable(device_, OB_PROP_LDP_MEASURE_DISTANCE_INT)) {
@@ -494,12 +573,14 @@ void OBCameraNode::setupCameraCtrlServices() {
   set_ae_reference_stream_srv_ = node_->create_service<SetString>(
       "set_ae_reference_stream", [this](const std::shared_ptr<SetString::Request> request,
                                         std::shared_ptr<SetString::Response> response) {
-        setAEReferenceStreamCallback(request, response);
+        setParameterResponse(node_, parameters_,
+                             {rclcpp::Parameter("ae_reference_stream", request->data)}, response);
       });
   set_ae_strategy_srv_ = node_->create_service<SetString>(
       "set_ae_strategy", [this](const std::shared_ptr<SetString::Request> request,
                                 std::shared_ptr<SetString::Response> response) {
-        setAEStrategyCallback(request, response);
+        setParameterResponse(node_, parameters_, {rclcpp::Parameter("ae_strategy", request->data)},
+                             response);
       });
   set_streams_enable_srv_ = node_->create_service<SetBool>(
       "set_streams_enable", [this](const std::shared_ptr<SetBool::Request> request,
@@ -524,7 +605,9 @@ void OBCameraNode::setupCameraCtrlServices() {
   set_point_cloud_decimation_srv_ = node_->create_service<SetInt32>(
       "set_point_cloud_decimation", [this](const std::shared_ptr<SetInt32::Request> request,
                                            std::shared_ptr<SetInt32::Response> response) {
-        setPointCloudDecimationCallback(request, response);
+        setParameterResponse(
+            node_, parameters_,
+            {rclcpp::Parameter("point_cloud_decimation_filter_factor", request->data)}, response);
       });
   get_point_cloud_decimation_srv_ = node_->create_service<GetInt32>(
       "get_point_cloud_decimation", [this](const std::shared_ptr<GetInt32::Request> request,
@@ -535,21 +618,27 @@ void OBCameraNode::setupCameraCtrlServices() {
     set_disparity_range_mode_srv_ = node_->create_service<SetInt32>(
         "set_disparity_range_mode", [this](const std::shared_ptr<SetInt32::Request> request,
                                            std::shared_ptr<SetInt32::Response> response) {
-          setDisparityRangeModeCallback(request, response);
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("disparity_range_mode", request->data)},
+                               response);
         });
   }
   if (isPropertyWritable(device_, OB_PROP_DISP_SEARCH_OFFSET_INT)) {
     set_disparity_search_offset_srv_ = node_->create_service<SetInt32>(
         "set_disparity_search_offset", [this](const std::shared_ptr<SetInt32::Request> request,
                                               std::shared_ptr<SetInt32::Response> response) {
-          setDisparitySearchOffsetCallback(request, response);
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("disparity_search_offset", request->data)},
+                               response);
         });
   }
   if (isPropertyWritable(device_, OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT)) {
     set_sync_io_voltage_level_srv_ = node_->create_service<SetInt32>(
         "set_sync_io_voltage_level", [this](const std::shared_ptr<SetInt32::Request> request,
                                             std::shared_ptr<SetInt32::Response> response) {
-          setSyncIoVoltageLevelCallback(request, response);
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("sync_io_voltage_level", request->data)},
+                               response);
         });
   }
 }

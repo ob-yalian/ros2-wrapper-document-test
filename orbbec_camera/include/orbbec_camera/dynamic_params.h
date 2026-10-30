@@ -48,17 +48,17 @@ class Parameters {
 
   using BatchSetter = std::function<rcl_interfaces::msg::SetParametersResult(
       const std::vector<rclcpp::Parameter>&)>;
-  void setDeviceContext(const std::string& device_key);
   void registerDynamicParameters(const std::map<std::string, rclcpp::ParameterType>& types,
                                  BatchSetter setter);
   // Drains any in-flight callback before releasing its camera captures.
   void clearDynamicParameters();
   bool hasRuntimeOverride(const std::string& name) const;
-  void rememberRuntimeConfiguration(const std::vector<rclcpp::Parameter>& values);
+  bool isDynamicParameter(const std::string& name) const;
+  void markRuntimeParameters(const std::vector<rclcpp::Parameter>& values);
 
   using ParameterReader = std::function<rclcpp::ParameterValue()>;
   void registerParameterReader(const std::string& name, ParameterReader reader);
-  // Read device state without changing the requested configuration or reconnect overrides.
+  // Read device state without changing the requested ROS configuration.
   rclcpp::Parameter getParameter(const std::string& name) const;
   // The driver disables rclcpp's default services before creating these endpoints.
   void startParameterServices();
@@ -70,10 +70,8 @@ class Parameters {
   std::vector<rclcpp::ServiceBase::SharedPtr> parameter_services_;
   std::map<std::string, rclcpp::ParameterType> dynamic_types_;
   BatchSetter batch_setter_;
-  std::string device_key_;
-  std::map<std::string, std::map<std::string, rclcpp::ParameterValue>> runtime_overrides_;
-  std::map<std::string, rclcpp::ParameterValue> initial_values_;
-  std::set<std::string> runtime_parameter_names_;
+  // Names only: explicit runtime writes take precedence over JSON/preset defaults.
+  std::set<std::string> runtime_updated_parameters_;
   rclcpp::Node* node_;
   rclcpp::Logger logger_;
   std::map<std::string, std::vector<std::function<void(const rclcpp::Parameter&)> > >

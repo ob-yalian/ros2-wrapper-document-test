@@ -806,7 +806,7 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
     setupDynamicParameters();
     is_camera_node_initialized_.store(true);
   } catch (...) {
-    clearDeviceParameters();
+    parameters_->clearDynamicParameters();
     throw;
   }
 }
@@ -863,12 +863,11 @@ void OBCameraNode::setAndGetDeviceParameter(T &param, const std::string &param_n
     RCLCPP_DEBUG_STREAM(logger_, "Skip unsupported device parameter: " << param_name);
     return;
   }
-  // Parameters is shared by the driver across reconnections. Track declarations so a new
-  // camera does not inherit parameters for streams/properties it does not support.
+  // Track device declarations for readback binding; retain them across disconnects.
   device_param_names_.insert(param_name);
   rcl_interfaces::msg::ParameterDescriptor descriptor;
-  // Humble only permits undeclaring dynamically typed parameters. Runtime updates are
-  // still rejected by Parameters for these initialization-only settings.
+  // Humble requires dynamic typing to refresh descriptions by re-declaring parameters.
+  // Initialization-only runtime updates are still rejected by Parameters.
   descriptor.dynamic_typing = true;
   setAndGetNodeParameter(param, param_name, default_value, descriptor);
 }
@@ -876,6 +875,11 @@ void OBCameraNode::setAndGetDeviceParameter(T &param, const std::string &param_n
 template <class T>
 void OBCameraNode::setAndGetFilterParameter(T &param, const std::string &param_name,
                                             const T &default_value) {
+  const auto property = filter_property_ids_.find(param_name);
+  if (isFilterParameterSupported(param_name) && property != filter_property_ids_.end()) {
+    setAndGetPropertyParameter(param, param_name, default_value, property->second);
+    return;
+  }
   setAndGetDeviceParameter(param, param_name, default_value,
                            isFilterParameterSupported(param_name));
 }
@@ -884,10 +888,12 @@ template <class T>
 void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param_name,
                                               const T &default_value, OBPropertyID property_id) {
   param = default_value;
-  if (isPropertyParameterSupported(param_name, property_id)) {
+  const bool writable = isPropertyParameterSupported(param_name, property_id);
+  if (writable || isPropertyParameterSupported(param_name, property_id, OB_PERMISSION_READ)) {
     device_param_names_.insert(param_name);
     auto descriptor = describeCameraParameter(param_name);
     descriptor.dynamic_typing = true;
+    descriptor.read_only = !writable;
     const auto initial = rclcpp::ParameterValue(default_value);
     appendPropertyDescription(descriptor, property_id, initial.get_type());
     if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
@@ -895,7 +901,7 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
       descriptor.description += " -1 skips setting at startup.";
     }
     if constexpr (std::is_same_v<T, bool> || std::is_same_v<T, int>) {
-      if (isDynamicProperty(property_id)) {
+      if (writable && isDynamicProperty(property_id)) {
         descriptor.additional_constraints =
             "Change while streaming within the camera's supported range.";
         if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
@@ -977,27 +983,7 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
   }
 }
 
-void OBCameraNode::clearDeviceParameters() noexcept {
-  parameters_->clearDynamicParameters();
-  dynamic_properties_.clear();
-  property_parameters_.clear();
-  for (const auto &name : device_param_names_) {
-    try {
-      if (node_->has_parameter(name)) {
-        parameters_->removeParam(name);
-      }
-    } catch (const std::exception &e) {
-      RCLCPP_ERROR_STREAM(logger_,
-                          "Failed to remove device parameter " << name << ": " << e.what());
-    }
-  }
-  device_param_names_.clear();
-}
-
-OBCameraNode::~OBCameraNode() noexcept {
-  clean();
-  clearDeviceParameters();
-}
+OBCameraNode::~OBCameraNode() noexcept { clean(); }
 
 void OBCameraNode::rebootDevice() {
   RCLCPP_DEBUG_STREAM(logger_, "Cleaning before rebooting device");
@@ -5601,10 +5587,17 @@ void OBCameraNode::getPropertyParameters() {
   setAndGetPropertyParameter<int>(ldp_power_level_, "ldp_power_level", -1,
                                   OB_PROP_LASER_POWER_LEVEL_CONTROL_INT);
   enable_laser_ = true;
-  if (isPropertyParameterSupported("enable_laser", OB_PROP_LASER_CONTROL_INT) ||
-      isPropertyParameterSupported("enable_laser", OB_PROP_LASER_BOOL)) {
-    setAndGetDeviceParameter<bool>(enable_laser_, "enable_laser", true);
+  const bool laser_control_writable =
+      isPropertyParameterSupported("enable_laser", OB_PROP_LASER_CONTROL_INT);
+  const bool laser_bool_writable = isPropertyParameterSupported("enable_laser", OB_PROP_LASER_BOOL);
+  auto laser_property = OB_PROP_LASER_BOOL;
+  if (laser_control_writable ||
+      (!laser_bool_writable &&
+       isPropertyParameterSupported("enable_laser", OB_PROP_LASER_CONTROL_INT,
+                                    OB_PERMISSION_READ))) {
+    laser_property = OB_PROP_LASER_CONTROL_INT;
   }
+  setAndGetPropertyParameter<bool>(enable_laser_, "enable_laser", true, laser_property);
   setAndGetPropertyParameter<bool>(retry_on_usb3_detection_failure_,
                                    "retry_on_usb3_detection_failure", false,
                                    OB_PROP_DEVICE_USB3_REPEAT_IDENTIFY_BOOL);
@@ -5661,10 +5654,7 @@ void OBCameraNode::validateParameters() {
 
 void OBCameraNode::setupTopics() {
   try {
-    // Parameters survives reconnects. Only explicit successful runtime writes are restored.
-    const char *serial =
-        is_playback_device_ ? nullptr : device_->getDeviceInfo()->getSerialNumber();
-    parameters_->setDeviceContext(serial ? serial : "");
+    // Reuse the driver node's configured parameter values when the camera reconnects.
     captureInitialRosParameters();
     getCommonParameters();
     loadConfigJson();
@@ -5706,19 +5696,19 @@ void OBCameraNode::setupTopics() {
     setupPublishers();
     exportConfigJsonIfRequested();
   } catch (const StreamConfigurationError &) {
-    clearDeviceParameters();
+    parameters_->clearDynamicParameters();
     throw;
   } catch (const ob::Error &e) {
-    clearDeviceParameters();
+    parameters_->clearDynamicParameters();
     RCLCPP_ERROR_STREAM(logger_,
                         "Failed to setup topics: " << orbbec_camera::formatObErrorWithStatus(e));
     throw std::runtime_error(orbbec_camera::formatObErrorWithStatus(e));
   } catch (const std::exception &e) {
-    clearDeviceParameters();
+    parameters_->clearDynamicParameters();
     RCLCPP_ERROR_STREAM(logger_, "Failed to setup topics: " << e.what());
     throw std::runtime_error(e.what());
   } catch (...) {
-    clearDeviceParameters();
+    parameters_->clearDynamicParameters();
     RCLCPP_ERROR(logger_, "Failed to setup topics");
     throw std::runtime_error("Failed to setup topics");
   }

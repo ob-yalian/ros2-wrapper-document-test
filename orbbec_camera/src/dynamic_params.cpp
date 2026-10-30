@@ -43,7 +43,7 @@ Parameters::Parameters(rclcpp::Node *node)
     std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
     rcl_interfaces::msg::SetParametersResult result;
     result.successful = true;
-    // Reconnect restores retained ROS values before the camera applies its initial configuration.
+    // Updating a descriptor re-declares the same value without applying it to the device.
     if (parameter_restore && parameter_restore->manager == this && parameters.size() == 1 &&
         parameter_restore->value == parameters.front()) {
       return result;
@@ -78,9 +78,9 @@ Parameters::Parameters(rclcpp::Node *node)
           }
         }
         result = batch_setter_(parameters);
-        if (result.successful && !device_key_.empty()) {
+        if (result.successful) {
           for (const auto &parameter : parameters) {
-            runtime_overrides_[device_key_][parameter.get_name()] = parameter.get_parameter_value();
+            runtime_updated_parameters_.insert(parameter.get_name());
           }
         }
       } else {
@@ -108,6 +108,8 @@ Parameters::~Parameters() noexcept {
       node_->undeclare_parameter(param.first);
     } catch (const rclcpp::exceptions::InvalidParameterTypeException &e) {
       // ignore
+    } catch (const rclcpp::exceptions::ParameterImmutableException &e) {
+      // Read-only declarations are released with the driver node.
     } catch (const std::exception &e) {
       RCLCPP_ERROR_STREAM(logger_, e.what());
     }
@@ -118,26 +120,6 @@ rclcpp::ParameterValue Parameters::setParam(
     const std::string &param_name, rclcpp::ParameterValue initial_value,
     const std::function<void(const rclcpp::Parameter &)> &func,
     const rcl_interfaces::msg::ParameterDescriptor &descriptor) {
-  bool restore_runtime = false;
-  bool restore_initial = false;
-  {
-    std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
-    const auto device = runtime_overrides_.find(device_key_);
-    if (!device_key_.empty() && device != runtime_overrides_.end()) {
-      const auto value = device->second.find(param_name);
-      if (value != device->second.end()) {
-        initial_value = value->second;
-        restore_runtime = true;
-      }
-    }
-    if (!restore_runtime && runtime_parameter_names_.count(param_name) != 0) {
-      const auto original = initial_values_.find(param_name);
-      if (original != initial_values_.end()) {
-        initial_value = original->second;
-        restore_initial = true;
-      }
-    }
-  }
   rclcpp::ParameterValue result_value(initial_value);
   try {
     if (!node_->has_parameter(param_name)) {
@@ -149,21 +131,10 @@ rclcpp::ParameterValue Parameters::setParam(
       if (description.additional_constraints.empty()) {
         description.additional_constraints = defaults.additional_constraints;
       }
-      result_value =
-          node_->declare_parameter(param_name, initial_value, description, restore_runtime);
+      result_value = node_->declare_parameter(param_name, initial_value, description);
     } else {
+      // The driver node survives camera reconnects; retain its configured parameter value.
       result_value = node_->get_parameter(param_name).get_parameter_value();
-      if ((restore_initial || restore_runtime) && result_value != initial_value) {
-        const rclcpp::Parameter value(param_name, initial_value);
-        ParameterRestore restore(this, value);
-        const auto restored = node_->set_parameter(value);
-        if (restored.successful) {
-          result_value = initial_value;
-        } else {
-          RCLCPP_WARN_STREAM(
-              logger_, "Could not restore parameter " << param_name << ": " << restored.reason);
-        }
-      }
     }
   } catch (const std::exception &e) {
     std::stringstream range;
@@ -183,7 +154,6 @@ rclcpp::ParameterValue Parameters::setParam(
   }
 
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
-  initial_values_.emplace(param_name, result_value);
   if (func) {
     param_functions_[param_name].push_back(func);
   } else {
@@ -239,6 +209,7 @@ void Parameters::removeParam(const std::string &param_name) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   param_functions_.erase(param_name);
   dynamic_types_.erase(param_name);
+  runtime_updated_parameters_.erase(param_name);
 }
 
 void Parameters::updateDescription(const std::string &param_name, const std::string &description) {
@@ -263,21 +234,10 @@ void Parameters::updateDescription(const std::string &param_name, const std::str
   }
 }
 
-void Parameters::setDeviceContext(const std::string &device_key) {
-  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
-  dynamic_types_.clear();
-  batch_setter_ = {};
-  parameter_readers_.clear();
-  device_key_ = device_key;
-}
-
 void Parameters::registerDynamicParameters(
     const std::map<std::string, rclcpp::ParameterType> &types, BatchSetter setter) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   dynamic_types_ = types;
-  for (const auto &entry : types) {
-    runtime_parameter_names_.insert(entry.first);
-  }
   batch_setter_ = std::move(setter);
 }
 
@@ -313,19 +273,20 @@ rclcpp::Parameter Parameters::getParameter(const std::string &name) const {
   return rclcpp::Parameter(name, value);
 }
 
-bool Parameters::hasRuntimeOverride(const std::string &name) const {
+bool Parameters::isDynamicParameter(const std::string &name) const {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
-  const auto device = runtime_overrides_.find(device_key_);
-  return !device_key_.empty() && device != runtime_overrides_.end() &&
-         device->second.count(name) != 0;
+  return dynamic_types_.count(name) != 0;
 }
 
-void Parameters::rememberRuntimeConfiguration(const std::vector<rclcpp::Parameter> &values) {
+bool Parameters::hasRuntimeOverride(const std::string &name) const {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
-  if (!device_key_.empty()) {
-    for (const auto &value : values) {
-      runtime_overrides_[device_key_][value.get_name()] = value.get_parameter_value();
-    }
+  return runtime_updated_parameters_.count(name) != 0;
+}
+
+void Parameters::markRuntimeParameters(const std::vector<rclcpp::Parameter> &values) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  for (const auto &value : values) {
+    runtime_updated_parameters_.insert(value.get_name());
   }
 }
 
