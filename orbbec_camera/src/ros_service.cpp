@@ -15,53 +15,14 @@
  *******************************************************************************/
 
 #include "orbbec_camera/ob_camera_node.h"
-#include "orbbec_camera/user_data_utils.h"
 #include <algorithm>
-#include <array>
 #include <cctype>
-#include <cmath>
-#include <cstring>
-#include <iomanip>
-#include <limits>
-#include <stdexcept>
 #include <rclcpp/rclcpp.hpp>
 #include <nlohmann/json.hpp>
 #include <thread>
 
 #include "orbbec_camera/utils.h"
 namespace orbbec_camera {
-
-bool decodeUserData(const std::vector<uint8_t>& buffer, uint32_t size, std::string& data) {
-  data.clear();
-  if (size < kUserDataHeaderSize || size > buffer.size()) {
-    return false;
-  }
-  uint32_t payload_size_net = 0;
-  std::memcpy(&payload_size_net, buffer.data(), sizeof(payload_size_net));
-  const auto payload_size = ntohl(payload_size_net);
-  if (payload_size == 0 || payload_size > size - kUserDataHeaderSize) {
-    return false;
-  }
-  const std::string md5(reinterpret_cast<const char*>(buffer.data() + sizeof(uint32_t)), 32);
-  std::string payload(reinterpret_cast<const char*>(buffer.data() + kUserDataHeaderSize),
-                      payload_size);
-  if (calcMD5(payload) != md5) {
-    return false;
-  }
-  data = std::move(payload);
-  return true;
-}
-
-bool parseUserCalibration(const std::string& data, std::array<double, 29>& values) {
-  std::istringstream stream(data);
-  for (auto& value : values) {
-    if (!(stream >> value) || !std::isfinite(value)) {
-      return false;
-    }
-  }
-  stream >> std::ws;
-  return stream.eof();
-}
 
 namespace {
 
@@ -496,12 +457,6 @@ void OBCameraNode::setupCameraCtrlServices() {
         "get_user_calib_params", [this](const std::shared_ptr<GetUserCalibParams::Request> request,
                                         std::shared_ptr<GetUserCalibParams::Response> response) {
           getUserCalibParamsCallback(request, response);
-        });
-    migrate_customer_data_srv_ = node_->create_service<std_srvs::srv::Trigger>(
-        "migrate_customer_data",
-        [this](const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-               std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
-          migrateCustomerDataCallback(request, response);
         });
   }
   set_ae_reference_stream_srv_ = node_->create_service<SetString>(
@@ -2513,169 +2468,141 @@ void OBCameraNode::sendSoftwareTriggerCallback(
   }
 }
 
-bool OBCameraNode::writeDeviceUserData(const std::string& data) {
-  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  if (data.empty() || data.size() > kDeviceUserDataCapacity - kUserDataHeaderSize) {
-    throw std::invalid_argument("User data payload must contain 1 to 16348 bytes");
+bool OBCameraNode::writeCustomerData(const std::string& data) {
+  if (data.empty()) return false;
+
+  std::string md5_value = calcMD5(data);
+  uint32_t data_len_net = htonl(static_cast<uint32_t>(data.size()));
+  std::string len_bytes(reinterpret_cast<char*>(&data_len_net), sizeof(data_len_net));
+
+  std::string write_buffer = len_bytes + md5_value + data;
+  device_->writeCustomerData(write_buffer.c_str(), write_buffer.size());
+
+  std::vector<uint8_t> read_buffer(write_buffer.size() + 8);
+  uint32_t read_len = 0;
+  device_->readCustomerData(read_buffer.data(), &read_len);
+
+  if (read_len < sizeof(uint32_t) + 32) return false;
+
+  uint32_t read_data_len_net = 0;
+  memcpy(&read_data_len_net, read_buffer.data(), sizeof(uint32_t));
+  uint32_t read_data_len = ntohl(read_data_len_net);
+
+  std::string md5_read(reinterpret_cast<char*>(read_buffer.data() + sizeof(uint32_t)), 32);
+  std::string data_read(reinterpret_cast<char*>(read_buffer.data() + sizeof(uint32_t) + 32),
+                        read_data_len);
+
+  return calcMD5(data_read) == md5_read;
+}
+
+bool OBCameraNode::readCustomerData(std::string& out_data) {
+  std::vector<uint8_t> read_buffer(40960);
+  uint32_t read_len = 0;
+  device_->readCustomerData(read_buffer.data(), &read_len);
+  if (read_len < sizeof(uint32_t) + 32) {
+    return false;
   }
-
-  const uint32_t data_len_net = htonl(static_cast<uint32_t>(data.size()));
-  const std::string write_buffer =
-      std::string(reinterpret_cast<const char*>(&data_len_net), sizeof(data_len_net)) +
-      calcMD5(data) + data;
-  write_customer_data_success_ = false;
-  user_calibration_ready_ = false;
-  user_calibration_checked_ = false;
-  device_->writeDeviceUserData(write_buffer.data(), static_cast<uint32_t>(write_buffer.size()));
-
-  std::string read_data;
-  const bool verified = readDeviceUserData(read_data) && read_data == data;
-  std::array<double, 29> calibration{};
-  user_calibration_ready_ = verified && parseUserCalibration(read_data, calibration);
-  user_calibration_checked_ = true;
-  write_customer_data_success_ = verified;
-  return verified;
-}
-
-bool OBCameraNode::readDeviceUserData(std::string& out_data) {
-  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  out_data.clear();
-  std::vector<uint8_t> buffer(kDeviceUserDataCapacity);
-  uint32_t size = 0;
-  device_->readDeviceUserData(buffer.data(), static_cast<uint32_t>(buffer.size()), &size);
-  return decodeUserData(buffer, size, out_data);
-}
-
-bool OBCameraNode::checkUserCalibrationReady() {
-  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  if (!user_calibration_checked_) {
-    std::string data;
-    std::array<double, 29> calibration{};
-    user_calibration_ready_ = readDeviceUserData(data) && parseUserCalibration(data, calibration);
-    user_calibration_checked_ = true;
-  }
-  return user_calibration_ready_;
-}
-
-void OBCameraNode::migrateCustomerDataCallback(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request>& request,
-    std::shared_ptr<std_srvs::srv::Trigger::Response>& response) {
-  (void)request;
-  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
-  response->success = false;
-  try {
-    std::string data;
-    if (readDeviceUserData(data)) {
-      response->message = "Valid device user data already exists; migration skipped";
-      return;
-    }
-    // The deprecated API ignores buffer capacity and copies the full legacy area.
-    std::vector<uint8_t> legacy_buffer(65536);
-    uint32_t legacy_size = 0;
-    device_->readCustomerData(legacy_buffer.data(), &legacy_size);
-    if (!decodeUserData(legacy_buffer, legacy_size, data)) {
-      response->message = "Legacy customer data has no valid length/MD5 payload";
-      return;
-    }
-    response->success = writeDeviceUserData(data);
-    response->message = response->success ? "Migrated and verified; legacy data was preserved"
-                                          : "Migration failed: readback mismatch";
-  } catch (const ob::Error& e) {
-    response->message = formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
-  } catch (...) {
-    response->message = "Unknown migration error";
+  uint32_t read_data_len_net = 0;
+  memcpy(&read_data_len_net, read_buffer.data(), sizeof(uint32_t));
+  uint32_t read_data_len = ntohl(read_data_len_net);
+  std::string md5_read(reinterpret_cast<char*>(read_buffer.data() + sizeof(uint32_t)), 32);
+  std::string data_read(reinterpret_cast<char*>(read_buffer.data() + sizeof(uint32_t) + 32),
+                        read_data_len);
+  if (calcMD5(data_read) == md5_read) {
+    out_data = std::move(data_read);
+    return true;
+  } else {
+    return false;
   }
 }
 
 void OBCameraNode::writeCustomerDataCallback(const std::shared_ptr<SetString::Request>& request,
                                              std::shared_ptr<SetString::Response>& response) {
-  response->success = false;
+  if (request->data.empty()) {
+    response->success = false;
+    response->message = "data empty";
+    return;
+  }
+
   try {
-    response->success = writeDeviceUserData(request->data);
-    response->message = response->success ? "write and verify success"
-                                          : "write failed: invalid data or readback mismatch";
-  } catch (const ob::Error& e) {
-    response->message = formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
+    if (writeCustomerData(request->data)) {
+      write_customer_data_success_ = true;
+      response->success = true;
+      response->message = "write and verify success";
+      user_calibration_ready_ = true;
+    } else {
+      write_customer_data_success_ = false;
+      response->success = false;
+      response->message = "write failed: MD5 mismatch or read too short";
+      user_calibration_ready_ = false;
+    }
   } catch (...) {
-    response->message = "Unknown write error";
+    response->success = false;
+    response->message = "write exception";
   }
 }
 
 void OBCameraNode::readCustomerDataCallback(const std::shared_ptr<GetString::Request>& request,
                                             std::shared_ptr<GetString::Response>& response) {
   (void)request;
-  response->success = false;
-  response->data.clear();
   try {
-    response->success = readDeviceUserData(response->data);
-    response->message =
-        response->success ? "read success" : "read failed: invalid length/MD5 payload";
-  } catch (const ob::Error& e) {
-    response->message = formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
+    std::string data;
+    if (readCustomerData(data)) {
+      response->success = true;
+      response->data = std::move(data);
+      response->message = "read success";
+    } else {
+      response->success = false;
+      response->message = "read failed: MD5 mismatch or data too short";
+    }
   } catch (...) {
-    response->message = "Unknown read error";
+    response->success = false;
+    response->message = "read exception";
   }
 }
-
 void OBCameraNode::setUserCalibParamsCallback(
     const std::shared_ptr<SetUserCalibParams::Request>& request,
     std::shared_ptr<SetUserCalibParams::Response>& response) {
-  response->success = false;
   try {
-    std::ostringstream stream;
-    stream << std::setprecision(std::numeric_limits<double>::max_digits10);
-    for (const auto& value : request->k) stream << value << " ";
-    for (const auto& value : request->d) stream << value << " ";
-    for (const auto& value : request->rotation) stream << value << " ";
-    for (const auto& value : request->translation) stream << value << " ";
-    const auto data = stream.str();
-    std::array<double, 29> calibration{};
-    if (!parseUserCalibration(data, calibration)) {
-      response->message = "Calibration must contain 29 finite numbers";
-      return;
+    std::ostringstream ss;
+    for (const auto& v : request->k) ss << v << " ";
+    for (const auto& v : request->d) ss << v << " ";
+    for (const auto& v : request->rotation) ss << v << " ";
+    for (const auto& v : request->translation) ss << v << " ";
+    std::string serialized_data = ss.str();
+    if (writeCustomerData(serialized_data)) {
+      response->success = true;
+      response->message = "write and verify success";
+    } else {
+      response->success = false;
+      response->message = "write failed";
     }
-    response->success = writeDeviceUserData(data);
-    response->message =
-        response->success ? "write and verify success" : "write failed: readback mismatch";
-  } catch (const ob::Error& e) {
-    response->message = formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
   } catch (...) {
-    response->message = "Unknown calibration write error";
+    response->success = false;
+    response->message = "exception occurred";
   }
 }
-
 void OBCameraNode::getUserCalibParamsCallback(
     const std::shared_ptr<GetUserCalibParams::Request>& request,
     std::shared_ptr<GetUserCalibParams::Response>& response) {
   (void)request;
-  response->success = false;
   try {
-    std::string data;
-    std::array<double, 29> calibration{};
-    if (!readDeviceUserData(data) || !parseUserCalibration(data, calibration)) {
-      response->message = "read failed: invalid calibration payload";
+    std::string data_read;
+    if (!readCustomerData(data_read)) {
+      response->success = false;
+      response->message = "read failed";
       return;
     }
-    std::copy_n(calibration.begin(), 9, response->k.begin());
-    std::copy_n(calibration.begin() + 9, 8, response->d.begin());
-    std::copy_n(calibration.begin() + 17, 9, response->rotation.begin());
-    std::copy_n(calibration.begin() + 26, 3, response->translation.begin());
+    std::istringstream ss(data_read);
+    for (size_t i = 0; i < 9; ++i) ss >> response->k[i];
+    for (size_t i = 0; i < 8; ++i) ss >> response->d[i];
+    for (size_t i = 0; i < 9; ++i) ss >> response->rotation[i];
+    for (size_t i = 0; i < 3; ++i) ss >> response->translation[i];
     response->success = true;
     response->message = "read success";
-  } catch (const ob::Error& e) {
-    response->message = formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
   } catch (...) {
-    response->message = "Unknown calibration read error";
+    response->success = false;
+    response->message = "exception occurred";
   }
 }
 void OBCameraNode::setAEReferenceStreamCallback(const std::shared_ptr<SetString::Request>& request,

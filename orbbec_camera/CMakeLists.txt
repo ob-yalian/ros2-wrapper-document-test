@@ -448,10 +448,6 @@ if(BUILD_TESTING)
     target_link_directories(camera_info_distortion_test PRIVATE ${ORBBEC_LIBS_DIR})
     target_link_libraries(camera_info_distortion_test ${PROJECT_NAME})
 
-    ament_add_gtest(user_data_utils_test test/user_data_utils_test.cpp)
-    target_link_directories(user_data_utils_test PRIVATE ${ORBBEC_LIBS_DIR})
-    target_link_libraries(user_data_utils_test ${PROJECT_NAME})
-
     ament_add_gtest(net_device_parameters_test test/net_device_parameters_test.cpp)
     target_link_directories(net_device_parameters_test PRIVATE ${ORBBEC_LIBS_DIR})
     target_link_libraries(net_device_parameters_test ${PROJECT_NAME})
