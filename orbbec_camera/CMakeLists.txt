@@ -452,6 +452,10 @@ if(BUILD_TESTING)
     target_link_directories(net_device_parameters_test PRIVATE ${ORBBEC_LIBS_DIR})
     target_link_libraries(net_device_parameters_test ${PROJECT_NAME})
     ament_add_pytest_test(net_camera_launch_test test/test_net_camera_launch.py)
+
+    ament_add_gtest(stream_status_test test/stream_status_test.cpp)
+    target_link_directories(stream_status_test PRIVATE ${ORBBEC_LIBS_DIR})
+    target_link_libraries(stream_status_test ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)
