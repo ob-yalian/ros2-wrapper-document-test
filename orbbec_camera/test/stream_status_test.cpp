@@ -18,11 +18,11 @@ TEST(StreamStatusTest, HidesUnavailableTopicsAndResetsTheirCounters) {
   available = true;
   EXPECT_TRUE(tracker.fill(status));
   EXPECT_TRUE(status.has_subscribers);
-  EXPECT_EQ(status.publish_rate_hz, 0.0);
+  EXPECT_EQ(status.pre_publish_frame_rate_hz, 0.0);
 
   tracker.record(stamp);
   EXPECT_TRUE(tracker.fill(status));
-  EXPECT_GT(status.publish_rate_hz, 0.0);
+  EXPECT_GT(status.pre_publish_frame_rate_hz, 0.0);
 
   available = false;
   EXPECT_FALSE(tracker.fill(status));

@@ -153,6 +153,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::atomic<bool> delay_stream_start_after_reconnect_{false};
   rclcpp::TimerBase::SharedPtr device_status_timer_ = nullptr;
   rclcpp::Publisher<orbbec_camera_msgs::msg::DeviceStatus>::SharedPtr device_status_pub_ = nullptr;
+  double device_status_period_ = 1.0;
   std::string node_name_;
   bool force_ip_enable_{false};
   bool force_ip_dhcp_{false};

@@ -204,7 +204,7 @@ class OBCameraNode {
  public:
   OBCameraNode(rclcpp::Node* node, std::shared_ptr<ob::Device> device,
                std::shared_ptr<Parameters> parameters, bool use_intra_process = false,
-               bool is_playback_device = false);
+               bool is_playback_device = false, bool stream_status_enabled = true);
 
   template <class T>
   void setAndGetNodeParameter(
@@ -1151,6 +1151,7 @@ class OBCameraNode {
   // setupDevices() for playback devices since those SDK components aren't
   // registered for a recorded .bag file.
   bool is_playback_device_ = false;
+  bool stream_status_enabled_ = true;
   std::string cloud_frame_id_;
   std::mutex depth_filter_mutex_;
   std::vector<std::shared_ptr<ob::Filter>> depth_filter_list_;
