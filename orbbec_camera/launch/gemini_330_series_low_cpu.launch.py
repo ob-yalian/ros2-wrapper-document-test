@@ -276,6 +276,7 @@ def generate_launch_description():
         DeclareLaunchArgument('align_mode', default_value='SW'),
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'),
+        DeclareLaunchArgument('device_status_period', default_value='1.0'),
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('device_preset', default_value='Default'),
         DeclareLaunchArgument('device_preset_version', default_value=''),

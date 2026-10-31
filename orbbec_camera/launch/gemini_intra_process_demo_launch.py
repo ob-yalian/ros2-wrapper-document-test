@@ -168,6 +168,7 @@ def generate_launch_description():
         DeclareLaunchArgument('hdr_merge_gain_2', default_value='-1'),
         DeclareLaunchArgument('align_mode', default_value='SW'),
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'),
+        DeclareLaunchArgument('device_status_period', default_value='1.0'),
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_precision', default_value=''),
         DeclareLaunchArgument('device_preset', default_value='Default'),

@@ -62,7 +62,7 @@ class StreamStatusTracker {
     const double window_seconds = std::chrono::duration<double>(now - window_start_).count();
     status.topic_name = topic_name_;
     status.has_subscribers = has_subscribers;
-    status.publish_rate_hz =
+    status.pre_publish_frame_rate_hz =
         window_seconds > 0.0 ? static_cast<double>(published_count_) / window_seconds : 0.0;
     status.delay_ms_avg =
         published_count_ > 0 ? delay_sum_ms_ / static_cast<double>(published_count_) : 0.0;

@@ -29,6 +29,7 @@ def generate_launch_description():
         DeclareLaunchArgument('point_cloud_qos', default_value='default'),
         DeclareLaunchArgument('connection_delay', default_value='100'),
         DeclareLaunchArgument('diagnostic_period', default_value='0.0'),
+        DeclareLaunchArgument('device_status_period', default_value='1.0'),
         DeclareLaunchArgument('color_frame_queue_max_frames', default_value='1'),
         DeclareLaunchArgument('color_width', default_value='640'),
         DeclareLaunchArgument('color_height', default_value='480'),

@@ -242,6 +242,7 @@ def generate_launch_description():
         DeclareLaunchArgument('align_mode', default_value='HW'),
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'), # seconds
+        DeclareLaunchArgument('device_status_period', default_value='1.0'),
         DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('device_preset', default_value='AMR Perception'),
         DeclareLaunchArgument('preset_resolution_config', default_value='1280, 800, 1, 1'),

@@ -40,11 +40,13 @@
 #include <unistd.h>
 #include <filesystem>
 #include <atomic>
+#include <cmath>
 
 #include <fstream>
 #include <iomanip>  // For std::put_time
 #include <malloc.h>
 #include <sstream>
+#include <stdexcept>
 
 std::string g_camera_name = "orbbec_camera";  // Assuming this is declared elsewhere
 std::string g_time_domain = "global";         // Assuming this is declared elsewhere
@@ -321,6 +323,16 @@ void OBCameraNodeDriver::init() {
   // device instead of enumerating real hardware. Must be checked before the
   // ob::Context / device discovery machinery is set up below.
   device_type_ = declare_parameter<std::string>("device_type", "camera");
+  rcl_interfaces::msg::ParameterDescriptor device_status_descriptor;
+  device_status_descriptor.description =
+      "Device status publication period in seconds; 0 disables publication and statistics.";
+  device_status_descriptor.read_only = true;
+  device_status_period_ =
+      declare_parameter<double>("device_status_period", 1.0, device_status_descriptor);
+  if (!std::isfinite(device_status_period_) || device_status_period_ < 0.0 ||
+      (device_status_period_ > 0.0 && device_status_period_ < 1e-9)) {
+    throw std::invalid_argument("device_status_period must be 0 or at least 1e-9 seconds");
+  }
   bag_filename_ = declare_parameter<std::string>("bag_filename", "");
   bag_loop_ = declare_parameter<bool>("bag_loop", false);
   if (!bag_filename_.empty()) {
@@ -452,9 +464,9 @@ void OBCameraNodeDriver::init() {
   check_connect_timer_ =
       this->create_wall_timer(std::chrono::milliseconds(1000), [this]() { checkConnectTimer(); });
   CHECK_NOTNULL(check_connect_timer_);
-  if (device_type_ == "camera") {
-    device_status_timer_ =
-        this->create_wall_timer(std::chrono::seconds(1), [this]() { deviceStatusTimer(); });
+  if (device_type_ == "camera" && device_status_period_ > 0.0) {
+    device_status_timer_ = this->create_wall_timer(
+        std::chrono::duration<double>(device_status_period_), [this]() { deviceStatusTimer(); });
     auto qos = rclcpp::QoS(1).transient_local();
     if (node_options_.use_intra_process_comms()) {
       qos = rclcpp::QoS(1);
@@ -1227,9 +1239,9 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   while (retry_count < max_retries && !initialized) {
     try {
       if (device_type_ == "camera") {
-        ob_camera_node_ = std::make_unique<OBCameraNode>(this, device_, parameters_,
-                                                         node_options_.use_intra_process_comms(),
-                                                         playback_device_ != nullptr);
+        ob_camera_node_ = std::make_unique<OBCameraNode>(
+            this, device_, parameters_, node_options_.use_intra_process_comms(),
+            playback_device_ != nullptr, device_status_period_ > 0.0);
         ob_camera_node_->setupDiagnosticUpdater(diagnostic_updater_);
       } else if (device_type_ == "lidar") {
         ob_lidar_node_ = std::make_unique<orbbec_lidar::OBLidarNode>(

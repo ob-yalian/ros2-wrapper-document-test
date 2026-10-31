@@ -268,6 +268,7 @@ def generate_launch_description():
         DeclareLaunchArgument('align_mode', default_value='SW'),
         DeclareLaunchArgument('align_target_stream', default_value='COLOR'),# COLOR or DEPTH
         DeclareLaunchArgument('diagnostic_period', default_value='1.0'), # seconds
+        DeclareLaunchArgument('device_status_period', default_value='1.0'),
         DeclareLaunchArgument('device_preset', default_value='Default'), # Default, High Accuracy, Close Range High Accuracy, Factory Calib, Dual Color Streams, Custom
         DeclareLaunchArgument('color_preset', default_value='Default'), # color preset: Default, Warm Biased AWB, Cold Biased AWB
         DeclareLaunchArgument('retry_on_usb3_detection_failure', default_value='false'),

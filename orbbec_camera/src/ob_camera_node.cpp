@@ -751,13 +751,14 @@ void OBCameraNode::publishLrmObstacleDistance() {
 
 OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> device,
                            std::shared_ptr<Parameters> parameters, bool use_intra_process,
-                           bool is_playback_device)
+                           bool is_playback_device, bool stream_status_enabled)
     : node_(node),
       device_(std::move(device)),
       parameters_(std::move(parameters)),
       logger_(node->get_logger()),
       use_intra_process_(use_intra_process),
-      is_playback_device_(is_playback_device) {
+      is_playback_device_(is_playback_device),
+      stream_status_enabled_(stream_status_enabled) {
   pid_ = device_->getDeviceInfo()->getPid();
   RCLCPP_INFO_STREAM(logger_,
                      "OBCameraNode: use_intra_process: " << (use_intra_process ? "ON" : "OFF"));
@@ -5814,6 +5815,9 @@ std::vector<std::string> OBCameraNode::compressedStreamStatusTopics(
 void OBCameraNode::registerStreamStatus(const std::string &topic_name,
                                         StreamStatusTracker::SubscriberCountFn subscriber_count,
                                         StreamStatusTracker::AvailableFn available) {
+  if (!stream_status_enabled_) {
+    return;
+  }
   const auto resolved_topic_name = resolveStreamStatusTopic(topic_name);
   auto tracker = std::make_shared<StreamStatusTracker>(
       resolved_topic_name, std::move(subscriber_count), std::move(available));
@@ -5828,6 +5832,9 @@ void OBCameraNode::removeStreamStatus(const std::string &topic_name) {
 
 void OBCameraNode::recordStreamStatus(const std::string &topic_name,
                                       const builtin_interfaces::msg::Time &stamp) {
+  if (!stream_status_enabled_) {
+    return;
+  }
   std::shared_ptr<StreamStatusTracker> tracker;
   {
     std::lock_guard<std::mutex> lock(stream_status_mutex_);
@@ -6404,7 +6411,9 @@ void OBCameraNode::publishDepthPointCloud(const std::shared_ptr<ob::FrameSet> &f
       RCLCPP_ERROR_STREAM(logger_, "Failed to save point cloud: " << e.what());
     }
   }
-  recordStreamStatus("depth/points", point_cloud_msg->header.stamp);
+  if (stream_status_enabled_) {
+    recordStreamStatus("depth/points", point_cloud_msg->header.stamp);
+  }
   depth_cloud_pub_->publish(std::move(point_cloud_msg));
 }
 
@@ -6552,7 +6561,9 @@ void OBCameraNode::publishColoredPointCloud(const std::shared_ptr<ob::FrameSet> 
     }
   }
 
-  recordStreamStatus("depth_registered/points", point_cloud_msg->header.stamp);
+  if (stream_status_enabled_) {
+    recordStreamStatus("depth_registered/points", point_cloud_msg->header.stamp);
+  }
   depth_registration_cloud_pub_->publish(std::move(point_cloud_msg));
 }
 std::shared_ptr<ob::Frame> OBCameraNode::processIrFrameFilter(std::shared_ptr<ob::Frame> &frame) {
@@ -7667,10 +7678,10 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
       timestamp_csv_logger_->recordImagePrePublish(stream_index.first, frame, getSystemNowUs(),
                                                    getSteadyNowUs());
     }
-    if (has_raw_image_subscriber) {
+    if (stream_status_enabled_ && has_raw_image_subscriber) {
       recordStreamStatus(stream_name_[stream_index] + "/image_raw", image_msg->header.stamp);
     }
-    if (has_image_transport_subscriber) {
+    if (stream_status_enabled_ && has_image_transport_subscriber) {
       for (const auto &topic : compressedStreamStatusTopics(stream_index)) {
         if (node_->count_subscribers(resolveStreamStatusTopic(topic)) > 0) {
           recordStreamStatus(topic, image_msg->header.stamp);
@@ -7711,7 +7722,9 @@ void OBCameraNode::publishCompressedColorImage(const std::shared_ptr<ob::Frame> 
   msg.format = "jpeg";
   const auto *data = static_cast<const uint8_t *>(frame->getData());
   msg.data.assign(data, data + frame->getDataSize());
-  recordStreamStatus(stream_name_[stream_index] + "/image_raw/compressed", msg.header.stamp);
+  if (stream_status_enabled_) {
+    recordStreamStatus(stream_name_[stream_index] + "/image_raw/compressed", msg.header.stamp);
+  }
   it->second->publish(std::move(msg));
 }
 
@@ -7924,8 +7937,10 @@ void OBCameraNode::onNewIMUFrameSyncOutputCallback(const std::shared_ptr<ob::Fra
   imu_msg.linear_acceleration.z = accelData.z - accel_info.bias[2];
 
   const auto publish_system_us = getSystemNowUs();
-  recordStreamStatus(stream_name_[GYRO] + "_" + stream_name_[ACCEL] + "/sample",
-                     imu_msg.header.stamp);
+  if (stream_status_enabled_) {
+    recordStreamStatus(stream_name_[GYRO] + "_" + stream_name_[ACCEL] + "/sample",
+                       imu_msg.header.stamp);
+  }
   imu_gyro_accel_publisher_->publish(imu_msg);
   record_timestamps(publish_system_us);
 }
@@ -7986,7 +8001,9 @@ void OBCameraNode::onNewIMUFrameCallback(const std::shared_ptr<ob::Frame> &frame
     return;
   }
   const auto publish_system_us = getSystemNowUs();
-  recordStreamStatus(stream_name_[stream_index] + "/sample", imu_msg.header.stamp);
+  if (stream_status_enabled_) {
+    recordStreamStatus(stream_name_[stream_index] + "/sample", imu_msg.header.stamp);
+  }
   imu_publishers_[stream_index]->publish(imu_msg);
   record_timestamps(publish_system_us);
 }
