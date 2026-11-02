@@ -422,6 +422,7 @@ void OBCameraNode::addRuntimeControl(const std::vector<std::string> &names,
       runtime_control_groups_.emplace(name, names.front());
     }
   }
+  parameters_->registerParameterDependencies(names);
   runtime_control_setters_.emplace(names.front(), std::move(setter));
 }
 
@@ -763,6 +764,17 @@ void OBCameraNode::setupFilterParameterReaders() {
   }
 }
 
+std::string OBCameraNode::synchronizeFilterParameters(const std::string &filter_name) {
+  const auto normalized = normalizeDepthFilterName(filter_name);
+  for (const auto &spec : runtimeFilters()) {
+    if (spec.name != normalized) continue;
+    std::vector<std::string> names = {spec.enable_parameter};
+    for (const auto &config : spec.config) names.push_back(config.first);
+    return parameters_->synchronizeParameters(names, true);
+  }
+  return "";
+}
+
 void OBCameraNode::setupRuntimeControls() {
   if (!static_tf_broadcaster_) {
     static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(*node_);
@@ -861,6 +873,12 @@ void OBCameraNode::setupRuntimeControls() {
     setDisparityRangeModeCallback(request, response);
   });
   add_string("ae_reference_stream", [this](const auto &request, auto &response) {
+    if (isGemini301SeriesPID(pid_) && request->data == "color" &&
+        device_->isPropertySupported(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL, OB_PERMISSION_READ) &&
+        device_->getBoolProperty(OB_PROP_FRAME_INTERLEAVE_ENABLE_BOOL)) {
+      response->message = "Color AE reference is unavailable while frame interleave is enabled.";
+      return;
+    }
     setAEReferenceStreamCallback(request, response);
   });
   add_string("ae_strategy", [this](const auto &request, auto &response) {
@@ -1165,6 +1183,18 @@ void OBCameraNode::setupRuntimeControls() {
       }
     }
     if (names.empty()) continue;
+    if (spec.name == "HDRMerge") {
+      auto affected = names;
+      for (const auto &name : {"enable_depth_auto_exposure", "enable_ir_auto_exposure",
+                               "depth_exposure", "ir_exposure", "depth_gain", "ir_gain"}) {
+        affected.emplace_back(name);
+      }
+      if (isGemini301SeriesPID(pid_) && sensors_.count(COLOR) != 0) {
+        affected.insert(affected.end(),
+                        {"enable_color_auto_exposure", "color_exposure", "color_gain"});
+      }
+      parameters_->registerParameterDependencies(affected);
+    }
     addRuntimeControl(names, [this, spec](const auto &values) {
       auto request = std::make_shared<SetFilter::Request>();
       auto response = std::make_shared<SetFilter::Response>();

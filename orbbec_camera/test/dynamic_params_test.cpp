@@ -326,6 +326,94 @@ TEST_F(DynamicParametersTest, RejectsInvalidReadbackTypeAndPendingReader) {
   EXPECT_THROW(manager->getParameter("exposure"), std::runtime_error);
 }
 
+TEST_F(DynamicParametersTest, LinkedReadbackUsesDeviceUnitsWithoutRepeatingHardwareWrites) {
+  manager->setParam("color_exposure", rclcpp::ParameterValue(1), {}, descriptor);
+  int depth_actual = 100;
+  manager->registerDynamicParameters(
+      {{"exposure", rclcpp::ParameterType::PARAMETER_INTEGER},
+       {"color_exposure", rclcpp::ParameterType::PARAMETER_INTEGER}},
+      [&](const auto &values) {
+        ++writes;
+        for (const auto &value : values) {
+          depth_actual = value.as_int() * (value.get_name() == "color_exposure" ? 100 : 1);
+        }
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        return result;
+      });
+  manager->registerParameterReader("exposure",
+                                   [&] { return rclcpp::ParameterValue(depth_actual); });
+  manager->registerParameterReader("color_exposure",
+                                   [&] { return rclcpp::ParameterValue(depth_actual / 100); });
+  manager->registerParameterAliases({{"exposure", 1}, {"color_exposure", 100}});
+  auto result = manager->setParametersAtomically({rclcpp::Parameter("color_exposure", 20)});
+  ASSERT_TRUE(result.successful) << result.reason;
+  EXPECT_EQ(writes, 1);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 2000);
+  EXPECT_EQ(node->get_parameter("color_exposure").as_int(), 20);
+  EXPECT_TRUE(manager->hasRuntimeOverride("exposure"));
+  result = manager->setParametersAtomically(
+      {rclcpp::Parameter("exposure", 2001), rclcpp::Parameter("color_exposure", 20)});
+  EXPECT_FALSE(result.successful);
+  EXPECT_EQ(writes, 1);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 2000);
+  result = manager->setParametersAtomically(
+      {rclcpp::Parameter("exposure", 3000), rclcpp::Parameter("color_exposure", 30)});
+  EXPECT_TRUE(result.successful) << result.reason;
+  EXPECT_EQ(writes, 2);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 3000);
+}
+
+TEST_F(DynamicParametersTest, SuccessfulWriteReportsReadbackFailureWithoutClaimingWriteFailed) {
+  manager->registerParameterReader("exposure", []() -> rclcpp::ParameterValue {
+    throw std::runtime_error("transport failed after successful write");
+  });
+  const auto result = manager->setParametersAtomically({rclcpp::Parameter("exposure", 40)});
+  EXPECT_TRUE(result.successful);
+  EXPECT_NE(result.reason.find("synchronization failed"), std::string::npos);
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 40);
+  EXPECT_EQ(writes, 1);
+}
+
+TEST_F(DynamicParametersTest, FailedWriteDoesNotRefreshLinkedCacheOrMarkRuntimeIntent) {
+  manager->setParam("ir_exposure", rclcpp::ParameterValue(100), {}, descriptor);
+  int reads = 0;
+  manager->registerParameterReader("ir_exposure", [&] {
+    ++reads;
+    return rclcpp::ParameterValue(200);
+  });
+  manager->registerParameterDependencies({"exposure", "ir_exposure"});
+  accept = false;
+  EXPECT_FALSE(manager->setParametersAtomically({rclcpp::Parameter("exposure", 40)}).successful);
+  EXPECT_EQ(reads, 0);
+  EXPECT_EQ(node->get_parameter("ir_exposure").as_int(), 100);
+  EXPECT_FALSE(manager->hasRuntimeOverride("ir_exposure"));
+}
+
+TEST_F(DynamicParametersTest, InitialSynchronizationDoesNotSetHardwareOrReconnectOverride) {
+  manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(123); });
+  EXPECT_TRUE(manager->synchronizeParameters().empty());
+  EXPECT_EQ(node->get_parameter("exposure").as_int(), 123);
+  EXPECT_EQ(writes, 0);
+  EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
+}
+
+TEST_F(DynamicParametersTest, DeviceReadbackCanReplaceStaleDescriptorBoundsWithoutHardwareWrite) {
+  auto bounded = descriptor;
+  rcl_interfaces::msg::IntegerRange range;
+  range.from_value = 0;
+  range.to_value = 10;
+  range.step = 1;
+  bounded.integer_range.push_back(range);
+  manager->setParam("gain", rclcpp::ParameterValue(5), {}, bounded);
+  manager->registerParameterReader("gain", [] { return rclcpp::ParameterValue(25); });
+  EXPECT_TRUE(manager->synchronizeParameters({"gain"}).empty());
+  EXPECT_EQ(node->get_parameter("gain").as_int(), 25);
+  EXPECT_TRUE(node->describe_parameter("gain").integer_range.empty());
+  EXPECT_EQ(writes, 0);
+  EXPECT_FALSE(manager->hasRuntimeOverride("gain"));
+}
+
 class LiveParameterServicesTest : public DynamicParametersTest {
  protected:
   void SetUp() override {

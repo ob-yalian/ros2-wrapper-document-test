@@ -254,5 +254,67 @@ void OBCameraNode::setupParameterReaders() {
       });
     }
   }
+  // All ROS names for the same scalar SDK property share one stored value.
+  std::map<OBPropertyID, std::vector<std::pair<std::string, int64_t>>> aliases;
+  for (const auto &entry : property_parameters_) {
+    if (entry.second.first == OB_STRUCT_COLOR_AE_ROI ||
+        entry.second.first == OB_STRUCT_DEPTH_AE_ROI)
+      continue;
+    aliases[entry.second.first].emplace_back(entry.first, 1);
+  }
+  for (const auto &group : aliases) parameters_->registerParameterAliases(group.second);
+
+  // Read both sides even on models without documented aliases; only confirmed
+  // shared controls are subjected to conflict validation.
+  parameters_->registerParameterDependencies({"depth_exposure", "ir_exposure"});
+  parameters_->registerParameterDependencies({"depth_gain", "ir_gain"});
+  parameters_->registerParameterDependencies({"enable_depth_auto_exposure",
+                                              "enable_ir_auto_exposure", "depth_exposure",
+                                              "ir_exposure", "depth_gain", "ir_gain"});
+  parameters_->registerParameterDependencies(
+      {"enable_color_auto_exposure", "color_exposure", "color_gain", "color_denoising_level"});
+  parameters_->registerParameterDependencies(
+      {"enable_color_auto_white_balance", "color_white_balance"});
+  const std::string model = device_->getDeviceInfo()->getName();
+  if (isGemini330SeriesPID(pid_) || isGemini301SeriesPID(pid_) || pid_ == GEMINI2_PID ||
+      pid_ == GEMINI2L_PID || pid_ == GEMINI_435Le_PID || pid_ == DABAI_A_PID ||
+      pid_ == DABAI_AL_PID || model.find("Astra 2") != std::string::npos) {
+    parameters_->registerParameterAliases({{"depth_exposure", 1}, {"ir_exposure", 1}});
+    parameters_->registerParameterAliases({{"depth_gain", 1}, {"ir_gain", 1}});
+    parameters_->registerParameterAliases(
+        {{"enable_depth_auto_exposure", 1}, {"enable_ir_auto_exposure", 1}});
+  }
+  if (pid_ == FEMTO_BOLT_PID || pid_ == FEMTO_MEGA_PID) {
+    parameters_->registerParameterAliases({{"depth_exposure", 1}, {"ir_exposure", 1}});
+  }
+  if (isGemini301SeriesPID(pid_) && sensors_.count(COLOR) != 0) {
+    // G305 SDK exposes color exposure in units 100 times those of depth/IR.
+    parameters_->registerParameterAliases(
+        {{"depth_exposure", 1}, {"ir_exposure", 1}, {"color_exposure", 100}});
+    parameters_->registerParameterAliases({{"depth_gain", 1}, {"ir_gain", 1}, {"color_gain", 1}});
+    parameters_->registerParameterAliases({{"enable_depth_auto_exposure", 1},
+                                           {"enable_ir_auto_exposure", 1},
+                                           {"enable_color_auto_exposure", 1}});
+    parameters_->registerParameterAliases(
+        {{"enable_depth_auto_exposure_priority", 1}, {"enable_color_auto_exposure_priority", 1}});
+    parameters_->registerParameterAliases(
+        {{"ir_ae_max_exposure", 1}, {"color_ae_max_exposure", 100}});
+    parameters_->registerParameterDependencies(
+        {"enable_depth_auto_exposure", "enable_ir_auto_exposure", "enable_color_auto_exposure",
+         "depth_exposure", "ir_exposure", "color_exposure", "depth_gain", "ir_gain", "color_gain",
+         "color_denoising_level"});
+  }
+  parameters_->registerParameterDependencies({"ae_strategy", "enable_color_auto_exposure_priority",
+                                              "enable_depth_auto_exposure_priority",
+                                              "color_ae_max_exposure", "ir_ae_max_exposure"});
+  parameters_->registerParameterDependencies(
+      {"ae_reference_stream", "color_ae_roi_left", "color_ae_roi_right", "color_ae_roi_top",
+       "color_ae_roi_bottom", "depth_ae_roi_left", "depth_ae_roi_right", "depth_ae_roi_top",
+       "depth_ae_roi_bottom"});
+  parameters_->registerParameterDependencies({"disparity_to_depth_mode", "depth_precision"});
+  parameters_->registerParameterDependencies({"interleave_frame_enable", "enable_laser",
+                                              "depth_exposure", "ir_exposure", "depth_gain",
+                                              "ir_gain", "ir_brightness", "depth_brightness",
+                                              "mean_intensity_set_point", "ir_ae_max_exposure"});
 }
 }  // namespace orbbec_camera

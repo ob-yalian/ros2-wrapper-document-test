@@ -805,6 +805,8 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
   try {
     setupDynamicParameters();
     is_camera_node_initialized_.store(true);
+    const auto failures = parameters_->synchronizeParameters();
+    if (!failures.empty()) RCLCPP_WARN_STREAM(logger_, "Initial parameter sync: " << failures);
   } catch (...) {
     parameters_->clearDynamicParameters();
     throw;
@@ -3845,6 +3847,13 @@ void OBCameraNode::setupDepthPostProcessFilter() {
       "set_filter", [this](const std::shared_ptr<SetFilter ::Request> request,
                            std::shared_ptr<SetFilter ::Response> response) {
         setFilterCallback(request, response);
+        if (response->success) {
+          const auto failures = synchronizeFilterParameters(request->filter_name);
+          if (!failures.empty()) {
+            response->message += "; filter updated; parameter synchronization failed: " + failures;
+            RCLCPP_WARN_STREAM(logger_, response->message);
+          }
+        }
       });
 }
 

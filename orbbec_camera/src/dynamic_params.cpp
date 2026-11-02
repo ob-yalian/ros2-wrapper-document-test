@@ -17,6 +17,7 @@
 #include "orbbec_camera/parameter_descriptions.h"
 
 #include <cmath>
+#include <sstream>
 #include <limits>
 #include <stdexcept>
 
@@ -83,6 +84,36 @@ Parameters::Parameters(rclcpp::Node *node)
         if (parameter_restore && parameter_restore->manager == this && parameters.size() == 1 &&
             parameter_restore->value == parameters.front()) {
           return result;
+        }
+        // Validate aliases in device units before any SDK operation.
+        for (const auto &aliases : parameter_aliases_) {
+          bool found = false;
+          int64_t expected = 0;
+          for (const auto &alias : aliases) {
+            for (const auto &parameter : parameters) {
+              if (parameter.get_name() != alias.first) continue;
+              if (parameter.get_type() != rclcpp::ParameterType::PARAMETER_INTEGER &&
+                  parameter.get_type() != rclcpp::ParameterType::PARAMETER_BOOL)
+                continue;
+              const int64_t value = parameter.get_type() == rclcpp::ParameterType::PARAMETER_BOOL
+                                        ? parameter.as_bool()
+                                        : parameter.as_int();
+              if (alias.second <= 0 || value > std::numeric_limits<int64_t>::max() / alias.second ||
+                  value < std::numeric_limits<int64_t>::min() / alias.second) {
+                result.successful = false;
+                result.reason = "Alias value overflow: " + alias.first;
+                return result;
+              }
+              const int64_t normalized = value * alias.second;
+              if (found && normalized != expected) {
+                result.successful = false;
+                result.reason = "Conflicting linked parameters: " + alias.first;
+                return result;
+              }
+              found = true;
+              expected = normalized;
+            }
+          }
         }
         bool has_dynamic = false;
         // Reject the entire request before invoking any callback with side effects.
@@ -305,7 +336,7 @@ void Parameters::updateDescription(
 
 void Parameters::updateParameterValue(const std::string &param_name,
                                       const rclcpp::ParameterValue &value) {
-  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  std::lock_guard<std::recursive_mutex> transaction(transaction_mutex_);
   if (!node_->has_parameter(param_name)) return;
   const auto current = node_->get_parameter(param_name);
   if (current.get_type() != value.get_type()) {
@@ -316,15 +347,27 @@ void Parameters::updateParameterValue(const std::string &param_name,
   if (descriptor.read_only) return;
   const rclcpp::Parameter replacement(param_name, value);
   ParameterRestore restore(this, replacement);
-  node_->undeclare_parameter(param_name);
-  try {
-    node_->declare_parameter(param_name, value, descriptor, true);
-  } catch (...) {
-    if (!node_->has_parameter(param_name)) {
-      node_->declare_parameter(param_name, current.get_parameter_value(), descriptor, true);
+  auto effective_descriptor = descriptor;
+  removeInvalidDescriptorRanges(effective_descriptor, value);
+  if (effective_descriptor.integer_range != descriptor.integer_range ||
+      effective_descriptor.floating_point_range != descriptor.floating_point_range) {
+    // Firmware/AE may report a value outside the old descriptor. Never discard
+    // valid SDK readback because of stale bounds; runtime setters validate SDK ranges.
+    // Humble can only replace descriptor bounds by re-declaring the parameter.
+    node_->undeclare_parameter(param_name);
+    try {
+      node_->declare_parameter(param_name, value, effective_descriptor, true);
+    } catch (...) {
+      if (!node_->has_parameter(param_name)) {
+        ParameterRestore previous(this, current);
+        node_->declare_parameter(param_name, current.get_parameter_value(), descriptor, true);
+      }
+      throw;
     }
-    throw;
+    return;
   }
+  const auto result = node_->set_parameters_atomically({replacement});
+  if (!result.successful) throw std::runtime_error(result.reason);
 }
 
 void Parameters::registerDynamicParameters(
@@ -335,16 +378,112 @@ void Parameters::registerDynamicParameters(
 }
 
 void Parameters::clearDynamicParameters() {
+  std::lock_guard<std::recursive_mutex> transaction(transaction_mutex_);
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   dynamic_types_.clear();
   batch_setter_ = {};
   parameter_readers_.clear();
+  parameter_dependencies_.clear();
+  parameter_aliases_.clear();
 }
 
 void Parameters::registerParameterReader(const std::string &name, ParameterReader reader) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   device_readback_names_.insert(name);
   parameter_readers_[name] = std::move(reader);
+}
+
+void Parameters::registerParameterDependencies(const std::vector<std::string> &names) {
+  std::vector<std::string> available;
+  for (const auto &name : names) {
+    if (node_->has_parameter(name)) available.push_back(name);
+  }
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  for (const auto &name : available) {
+    parameter_dependencies_[name].insert(available.begin(), available.end());
+  }
+}
+
+void Parameters::registerParameterAliases(
+    const std::vector<std::pair<std::string, int64_t>> &names) {
+  std::vector<std::pair<std::string, int64_t>> available;
+  std::vector<std::string> dependencies;
+  for (const auto &entry : names) {
+    if (!node_->has_parameter(entry.first)) continue;
+    available.push_back(entry);
+    dependencies.push_back(entry.first);
+  }
+  registerParameterDependencies(dependencies);
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  if (available.size() > 1) parameter_aliases_.push_back(std::move(available));
+}
+
+std::string Parameters::synchronizeParameters(const std::vector<std::string> &names,
+                                              bool runtime_update) {
+  std::lock_guard<std::recursive_mutex> transaction(transaction_mutex_);
+  std::vector<rclcpp::Parameter> snapshot;
+  std::ostringstream failures;
+  std::set<std::string> affected(names.begin(), names.end());
+  {
+    std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+    if (names.empty()) {
+      for (const auto &reader : parameter_readers_) affected.insert(reader.first);
+    } else {
+      // Groups include their required aliases; do not expand through unrelated controls.
+      for (const auto &name : names) {
+        const auto found = parameter_dependencies_.find(name);
+        if (found != parameter_dependencies_.end())
+          affected.insert(found->second.begin(), found->second.end());
+      }
+    }
+  }
+  for (const auto &name : affected) {
+    if (name.find("hdr_index") == 0 || name.find("laser_index") == 0) continue;
+    try {
+      // Match rclcpp's lock order: never acquire its parameter mutex while holding
+      // callback_mutex_. transaction_mutex_ also drains snapshots on camera detach.
+      if (!node_->has_parameter(name)) continue;
+      const auto current = node_->get_parameter(name);
+      if (node_->describe_parameter(name).read_only) continue;
+      std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+      const auto reader = parameter_readers_.find(name);
+      if (reader == parameter_readers_.end() || !reader->second) continue;
+      const auto value = reader->second();
+      if (value.get_type() != current.get_type()) throw std::runtime_error("Invalid readback type");
+      snapshot.emplace_back(name, value);
+    } catch (const std::exception &e) {
+      if (!names.empty())
+        failures << name << ": " << e.what() << "; ";
+      else
+        RCLCPP_DEBUG_STREAM(logger_, "Startup readback skipped " << name << ": " << e.what());
+    }
+  }
+  for (const auto &value : snapshot) {
+    try {
+      updateParameterValue(value.get_name(), value.get_parameter_value());
+      if (runtime_update && isDynamicParameter(value.get_name())) markRuntimeParameters({value});
+    } catch (const std::exception &e) {
+      failures << value.get_name() << ": " << e.what() << "; ";
+    }
+  }
+  return failures.str();
+}
+
+rcl_interfaces::msg::SetParametersResult Parameters::setParametersAtomically(
+    const std::vector<rclcpp::Parameter> &values) {
+  std::lock_guard<std::recursive_mutex> transaction(transaction_mutex_);
+  auto result = node_->set_parameters_atomically(values);
+  if (!result.successful) return result;
+  std::vector<std::string> names;
+  for (const auto &value : values) names.push_back(value.get_name());
+  if (!names.empty()) {
+    const auto failures = synchronizeParameters(names, true);
+    if (!failures.empty()) {
+      result.reason = "Device update succeeded; parameter synchronization failed: " + failures;
+      RCLCPP_WARN_STREAM(logger_, result.reason);
+    }
+  }
+  return result;
 }
 
 rclcpp::Parameter Parameters::getParameter(const std::string &name) const {

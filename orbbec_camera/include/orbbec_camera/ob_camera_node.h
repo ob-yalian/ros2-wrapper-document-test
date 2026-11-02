@@ -409,6 +409,7 @@ class OBCameraNode {
   void setupFilterParameterDescriptions();
   void setupParameterReaders();
   void setupFilterParameterReaders();
+  std::string synchronizeFilterParameters(const std::string& filter_name);
   void addParameterReader(const std::string& name, Parameters::ParameterReader reader);
   rclcpp::ParameterValue readPropertyParameter(const std::string& name, OBPropertyID id,
                                                rclcpp::ParameterType type) const;

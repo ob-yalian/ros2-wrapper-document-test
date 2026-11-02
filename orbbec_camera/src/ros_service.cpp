@@ -65,7 +65,7 @@ void setParameterResponse(rclcpp::Node* node, const std::shared_ptr<Parameters>&
         return;
       }
     }
-    const auto result = node->set_parameters_atomically(values);
+    const auto result = parameters->setParametersAtomically(values);
     response->success = result.successful;
     response->message = result.reason;
   } catch (const std::exception& e) {
@@ -277,6 +277,11 @@ void OBCameraNode::setupCameraCtrlServices() {
         [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
                                             std::shared_ptr<SetBool::Response> response) {
           toggleSensorCallback(request, response, stream_index);
+          if (response->success) {
+            const auto failures = parameters_->synchronizeParameters();
+            if (!failures.empty())
+              response->message += "; parameter synchronization failed: " + failures;
+          }
         });
     service_name = "set_" + stream_name + "_mirror";
     set_mirror_srv_[stream_index] = node_->create_service<SetBool>(
@@ -586,16 +591,31 @@ void OBCameraNode::setupCameraCtrlServices() {
       "set_streams_enable", [this](const std::shared_ptr<SetBool::Request> request,
                                    std::shared_ptr<SetBool::Response> response) {
         setStreamsEnableCallback(request, response);
+        if (response->success) {
+          const auto failures = parameters_->synchronizeParameters();
+          if (!failures.empty())
+            response->message += "; parameter synchronization failed: " + failures;
+        }
       });
   set_image_registration_mode_srv_ = node_->create_service<SetString>(
       "set_image_registration_mode", [this](const std::shared_ptr<SetString::Request> request,
                                             std::shared_ptr<SetString::Response> response) {
         setImageRegistrationModeCallback(request, response);
+        if (response->success) {
+          const auto failures = parameters_->synchronizeParameters();
+          if (!failures.empty())
+            response->message += "; parameter synchronization failed: " + failures;
+        }
       });
   set_stream_profile_srv_ = node_->create_service<SetStreamProfile>(
       "set_stream_profile", [this](const std::shared_ptr<SetStreamProfile::Request> request,
                                    std::shared_ptr<SetStreamProfile::Response> response) {
         setStreamProfileCallback(request, response);
+        if (response->success) {
+          const auto failures = parameters_->synchronizeParameters();
+          if (!failures.empty())
+            response->message += "; parameter synchronization failed: " + failures;
+        }
       });
   get_streams_enable_srv_ = node_->create_service<GetBool>(
       "get_streams_enable", [this](const std::shared_ptr<GetBool::Request> request,

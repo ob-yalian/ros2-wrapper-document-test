@@ -74,12 +74,11 @@ void Parameters::startParameterServices() {
         response.result = backend->list_parameters(request.prefixes, request.depth);
       }));
   parameter_services_.push_back(createParameterService<rcl_interfaces::srv::SetParameters>(
-      node_, "set_parameters", [backend](const auto &request, auto &response) {
+      node_, "set_parameters", [this](const auto &request, auto &response) {
         for (const auto &value : request.parameters) {
           rcl_interfaces::msg::SetParametersResult result;
           try {
-            result =
-                backend->set_parameters_atomically({rclcpp::Parameter::from_parameter_msg(value)});
+            result = setParametersAtomically({rclcpp::Parameter::from_parameter_msg(value)});
           } catch (const std::exception &e) {
             result.successful = false;
             result.reason = e.what();
@@ -89,13 +88,13 @@ void Parameters::startParameterServices() {
       }));
   parameter_services_.push_back(
       createParameterService<rcl_interfaces::srv::SetParametersAtomically>(
-          node_, "set_parameters_atomically", [backend](const auto &request, auto &response) {
+          node_, "set_parameters_atomically", [this](const auto &request, auto &response) {
             try {
               std::vector<rclcpp::Parameter> values;
               for (const auto &value : request.parameters) {
                 values.push_back(rclcpp::Parameter::from_parameter_msg(value));
               }
-              response.result = backend->set_parameters_atomically(values);
+              response.result = setParametersAtomically(values);
             } catch (const std::exception &e) {
               response.result.successful = false;
               response.result.reason = e.what();
