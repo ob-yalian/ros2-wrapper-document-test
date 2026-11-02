@@ -851,6 +851,14 @@ bool OBCameraNode::isPropertyParameterSupported(const std::string &param_name,
     return false;
   }
   return queryDeviceCapability(param_name, [this, property_id, permission]() {
+    if (permission == OB_PERMISSION_READ) {
+      return device_->isPropertySupported(property_id, OB_PERMISSION_READ) ||
+             device_->isPropertySupported(property_id, OB_PERMISSION_READ_WRITE);
+    }
+    if (permission == OB_PERMISSION_WRITE) {
+      return device_->isPropertySupported(property_id, OB_PERMISSION_WRITE) ||
+             device_->isPropertySupported(property_id, OB_PERMISSION_READ_WRITE);
+    }
     return device_->isPropertySupported(property_id, permission);
   });
 }
