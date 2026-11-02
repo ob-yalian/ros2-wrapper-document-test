@@ -5677,6 +5677,7 @@ void OBCameraNode::setupTopics() {
     setupUndistortionFilters();
     syncConfigJsonDeviceSettings();
     syncConfigJsonFilterSettings(depth_filter_list_, "depth");
+    setupFalsePositiveFilterParameters();
     syncConfigJsonFilterSettings(color_filter_list_, "color");
     syncConfigJsonFilterSettings(left_color_filter_list_, "left_color");
     syncConfigJsonFilterSettings(right_color_filter_list_, "right_color");

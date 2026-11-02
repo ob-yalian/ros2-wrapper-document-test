@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cctype>
+#include <iomanip>
 #include <limits>
 #include <set>
 #include <sstream>
@@ -44,6 +45,101 @@ struct RuntimeFilter {
   // ROS parameter name -> SDK/service config name, in legacy positional order.
   std::vector<std::pair<std::string, std::string>> config;
 };
+
+struct FalsePositiveFilterParameter {
+  std::string name;
+  std::string config;
+  rclcpp::ParameterValue initial_value;
+};
+
+const std::vector<FalsePositiveFilterParameter> &falsePositiveFilterParameters() {
+  static const std::vector<FalsePositiveFilterParameter> parameters = {
+      {"enable_false_positive_edge_bleed_filter", "fpEdgeBleedFilterEnable",
+       rclcpp::ParameterValue(false)},
+      {"false_positive_filter_edge_bleed_roi_min_x_ratio", "fpebfROIMinXRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_edge_bleed_roi_max_x_ratio", "fpebfROIMaxXRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_edge_bleed_roi_min_y_ratio", "fpebfROIMinYRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_edge_bleed_roi_max_y_ratio", "fpebfROIMaxYRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_edge_bleed_min_bleed_length", "fpebfMinBleedLength",
+       rclcpp::ParameterValue(-1)},
+      {"enable_false_positive_texture_sparsity_filter", "fpTextureSparsityFilterEnable",
+       rclcpp::ParameterValue(false)},
+      {"false_positive_filter_texture_sparsity_roi_min_x_ratio", "fptsfROIMinXRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_texture_sparsity_roi_max_x_ratio", "fptsfROIMaxXRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_texture_sparsity_roi_min_y_ratio", "fptsfROIMinYRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_texture_sparsity_roi_max_y_ratio", "fptsfROIMaxYRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_texture_sparsity_max_noise_level", "fptsfMaxNoiseLevel",
+       rclcpp::ParameterValue(-1)},
+      {"false_positive_filter_texture_sparsity_max_speckle_size", "fptsfMaxSpeckleSize",
+       rclcpp::ParameterValue(-1)},
+      {"enable_false_positive_pattern_ambiguity_filter", "fpPatternAmbiguityFilterEnable",
+       rclcpp::ParameterValue(false)},
+      {"false_positive_filter_pattern_ambiguity_roi_min_x_ratio", "fppafROIMinXRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_roi_max_x_ratio", "fppafROIMaxXRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_roi_min_y_ratio", "fppafROIMinYRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_roi_max_y_ratio", "fppafROIMaxYRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_max_noise_level", "fppafMaxNoiseLevel",
+       rclcpp::ParameterValue(-1)},
+      {"false_positive_filter_pattern_ambiguity_max_speckle_size", "fppafMaxSpeckleSize",
+       rclcpp::ParameterValue(-1)},
+      {"false_positive_filter_pattern_ambiguity_max_width_ratio", "fppafMaxWidthRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_max_height_ratio", "fppafMaxHeightRatio",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_tolerance", "fppafTolerance",
+       rclcpp::ParameterValue(-1.0)},
+      {"false_positive_filter_pattern_ambiguity_score", "fppafScore", rclcpp::ParameterValue(-1)},
+  };
+  return parameters;
+}
+
+void validateFalsePositiveFilterConfig(const std::shared_ptr<ob::Filter> &filter,
+                                       const std::vector<rclcpp::Parameter> &values) {
+  if (!filter) throw std::runtime_error("FalsePositiveFilter is unavailable.");
+  const auto schemas = filter->getConfigSchemaVec();
+  for (const auto &value : values) {
+    const auto &parameters = falsePositiveFilterParameters();
+    const auto binding = std::find_if(parameters.begin(), parameters.end(), [&](const auto &item) {
+      return item.name == value.get_name();
+    });
+    if (binding == parameters.end()) continue;  // The master switch has no config schema.
+    if (value.get_type() != binding->initial_value.get_type()) {
+      throw std::invalid_argument("Invalid type for " + value.get_name());
+    }
+    const auto schema = std::find_if(schemas.begin(), schemas.end(), [&](const auto &item) {
+      return item.name && binding->config == item.name;
+    });
+    if (schema == schemas.end()) {
+      throw std::invalid_argument(value.get_name() + ": configuration is not supported.");
+    }
+    const double requested = value.get_type() == rclcpp::ParameterType::PARAMETER_BOOL
+                                 ? static_cast<double>(value.as_bool())
+                             : value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER
+                                 ? static_cast<double>(value.as_int())
+                                 : value.as_double();
+    if (!std::isfinite(requested) || requested < schema->min || requested > schema->max) {
+      throw std::invalid_argument(value.get_name() + ": value is outside the SDK range.");
+    }
+    if (std::isfinite(schema->step) && schema->step > 0) {
+      const double steps = (requested - schema->min) / schema->step;
+      if (std::abs(steps - std::round(steps)) > 1e-6 * std::max(1.0, std::abs(steps))) {
+        throw std::invalid_argument(value.get_name() + ": value does not match the SDK step.");
+      }
+    }
+  }
+}
 
 const std::vector<RuntimeFilter> &runtimeFilters() {
   static const std::vector<RuntimeFilter> filters = {
@@ -88,7 +184,14 @@ const std::vector<RuntimeFilter> &runtimeFilters() {
       {"DispOutliersFilter",
        "enable_disp_outliers_filter",
        {{"disp_outliers_filter_search_mode", "search_mode"}}},
-      {"FalsePositiveFilter", "enable_false_positive_filter", {}},
+      {"FalsePositiveFilter", "enable_false_positive_filter",
+       [] {
+         std::vector<std::pair<std::string, std::string>> config;
+         for (const auto &parameter : falsePositiveFilterParameters()) {
+           config.emplace_back(parameter.name, parameter.config);
+         }
+         return config;
+       }()},
       {"EdgeNoiseRemovalFilter", "enable_edge_noise_removal_filter", {}},
       {"MgcNoiseRemovalFilter", "enable_mgc_noise_removal_filter", {}},
       {"LutNoiseRemovalFilter", "enable_lut_noise_removal_filter", {}},
@@ -127,7 +230,9 @@ std::string filterRangeDescription(const std::string &name,
   }
   std::ostringstream text;
   // ROS string selectors expose names, not the SDK's numeric enum codes.
-  if (name == "hole_filling_filter_mode" || name == "disp_outliers_filter_search_mode") {
+  if (name.rfind("enable_", 0) == 0 && (schema.def == 0.0 || schema.def == 1.0)) {
+    text << " SDK default: " << (schema.def != 0.0 ? "true" : "false") << ".";
+  } else if (name == "hole_filling_filter_mode" || name == "disp_outliers_filter_search_mode") {
     const std::vector<std::string> choices =
         name == "hole_filling_filter_mode"
             ? std::vector<std::string>{"FILL_TOP", "FILL_NEAREST", "FILL_FAREST"}
@@ -175,6 +280,15 @@ std::string filterConfigValue(const rclcpp::Parameter &value) {
     }
     return std::to_string(static_cast<int>(holeFillingModeFromString(value.as_string())));
   }
+  if (value.get_type() == rclcpp::ParameterType::PARAMETER_BOOL) {
+    return value.as_bool() ? "1" : "0";
+  }
+  if (value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE &&
+      value.get_name().rfind("false_positive_filter_", 0) == 0) {
+    std::ostringstream text;
+    text << std::setprecision(std::numeric_limits<double>::max_digits10) << value.as_double();
+    return text.str();
+  }
   return value.get_type() == rclcpp::ParameterType::PARAMETER_STRING ? value.as_string()
                                                                      : value.value_to_string();
 }
@@ -185,6 +299,11 @@ rclcpp::ParameterValue readFilterConfig(const std::shared_ptr<ob::Filter> &filte
     throw std::runtime_error("Filter has not been created; configuration is unavailable.");
   const double value = filter->getConfigValue(key == "scale" ? "decimate" : key);
   if (!std::isfinite(value)) throw std::runtime_error("Filter returned a nonfinite value.");
+  if (type == rclcpp::ParameterType::PARAMETER_BOOL) {
+    if (value != 0.0 && value != 1.0)
+      throw std::runtime_error("Filter returned an invalid boolean value.");
+    return rclcpp::ParameterValue(value != 0.0);
+  }
   if (type == rclcpp::ParameterType::PARAMETER_STRING) {
     const std::vector<std::string> modes = {"FILL_TOP", "FILL_NEAREST", "FILL_FAREST"};
     if (key != "hole_filling_mode" || value < 0 || value >= modes.size() ||
@@ -317,10 +436,26 @@ void OBCameraNode::setupFilterParameterSupport() {
                     return device_->isLicenseAuthorizationSupported();
                   });
     }
+    std::set<std::string> config_names;
+    bool has_config_schema = false;
+    if (spec.name == "FalsePositiveFilter" && supported) {
+      for (const auto &filter : depth_filter_list_) {
+        if (!filter || normalizeDepthFilterName(filter->type()) != spec.name) continue;
+        queryDeviceCapability("FalsePositiveFilter configuration", [&]() {
+          for (const auto &schema : filter->getConfigSchemaVec()) {
+            if (schema.name) config_names.insert(schema.name);
+          }
+          has_config_schema = true;
+          return true;
+        });
+        break;
+      }
+    }
     filter_parameter_support_[spec.enable_parameter] = supported;
     for (const auto &config : spec.config) {
       filter_parameter_support_[config.first] =
-          supported && (spec.name != "HDRMerge" || supports_hdr_config);
+          supported && (spec.name != "HDRMerge" || supports_hdr_config) &&
+          (!has_config_schema || config_names.count(config.second) != 0);
     }
   }
   filter_parameter_support_["enhanced_depth_model_path"] =
@@ -343,6 +478,74 @@ void OBCameraNode::setupFilterParameterSupport() {
     // Like OBV, the driver supplies undistortion independently of recommendations.
     filter_parameter_support_["enable_" + stream_name_.at(stream) + "_undistortion"] =
         sensors_.count(stream) != 0;
+  }
+}
+
+void OBCameraNode::setupFalsePositiveFilterParameters() {
+  std::vector<rclcpp::Parameter> values;
+  const auto overrides = node_->get_node_parameters_interface()->get_parameter_overrides();
+  bool invalid_configuration = false;
+  for (const auto &binding : falsePositiveFilterParameters()) {
+    if (!isFilterParameterSupported(binding.name)) continue;
+    device_param_names_.insert(binding.name);
+    auto descriptor = describeCameraParameter(binding.name);
+    descriptor.dynamic_typing = true;
+    const auto override_it = overrides.find(binding.name);
+    if (!parameters_->hasRuntimeOverride(binding.name) && override_it != overrides.end() &&
+        override_it->second.get_type() != binding.initial_value.get_type()) {
+      invalid_configuration = true;
+      RCLCPP_ERROR_STREAM(
+          logger_,
+          "Skip FalsePositiveFilter startup configuration: invalid type for " << binding.name);
+      if (!node_->has_parameter(binding.name)) {
+        // Keep a correctly typed control available even when a YAML override is invalid.
+        node_->declare_parameter(binding.name, binding.initial_value, descriptor, true);
+      }
+    }
+    const auto value = parameters_->setParam(binding.name, binding.initial_value, {}, descriptor);
+    if (value.get_type() != binding.initial_value.get_type()) {
+      throw std::invalid_argument("Invalid type for " + binding.name);
+    }
+    // An omitted boolean and numeric -1 both preserve preset/JSON configuration.
+    if (!isLaunchParamProvided(binding.name) ||
+        (value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
+         value.get<int64_t>() == -1) ||
+        (value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE &&
+         value.get<double>() == -1.0))
+      continue;
+    values.emplace_back(binding.name, value);
+  }
+  if (invalid_configuration || values.empty()) return;
+  try {
+    auto request = std::make_shared<SetFilter::Request>();
+    auto response = std::make_shared<SetFilter::Response>();
+    request->filter_name = "FalsePositiveFilter";
+    {
+      std::lock_guard<std::mutex> lock(depth_filter_mutex_);
+      const auto found = std::find_if(
+          depth_filter_list_.begin(), depth_filter_list_.end(), [](const auto &filter) {
+            return filter && normalizeDepthFilterName(filter->type()) == "FalsePositiveFilter";
+          });
+      const auto filter = found == depth_filter_list_.end() ? nullptr : *found;
+      // Validate the whole requested configuration before the first SDK write.
+      validateFalsePositiveFilterConfig(filter, values);
+      request->filter_enable = filter->isEnabled();
+    }
+    for (const auto &binding : falsePositiveFilterParameters()) {
+      for (const auto &value : values) {
+        if (value.get_name() == binding.name) {
+          orbbec_camera_msgs::msg::DepthFilterParam config;
+          config.name = binding.config;
+          config.value = filterConfigValue(value);
+          request->filter_config.push_back(config);
+        }
+      }
+    }
+    setFilterCallback(request, response);
+    if (!response->success) throw std::runtime_error(response->message);
+  } catch (const std::exception &e) {
+    RCLCPP_ERROR_STREAM(logger_,
+                        "Could not apply FalsePositiveFilter startup configuration: " << e.what());
   }
 }
 
@@ -910,6 +1113,18 @@ void OBCameraNode::setupRuntimeControls() {
       auto response = std::make_shared<SetFilter::Response>();
       std::vector<rclcpp::Parameter> configuration;
       request->filter_name = spec.name;
+      if (spec.name == "FalsePositiveFilter" &&
+          std::any_of(values.begin(), values.end(), [&](const auto &value) {
+            return value.get_name() != spec.enable_parameter;
+          })) {
+        std::lock_guard<std::mutex> lock(depth_filter_mutex_);
+        const auto found = std::find_if(
+            depth_filter_list_.begin(), depth_filter_list_.end(), [&](const auto &filter) {
+              return filter && normalizeDepthFilterName(filter->type()) == spec.name;
+            });
+        validateFalsePositiveFilterConfig(found == depth_filter_list_.end() ? nullptr : *found,
+                                          values);
+      }
       // Preserve the effective enable state when changing only filter configuration.
       request->filter_enable = node_->has_parameter(spec.enable_parameter) &&
                                node_->get_parameter(spec.enable_parameter).as_bool();

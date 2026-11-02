@@ -395,6 +395,7 @@ class OBCameraNode {
                                  const std::string& filter_name) const;
   void setupFilterParameterSupport();
   bool isFilterParameterSupported(const std::string& name) const;
+  void setupFalsePositiveFilterParameters();
 
   void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
                                  OBPropertyID property_id, rclcpp::ParameterType type) const;

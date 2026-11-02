@@ -305,3 +305,59 @@ ros2 service call /camera/set_filter orbbec_camera_msgs/srv/SetFilter \
 ros2 param get /camera/camera enable_decimation_filter
 ros2 param get /camera/camera decimation_filter_scale
 ```
+
+## False-positive (ghost) filtering
+
+`enable_false_positive_filter` is the master switch. The following 24 controls match the
+three groups exposed by OrbbecViewer. Each is declared when the recommended
+`FalsePositiveFilter` exposes the corresponding SDK configuration. Failed capability/schema
+queries retain controls; unavailable instances/configurations return `NOT_SET` on reads and
+reject runtime writes. No extra filter instance is created for these parameters.
+
+| Group | Parameters |
+| --- | --- |
+| Edge bleed | `enable_false_positive_edge_bleed_filter`; `false_positive_filter_edge_bleed_roi_{min,max}_{x,y}_ratio`; `false_positive_filter_edge_bleed_min_bleed_length` |
+| Texture sparsity | `enable_false_positive_texture_sparsity_filter`; `false_positive_filter_texture_sparsity_roi_{min,max}_{x,y}_ratio`; `false_positive_filter_texture_sparsity_max_noise_level`; `false_positive_filter_texture_sparsity_max_speckle_size` |
+| Pattern ambiguity | `enable_false_positive_pattern_ambiguity_filter`; `false_positive_filter_pattern_ambiguity_roi_{min,max}_{x,y}_ratio`; `false_positive_filter_pattern_ambiguity_max_noise_level`; `false_positive_filter_pattern_ambiguity_max_speckle_size`; `false_positive_filter_pattern_ambiguity_max_width_ratio`; `false_positive_filter_pattern_ambiguity_max_height_ratio`; `false_positive_filter_pattern_ambiguity_tolerance`; `false_positive_filter_pattern_ambiguity_score` |
+
+The three group switches are booleans. ROI ratios, width/height ratios and tolerance are
+floating-point values; lengths, noise levels, speckle sizes and score are integers. Use
+`0.0`/`1.0`, rather than `0`/`1`, for floating-point YAML values. Descriptions include SDK
+defaults, ranges and steps. `param get` reads the existing filter instance's configuration.
+
+Omitted group switches and numeric `-1` skip startup writes, preserving SDK/preset/JSON
+settings. Explicit settings and successful runtime changes take precedence on reconnect.
+Startup settings can be applied while the master or group switch is off; changing a numeric
+setting never enables either switch. Every coordinate can be changed separately. Runtime
+updates reject `-1` and validate type, range and step before applying the requested batch.
+Invalid startup configuration logs an error and skips the entire detailed-configuration
+batch while allowing streaming to continue. SDK errors after writes begin follow existing
+filter handling; no rollback is added. The `set_filter` service is unchanged.
+
+These controls are node parameters, not new launch arguments. Pass a standard ROS parameter
+YAML file directly to the camera executable or to a component's `parameters` list. The
+existing launch `config_file_path` loader ignores keys absent from its launch declarations.
+For example, save this as `/tmp/ghost-filter.yaml`:
+
+```yaml
+/**:
+  ros__parameters:
+    enable_color: true
+    enable_depth: true
+    enable_false_positive_filter: false
+    enable_false_positive_edge_bleed_filter: true
+    false_positive_filter_edge_bleed_roi_min_x_ratio: 0.0
+    false_positive_filter_edge_bleed_roi_max_x_ratio: 1.0
+```
+
+```sh
+ros2 run orbbec_camera orbbec_camera_node --ros-args \
+  -r __node:=camera -r __ns:=/camera --params-file /tmp/ghost-filter.yaml
+
+ros2 param describe /camera/camera false_positive_filter_edge_bleed_roi_min_x_ratio
+ros2 param get /camera/camera enable_false_positive_edge_bleed_filter
+# Preconfigure one coordinate while the master switch remains off.
+ros2 param set /camera/camera false_positive_filter_edge_bleed_roi_min_x_ratio 0.1
+ros2 param get /camera/camera enable_false_positive_filter
+ros2 param set /camera/camera enable_false_positive_filter true
+```
