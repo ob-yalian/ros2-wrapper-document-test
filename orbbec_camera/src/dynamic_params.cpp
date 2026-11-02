@@ -155,7 +155,7 @@ Parameters::~Parameters() noexcept {
 rclcpp::ParameterValue Parameters::setParam(
     const std::string &param_name, rclcpp::ParameterValue initial_value,
     const std::function<void(const rclcpp::Parameter &)> &func,
-    const rcl_interfaces::msg::ParameterDescriptor &descriptor) {
+    const rcl_interfaces::msg::ParameterDescriptor &descriptor, bool ignore_override) {
   rclcpp::ParameterValue result_value(initial_value);
   try {
     if (!node_->has_parameter(param_name)) {
@@ -167,8 +167,18 @@ rclcpp::ParameterValue Parameters::setParam(
       if (description.additional_constraints.empty()) {
         description.additional_constraints = defaults.additional_constraints;
       }
-      removeInvalidDescriptorRanges(description, initial_value);
-      result_value = node_->declare_parameter(param_name, initial_value, description);
+      auto descriptor_value = initial_value;
+      if (!ignore_override) {
+        const auto overrides = node_->get_node_parameters_interface()->get_parameter_overrides();
+        const auto override = overrides.find(param_name);
+        if (override != overrides.end() &&
+            override->second.get_type() == initial_value.get_type()) {
+          descriptor_value = override->second;
+        }
+      }
+      removeInvalidDescriptorRanges(description, descriptor_value);
+      result_value =
+          node_->declare_parameter(param_name, initial_value, description, ignore_override);
     } else {
       // The driver node survives camera reconnects; retain its configured parameter value.
       result_value = node_->get_parameter(param_name).get_parameter_value();
@@ -288,6 +298,30 @@ void Parameters::updateDescription(
   } catch (...) {
     if (!node_->has_parameter(param_name)) {
       node_->declare_parameter(param_name, value.get_parameter_value(), previous, true);
+    }
+    throw;
+  }
+}
+
+void Parameters::updateParameterValue(const std::string &param_name,
+                                      const rclcpp::ParameterValue &value) {
+  std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+  if (!node_->has_parameter(param_name)) return;
+  const auto current = node_->get_parameter(param_name);
+  if (current.get_type() != value.get_type()) {
+    throw std::runtime_error("Invalid value type for " + param_name);
+  }
+  if (current.get_parameter_value() == value) return;
+  const auto descriptor = node_->describe_parameter(param_name);
+  if (descriptor.read_only) return;
+  const rclcpp::Parameter replacement(param_name, value);
+  ParameterRestore restore(this, replacement);
+  node_->undeclare_parameter(param_name);
+  try {
+    node_->declare_parameter(param_name, value, descriptor, true);
+  } catch (...) {
+    if (!node_->has_parameter(param_name)) {
+      node_->declare_parameter(param_name, current.get_parameter_value(), descriptor, true);
     }
     throw;
   }

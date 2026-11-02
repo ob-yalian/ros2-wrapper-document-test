@@ -814,11 +814,15 @@ OBCameraNode::OBCameraNode(rclcpp::Node *node, std::shared_ptr<ob::Device> devic
 template <class T>
 void OBCameraNode::setAndGetNodeParameter(
     T &param, const std::string &param_name, const T &default_value,
-    const rcl_interfaces::msg::ParameterDescriptor &parameter_descriptor) {
+    const rcl_interfaces::msg::ParameterDescriptor &parameter_descriptor, bool ignore_override) {
   try {
+    auto descriptor = parameter_descriptor;
+    descriptor.read_only = descriptor.read_only || (!isRuntimeCameraParameter(param_name) &&
+                                                    dynamic_properties_.count(param_name) == 0);
     param = parameters_
                 ->setParam(param_name, rclcpp::ParameterValue(default_value),
-                           std::function<void(const rclcpp::Parameter &)>(), parameter_descriptor)
+                           std::function<void(const rclcpp::Parameter &)>(), descriptor,
+                           ignore_override)
                 .get<T>();
   } catch (const rclcpp::ParameterTypeException &ex) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to set parameter: " << param_name << ". " << ex.what());
@@ -888,8 +892,16 @@ void OBCameraNode::setAndGetFilterParameter(T &param, const std::string &param_n
     setAndGetPropertyParameter(param, param_name, default_value, property->second);
     return;
   }
-  setAndGetDeviceParameter(param, param_name, default_value,
-                           isFilterParameterSupported(param_name));
+  const bool supported = isFilterParameterSupported(param_name);
+  const bool skip_startup =
+      supported && isStartupParameterSkipped(param_name, rclcpp::ParameterValue(default_value));
+  if (skip_startup) {
+    startup_skip_parameters_.insert(param_name);
+  }
+  setAndGetDeviceParameter(param, param_name, default_value, supported);
+  if (skip_startup) {
+    param = default_value;
+  }
 }
 
 template <class T>
@@ -903,6 +915,24 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
     descriptor.dynamic_typing = true;
     descriptor.read_only = !writable;
     const auto initial = rclcpp::ParameterValue(default_value);
+    const bool skip_startup = isStartupParameterSkipped(param_name, initial);
+    if (skip_startup) {
+      startup_skip_parameters_.insert(param_name);
+    }
+    T ros_value = default_value;
+    if (skip_startup) {
+      try {
+        const auto device_value =
+            readPropertyParameter(param_name, property_id, initial.get_type());
+        if (device_value.get_type() != initial.get_type()) {
+          throw std::runtime_error("Camera property readback type mismatch.");
+        }
+        ros_value = device_value.get<T>();
+      } catch (const std::exception &e) {
+        RCLCPP_WARN_STREAM(logger_,
+                           "Could not read initial value for " << param_name << ": " << e.what());
+      }
+    }
     appendPropertyDescription(descriptor, property_id, initial.get_type());
     if (initial.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
         initial.get<int64_t>() == -1 && param_name.find("_ae_roi_") == std::string::npos) {
@@ -923,7 +953,14 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
                                                     }});
       }
     }
-    setAndGetNodeParameter(param, param_name, default_value, descriptor);
+    setAndGetNodeParameter(ros_value, param_name, ros_value, descriptor, skip_startup);
+    if (skip_startup) {
+      // Keep the launch sentinel for startup application logic; ROS stores the current device
+      // value so the descriptor range remains usable by parameter clients.
+      param = default_value;
+    } else {
+      param = ros_value;
+    }
     property_parameters_[param_name] = {property_id, initial.get_type()};
     parameters_->registerParameterReader(param_name, {});
   } else {
@@ -947,13 +984,34 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
         continue;
       }
       std::ostringstream range;
-      const auto append_range = [&range](const auto &value) {
+      const bool is_enum =
+          property_id == OB_PROP_DEPTH_ROTATE_INT || property_id == OB_PROP_COLOR_ROTATE_INT ||
+          property_id == OB_PROP_IR_ROTATE_INT || property_id == OB_PROP_IR_RIGHT_ROTATE_INT ||
+          property_id == OB_PROP_COLOR_LEFT_ROTATE_INT ||
+          property_id == OB_PROP_COLOR_RIGHT_ROTATE_INT;
+      const auto append_range = [&range, &descriptor, type, is_enum](const auto &value) {
         range << " Camera default: " << value.def << ". Range: [" << value.min << ", " << value.max
               << "]";
         if (value.step > 0) {
           range << ", step: " << value.step;
         }
         range << ".";
+        if (is_enum) return;
+        if constexpr (std::is_integral_v<decltype(value.min)>) {
+          if (type == rclcpp::ParameterType::PARAMETER_INTEGER && value.min <= value.max) {
+            rcl_interfaces::msg::IntegerRange parameter_range;
+            parameter_range.from_value = value.min;
+            parameter_range.to_value = value.max;
+            parameter_range.step = value.step > 0 ? static_cast<uint64_t>(value.step) : 0;
+            descriptor.integer_range = {parameter_range};
+          }
+        } else if (type == rclcpp::ParameterType::PARAMETER_DOUBLE && value.min <= value.max) {
+          rcl_interfaces::msg::FloatingPointRange parameter_range;
+          parameter_range.from_value = value.min;
+          parameter_range.to_value = value.max;
+          parameter_range.step = value.step > 0 ? value.step : 0.0;
+          descriptor.floating_point_range = {parameter_range};
+        }
       };
       switch (property.type) {
         case OB_BOOL_PROPERTY:
@@ -979,8 +1037,7 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
         case OB_STRUCT_PROPERTY:
           return;
       }
-      // Text preserves launch sentinels and enum mappings without imposing the raw SDK
-      // range on the ROS parameter. Metadata is a snapshot, never a write to the device.
+      // Enum controls keep textual choices; numeric controls also expose the SDK range.
       descriptor.description += range.str();
       return;
     }
@@ -1262,7 +1319,8 @@ void OBCameraNode::setupDevices() {
   }
 
   auto should_apply_launch_config = [this](const std::string &param_name) {
-    return isLaunchParamProvided(param_name);
+    return isLaunchParamProvided(param_name) && !(startup_skip_parameters_.count(param_name) != 0 &&
+                                                  !parameters_->hasRuntimeOverride(param_name));
   };
 
   if (should_apply_launch_config("retry_on_usb3_detection_failure") &&
@@ -2458,6 +2516,31 @@ bool OBCameraNode::isLaunchParamProvided(const std::string &param_name) const {
   }
   return initial_ros_params_.find(param_name) != initial_ros_params_.end() ||
          parameters_->hasRuntimeOverride(param_name);
+}
+
+bool OBCameraNode::isStartupParameterSkipped(const std::string &param_name,
+                                             const rclcpp::ParameterValue &default_value) const {
+  if (parameters_->hasRuntimeOverride(param_name)) {
+    return false;
+  }
+  auto value = default_value;
+  const auto overrides = node_->get_node_parameters_interface()->get_parameter_overrides();
+  const auto override = overrides.find(param_name);
+  if (override != overrides.end() && override->second.get_type() == default_value.get_type()) {
+    value = override->second;
+  }
+  switch (value.get_type()) {
+    case rclcpp::ParameterType::PARAMETER_INTEGER:
+      return value.get<int64_t>() == -1 ||
+             ((param_name == "min_depth_limit" || param_name == "max_depth_limit") &&
+              value.get<int64_t>() == 0);
+    case rclcpp::ParameterType::PARAMETER_DOUBLE:
+      return value.get<double>() == -1.0;
+    case rclcpp::ParameterType::PARAMETER_STRING:
+      return value.get<std::string>().empty();
+    default:
+      return false;
+  }
 }
 
 void OBCameraNode::syncConfigJsonApplicationConfig() {

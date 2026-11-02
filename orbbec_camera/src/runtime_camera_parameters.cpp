@@ -273,6 +273,31 @@ std::string filterRangeDescription(const std::string &name,
   return text.str();
 }
 
+void appendFilterParameterRange(rcl_interfaces::msg::ParameterDescriptor &descriptor,
+                                rclcpp::ParameterType type,
+                                const OBFilterConfigSchemaItem &schema) {
+  if (!std::isfinite(schema.min) || !std::isfinite(schema.max) || !std::isfinite(schema.step) ||
+      schema.min > schema.max) {
+    return;
+  }
+  if (schema.type == OB_FILTER_CONFIG_VALUE_TYPE_INT &&
+      type == rclcpp::ParameterType::PARAMETER_INTEGER && std::floor(schema.min) == schema.min &&
+      std::floor(schema.max) == schema.max && std::floor(schema.step) == schema.step) {
+    rcl_interfaces::msg::IntegerRange range;
+    range.from_value = static_cast<int64_t>(schema.min);
+    range.to_value = static_cast<int64_t>(schema.max);
+    range.step = schema.step > 0 ? static_cast<uint64_t>(schema.step) : 0;
+    descriptor.integer_range = {range};
+  } else if (schema.type == OB_FILTER_CONFIG_VALUE_TYPE_FLOAT &&
+             type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+    rcl_interfaces::msg::FloatingPointRange range;
+    range.from_value = schema.min;
+    range.to_value = schema.max;
+    range.step = schema.step > 0 ? schema.step : 0.0;
+    descriptor.floating_point_range = {range};
+  }
+}
+
 int runtimeInt(const rclcpp::Parameter &value) {
   const auto requested = value.as_int();
   if (requested == -1 || requested < std::numeric_limits<int32_t>::min() ||
@@ -506,6 +531,9 @@ void OBCameraNode::setupFalsePositiveFilterParameters() {
     device_param_names_.insert(binding.name);
     auto descriptor = describeCameraParameter(binding.name);
     descriptor.dynamic_typing = true;
+    if (isStartupParameterSkipped(binding.name, binding.initial_value)) {
+      startup_skip_parameters_.insert(binding.name);
+    }
     const auto override_it = overrides.find(binding.name);
     if (!parameters_->hasRuntimeOverride(binding.name) && override_it != overrides.end() &&
         override_it->second.get_type() != binding.initial_value.get_type()) {
@@ -524,6 +552,8 @@ void OBCameraNode::setupFalsePositiveFilterParameters() {
     }
     // An omitted boolean and numeric -1 both preserve preset/JSON configuration.
     if (!isLaunchParamProvided(binding.name) ||
+        (startup_skip_parameters_.count(binding.name) != 0 &&
+         !parameters_->hasRuntimeOverride(binding.name)) ||
         (value.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER &&
          value.get<int64_t>() == -1) ||
         (value.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE &&
@@ -567,7 +597,7 @@ void OBCameraNode::setupFalsePositiveFilterParameters() {
 
 void OBCameraNode::setupFilterParameterDescriptions() {
   // Read existing instances after preset/JSON initialization. Metadata never enables a
-  // stream, creates a filter, or replaces a requested ROS value with SDK readback.
+  // stream or creates a filter; only startup sentinel values are replaced with SDK readback.
   const auto find_filter = [](const auto &filters,
                               const std::string &type) -> std::shared_ptr<ob::Filter> {
     for (const auto &filter : filters) {
@@ -575,23 +605,33 @@ void OBCameraNode::setupFilterParameterDescriptions() {
     }
     return nullptr;
   };
-  const auto update = [this](const std::string &name, const std::string &metadata) {
+  const auto update = [this](const std::string &name,
+                             const rcl_interfaces::msg::ParameterDescriptor &descriptor) {
     if (!node_->has_parameter(name)) return;
     try {
-      parameters_->updateDescription(name, describeCameraParameter(name).description + metadata);
+      parameters_->updateDescription(name, descriptor);
     } catch (const std::exception &e) {
       RCLCPP_WARN_STREAM(logger_, "Could not update description for " << name << ": " << e.what());
     }
   };
-  const auto describe_filter = [&update](const std::string &name, const std::string &config,
-                                         const std::shared_ptr<ob::Filter> &filter) {
+  const auto describe_filter = [this, &update](const std::string &name, const std::string &config,
+                                               const std::shared_ptr<ob::Filter> &filter) {
+    if (!node_->has_parameter(name)) return;
+    auto descriptor = describeCameraParameter(name);
     std::string metadata = " SDK default/range unavailable.";
     const auto sdk_config = config == "scale" ? "decimate" : config;
     if (filter) {
       try {
+        if (startup_skip_parameters_.count(name) != 0 && !parameters_->hasRuntimeOverride(name)) {
+          parameters_->updateParameterValue(
+              name, readFilterConfig(filter, sdk_config, node_->get_parameter(name).get_type()));
+        }
         for (const auto &schema : filter->getConfigSchemaVec()) {
           if (schema.name && sdk_config == schema.name) {
             metadata = filterRangeDescription(name, schema);
+            if (sdk_config != "sequenceid") {
+              appendFilterParameterRange(descriptor, node_->get_parameter(name).get_type(), schema);
+            }
             break;
           }
         }
@@ -599,7 +639,8 @@ void OBCameraNode::setupFilterParameterDescriptions() {
         // Keep the basic description when a filter does not expose its schema.
       }
     }
-    update(name, metadata);
+    descriptor.description += metadata;
+    update(name, descriptor);
   };
   for (const auto &spec : runtimeFilters()) {
     const auto hardware = runtimeFilterProperties(spec);
@@ -607,7 +648,7 @@ void OBCameraNode::setupFilterParameterDescriptions() {
       for (const auto &binding : hardware) {
         if (!node_->has_parameter(binding.first)) continue;
         const auto type = node_->get_parameter(binding.first).get_type();
-        rcl_interfaces::msg::ParameterDescriptor metadata;
+        auto descriptor = describeCameraParameter(binding.first);
         if (type == rclcpp::ParameterType::PARAMETER_STRING) {
           try {
             const auto range = device_->getIntPropertyRange(binding.second);
@@ -618,14 +659,14 @@ void OBCameraNode::setupFilterParameterDescriptions() {
                                                   static_cast<double>(range.step),
                                                   static_cast<double>(range.def),
                                                   nullptr};
-            metadata.description = filterRangeDescription(binding.first, schema);
+            descriptor.description += filterRangeDescription(binding.first, schema);
           } catch (const std::exception &) {
-            metadata.description = " SDK default/range unavailable.";
+            descriptor.description += " SDK default/range unavailable.";
           }
         } else {
-          appendPropertyDescription(metadata, binding.second, type);
+          appendPropertyDescription(descriptor, binding.second, type);
         }
-        update(binding.first, metadata.description);
+        update(binding.first, descriptor);
       }
       continue;
     }

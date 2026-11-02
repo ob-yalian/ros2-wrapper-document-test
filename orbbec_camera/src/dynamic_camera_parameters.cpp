@@ -95,8 +95,8 @@ void OBCameraNode::writeDynamicProperty(const DynamicProperty &property,
 }
 
 void OBCameraNode::setupDynamicParameters() {
-  // ROS parameters represent requested configuration, including launch-only sentinels.
-  // Do not replace configured values with device readings here.
+  // Readable property parameters may expose the current device value while their launch-only
+  // sentinel is retained separately for startup application logic.
   setupRuntimeControls();
   setupParameterReaders();
   setupFilterParameterReaders();

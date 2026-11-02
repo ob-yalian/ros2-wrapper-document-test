@@ -31,7 +31,8 @@ class Parameters {
                                   const std::function<void(const rclcpp::Parameter&)>& func =
                                       std::function<void(const rclcpp::Parameter&)>(),
                                   const rcl_interfaces::msg::ParameterDescriptor& descriptor =
-                                      rcl_interfaces::msg::ParameterDescriptor());
+                                      rcl_interfaces::msg::ParameterDescriptor(),
+                                  bool ignore_override = false);
 
   template <class T>
   void setParamT(std::string param_name, rclcpp::ParameterValue initial_value, T& param,
@@ -47,6 +48,8 @@ class Parameters {
   void updateDescription(const std::string& param_name, const std::string& description);
   void updateDescription(const std::string& param_name,
                          const rcl_interfaces::msg::ParameterDescriptor& descriptor);
+  // Update the local ROS value without invoking a device setter.
+  void updateParameterValue(const std::string& param_name, const rclcpp::ParameterValue& value);
 
   using BatchSetter = std::function<rcl_interfaces::msg::SetParametersResult(
       const std::vector<rclcpp::Parameter>&)>;

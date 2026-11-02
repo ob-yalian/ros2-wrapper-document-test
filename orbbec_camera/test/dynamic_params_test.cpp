@@ -38,7 +38,9 @@ class DynamicParametersTest : public ::testing::Test {
     manager = std::make_unique<Parameters>(node.get());
     descriptor.dynamic_typing = true;
     manager->setParam("exposure", rclcpp::ParameterValue(-1), {}, descriptor);
-    manager->setParam("width", rclcpp::ParameterValue(640));
+    auto startup_descriptor = descriptor;
+    startup_descriptor.read_only = true;
+    manager->setParam("width", rclcpp::ParameterValue(640), {}, startup_descriptor);
     enableUpdates();
   }
 
@@ -111,6 +113,8 @@ TEST_F(DynamicParametersTest, ThrowingDeviceSetterDoesNotChangeValueOrReconnectI
 }
 
 TEST_F(DynamicParametersTest, RejectsStartupOnlyUpdatesWithoutCallingDeviceSetter) {
+  EXPECT_TRUE(node->describe_parameter("width").read_only);
+  EXPECT_FALSE(node->describe_parameter("exposure").read_only);
   EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("width", 1280)).successful);
   EXPECT_EQ(writes, 0);
   EXPECT_EQ(node->get_parameter("width").as_int(), 640);
@@ -174,20 +178,52 @@ TEST_F(DynamicParametersTest, RejectsMixingHardwareAndRosClockUpdates) {
 }
 
 TEST_F(DynamicParametersTest, RetainsSoftwareConfigurationAcrossReconnect) {
-  manager->registerDynamicParameters({{"width", rclcpp::ParameterType::PARAMETER_INTEGER}},
+  manager->setParam("queue_limit", rclcpp::ParameterValue(640));
+  manager->registerDynamicParameters({{"queue_limit", rclcpp::ParameterType::PARAMETER_INTEGER}},
                                      [this](const auto &) {
                                        ++writes;
                                        rcl_interfaces::msg::SetParametersResult result;
                                        result.successful = true;
                                        return result;
                                      });
-  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("width", 1280)).successful);
+  ASSERT_TRUE(node->set_parameter(rclcpp::Parameter("queue_limit", 1280)).successful);
   manager->clearDynamicParameters();
-  EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(640)).get<int64_t>(), 1280);
-  EXPECT_EQ(node->get_parameter("width").as_int(), 1280);
+  EXPECT_EQ(manager->setParam("queue_limit", rclcpp::ParameterValue(640)).get<int64_t>(), 1280);
+  EXPECT_EQ(node->get_parameter("queue_limit").as_int(), 1280);
   EXPECT_EQ(writes, 1);
-  EXPECT_TRUE(manager->hasRuntimeOverride("width"));
-  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("width", 1920)).successful);
+  EXPECT_TRUE(manager->hasRuntimeOverride("queue_limit"));
+  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("queue_limit", 1920)).successful);
+}
+
+TEST_F(DynamicParametersTest, StartupReadOnlyDescriptorSurvivesReconnect) {
+  manager->clearDynamicParameters();
+  EXPECT_EQ(manager->setParam("width", rclcpp::ParameterValue(320)).get<int64_t>(), 640);
+  enableUpdates();
+  EXPECT_TRUE(node->describe_parameter("width").read_only);
+  EXPECT_FALSE(node->describe_parameter("exposure").read_only);
+  EXPECT_EQ(writes, 0);
+}
+
+TEST_F(DynamicParametersTest, StartupParameterIsReadOnlyAtDeclaration) {
+  auto startup_descriptor = descriptor;
+  startup_descriptor.read_only = true;
+  manager->setParam("align_mode", rclcpp::ParameterValue("HW"), {}, startup_descriptor);
+  EXPECT_TRUE(node->describe_parameter("align_mode").read_only);
+  EXPECT_NO_THROW(enableUpdates());
+  EXPECT_EQ(node->get_parameter("align_mode").as_string(), "HW");
+  EXPECT_FALSE(node->set_parameter(rclcpp::Parameter("align_mode", "SW")).successful);
+  EXPECT_EQ(writes, 0);
+}
+
+TEST_F(DynamicParametersTest, CallbackParameterRemainsWritable) {
+  int configured = 0;
+  manager->setParam("callback_control", rclcpp::ParameterValue(1),
+                    [&configured](const auto &value) { configured = value.as_int(); });
+  enableUpdates();
+  EXPECT_FALSE(node->describe_parameter("callback_control").read_only);
+  EXPECT_TRUE(node->set_parameter(rclcpp::Parameter("callback_control", 2)).successful);
+  EXPECT_EQ(configured, 2);
+  EXPECT_EQ(writes, 0);
 }
 
 TEST_F(DynamicParametersTest, DescriptionRefreshPreservesSentinelAndDoesNotWriteDevice) {

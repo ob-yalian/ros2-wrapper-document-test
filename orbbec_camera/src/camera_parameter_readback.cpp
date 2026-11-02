@@ -34,7 +34,8 @@ void OBCameraNode::addParameterReader(const std::string &name, Parameters::Param
 
 rclcpp::ParameterValue OBCameraNode::readPropertyParameter(const std::string &name, OBPropertyID id,
                                                            rclcpp::ParameterType type) const {
-  if (!device_->isPropertySupported(id, OB_PERMISSION_READ)) {
+  if (!device_->isPropertySupported(id, OB_PERMISSION_READ) &&
+      !device_->isPropertySupported(id, OB_PERMISSION_READ_WRITE)) {
     throw std::runtime_error("Camera property is not readable: " + name);
   }
   if (id == OB_STRUCT_COLOR_AE_ROI || id == OB_STRUCT_DEPTH_AE_ROI) {

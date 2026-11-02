@@ -209,18 +209,19 @@ class OBCameraNode {
                bool is_playback_device = false);
 
   template <class T>
-  void setAndGetNodeParameter(
-      T& param, const std::string& param_name, const T& default_value,
-      const rcl_interfaces::msg::ParameterDescriptor& parameter_descriptor =
-          rcl_interfaces::msg::ParameterDescriptor());  // set and get parameter
+  void setAndGetNodeParameter(T& param, const std::string& param_name, const T& default_value,
+                              const rcl_interfaces::msg::ParameterDescriptor& parameter_descriptor =
+                                  rcl_interfaces::msg::ParameterDescriptor(),
+                              bool ignore_override = false);  // set and get parameter
 
   template <class T>
   void setAndGetNodeParameter(std::atomic<T>& param, const std::string& name,
                               const T& default_value,
                               const rcl_interfaces::msg::ParameterDescriptor& descriptor =
-                                  rcl_interfaces::msg::ParameterDescriptor()) {
+                                  rcl_interfaces::msg::ParameterDescriptor(),
+                              bool ignore_override = false) {
     T value = param.load();
-    setAndGetNodeParameter(value, name, default_value, descriptor);
+    setAndGetNodeParameter(value, name, default_value, descriptor, ignore_override);
     param.store(value);
   }
 
@@ -303,6 +304,8 @@ class OBCameraNode {
   void captureInitialRosParameters();
 
   bool isLaunchParamProvided(const std::string& param_name) const;
+  bool isStartupParameterSkipped(const std::string& param_name,
+                                 const rclcpp::ParameterValue& default_value) const;
 
   bool exportConfigJsonToFile(const std::string& file_path, std::string& message);
 
@@ -1161,6 +1164,7 @@ class OBCameraNode {
   bool retry_on_usb3_detection_failure_ = false;
   bool config_json_loaded_ = false;
   std::unordered_set<std::string> initial_ros_params_;
+  std::unordered_set<std::string> startup_skip_parameters_;
   std::unordered_set<std::string> device_param_names_;
   std::map<std::string, DynamicProperty> dynamic_properties_;
   std::map<std::string, std::pair<OBPropertyID, rclcpp::ParameterType>> property_parameters_;
