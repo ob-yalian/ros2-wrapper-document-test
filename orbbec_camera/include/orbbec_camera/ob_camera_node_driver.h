@@ -90,6 +90,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
       const std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Request> request,
       std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Response> response);
   bool applyForceIpConfig();
+  void declareNetworkParameters();
 
   OBDeviceAccessMode stringToAccessMode(const std::string& mode_str);
   std::string accessModeToString(OBDeviceAccessMode mode);

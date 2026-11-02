@@ -58,6 +58,17 @@ rcl_interfaces::msg::ParameterDescriptor describeStartupParameter(const std::str
   return descriptor;
 }
 
+template <class T>
+T readStartupOverride(rclcpp::Node &node, const std::string &name, const T &default_value) {
+  const auto &overrides = node.get_node_parameters_interface()->get_parameter_overrides();
+  const auto found = overrides.find(name);
+  if (found == overrides.end()) return default_value;
+  if (found->second.get_type() != rclcpp::ParameterValue(default_value).get_type()) {
+    throw rclcpp::exceptions::InvalidParameterTypeException(name, "Invalid startup value type.");
+  }
+  return found->second.get<T>();
+}
+
 std::filesystem::path getPackageSharePath(const std::string &package_name) {
 #ifdef ORBBEC_AMENT_INDEX_USES_FILESYSTEM_PATHS
   return ament_index_cpp::get_package_share_path(package_name);
@@ -342,16 +353,12 @@ void OBCameraNodeDriver::init() {
   }
 
   // Force IP
-  force_ip_enable_ = declare_parameter<bool>("force_ip_enable", false,
-                                             describeStartupParameter("force_ip_enable"));
-  force_ip_mac_ =
-      declare_parameter<std::string>("force_ip_mac", "", describeStartupParameter("force_ip_mac"));
-  force_ip_address_ = declare_parameter<std::string>("force_ip_address", "192.168.1.10",
-                                                     describeStartupParameter("force_ip_address"));
-  force_ip_subnet_mask_ = declare_parameter<std::string>(
-      "force_ip_subnet_mask", "255.255.255.0", describeStartupParameter("force_ip_subnet_mask"));
-  force_ip_gateway_ = declare_parameter<std::string>("force_ip_gateway", "192.168.1.1",
-                                                     describeStartupParameter("force_ip_gateway"));
+  force_ip_enable_ = readStartupOverride<bool>(*this, "force_ip_enable", false);
+  force_ip_mac_ = readStartupOverride<std::string>(*this, "force_ip_mac", "");
+  force_ip_address_ = readStartupOverride<std::string>(*this, "force_ip_address", "192.168.1.10");
+  force_ip_subnet_mask_ =
+      readStartupOverride<std::string>(*this, "force_ip_subnet_mask", "255.255.255.0");
+  force_ip_gateway_ = readStartupOverride<std::string>(*this, "force_ip_gateway", "192.168.1.1");
   if (config_path_.empty()) {
     ctx_ = std::make_unique<ob::Context>();
   } else {
@@ -423,12 +430,9 @@ void OBCameraNodeDriver::init() {
   device_num_ = static_cast<int>(
       declare_parameter<int>("device_num", 1, describeStartupParameter("device_num")));
   usb_port_ = declare_parameter<std::string>("usb_port", "", describeStartupParameter("usb_port"));
-  net_device_ip_ = declare_parameter<std::string>("net_device_ip", "",
-                                                  describeStartupParameter("net_device_ip"));
-  net_device_port_ = static_cast<int>(
-      declare_parameter<int>("net_device_port", 0, describeStartupParameter("net_device_port")));
-  enumerate_net_device_ = declare_parameter<bool>("enumerate_net_device", false,
-                                                  describeStartupParameter("enumerate_net_device"));
+  net_device_ip_ = readStartupOverride<std::string>(*this, "net_device_ip", "");
+  net_device_port_ = static_cast<int>(readStartupOverride<int>(*this, "net_device_port", 0));
+  enumerate_net_device_ = readStartupOverride<bool>(*this, "enumerate_net_device", false);
   uvc_backend_ = declare_parameter<std::string>("uvc_backend", "libuvc",
                                                 describeStartupParameter("uvc_backend"));
   const bool use_explicit_net_device = !net_device_ip_.empty() && net_device_port_ != 0;
@@ -1243,6 +1247,9 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   bool initialized = false;
   device_info_ = device_->getDeviceInfo();
   RCLCPP_DEBUG_STREAM(logger_, "Try to connect device via " << device_info_->connectionType());
+  if (!playback_device_ && std::string(device_info_->getConnectionType()) == "Ethernet") {
+    declareNetworkParameters();
+  }
 
   while (retry_count < max_retries && !initialized) {
     try {
@@ -1407,6 +1414,23 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   }
 
 }  // namespace orbbec_camera
+
+void OBCameraNodeDriver::declareNetworkParameters() {
+  // Read connection settings before discovery; expose them only for network devices.
+  const auto declare = [this](const std::string &name, const auto &value) {
+    if (!has_parameter(name)) {
+      declare_parameter(name, rclcpp::ParameterValue(value), describeStartupParameter(name), true);
+    }
+  };
+  declare("force_ip_enable", force_ip_enable_);
+  declare("force_ip_mac", force_ip_mac_);
+  declare("force_ip_address", force_ip_address_);
+  declare("force_ip_subnet_mask", force_ip_subnet_mask_);
+  declare("force_ip_gateway", force_ip_gateway_);
+  declare("net_device_ip", net_device_ip_);
+  declare("net_device_port", net_device_port_);
+  declare("enumerate_net_device", enumerate_net_device_);
+}
 
 bool OBCameraNodeDriver::applyForceIpConfig() {
   if (!force_ip_enable_) {
