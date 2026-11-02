@@ -5274,48 +5274,111 @@ void OBCameraNode::getCommonParameters() {
   setAndGetDeviceParameter<int>(interleave_skip_index_, "interleave_skip_index", -1,
                                 supports_interleave);
 
-  // hdr and laser interleave params
-  setAndGetDeviceParameter<int>(hdr_index1_laser_control_, "hdr_index1_laser_control", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index1_depth_exposure_, "hdr_index1_depth_exposure", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index1_depth_gain_, "hdr_index1_depth_gain", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index1_ir_brightness_, "hdr_index1_ir_brightness", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index1_ir_ae_max_exposure_, "hdr_index1_ir_ae_max_exposure", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index0_laser_control_, "hdr_index0_laser_control", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index0_depth_exposure_, "hdr_index0_depth_exposure", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index0_depth_gain_, "hdr_index0_depth_gain", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index0_ir_brightness_, "hdr_index0_ir_brightness", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(hdr_index0_ir_ae_max_exposure_, "hdr_index0_ir_ae_max_exposure", -1,
-                                supports_interleave);
+  bool supports_hdr_interleave = supports_interleave;
+  bool supports_laser_interleave = supports_interleave;
+  if (supports_interleave) {
+    queryDeviceCapability(
+        "frame interleave modes", [this, &supports_hdr_interleave, &supports_laser_interleave]() {
+          const auto modes = device_->getAvailableFrameInterleaveList();
+          if (!modes) throw std::runtime_error("Frame interleave mode list is unavailable.");
+          const bool hdr = modes->hasFrameInterleave("Depth from HDR");
+          const bool laser = modes->hasFrameInterleave("Laser On-Off");
+          supports_hdr_interleave = hdr;
+          supports_laser_interleave = laser;
+          return true;
+        });
+  }
+  const auto supports_interleave_property = [this](const std::string &name, OBPropertyID property) {
+    if (property == OB_PROP_LASER_CONTROL_INT && isnotLaserDevices(pid_)) return false;
+    if (property == OB_PROP_DEPTH_EXPOSURE_INT) {
+      return isPropertyParameterSupported(name, OB_PROP_DEPTH_EXPOSURE_INT) ||
+             isPropertyParameterSupported(name, OB_PROP_IR_EXPOSURE_INT);
+    }
+    return isPropertyParameterSupported(name, property);
+  };
 
-  setAndGetDeviceParameter<int>(laser_index1_laser_control_, "laser_index1_laser_control", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index1_depth_exposure_, "laser_index1_depth_exposure", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index1_depth_gain_, "laser_index1_depth_gain", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index1_ir_brightness_, "laser_index1_ir_brightness", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index1_ir_ae_max_exposure_, "laser_index1_ir_ae_max_exposure",
-                                -1, supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index0_laser_control_, "laser_index0_laser_control", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index0_depth_exposure_, "laser_index0_depth_exposure", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index0_depth_gain_, "laser_index0_depth_gain", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index0_ir_brightness_, "laser_index0_ir_brightness", -1,
-                                supports_interleave);
-  setAndGetDeviceParameter<int>(laser_index0_ir_ae_max_exposure_, "laser_index0_ir_ae_max_exposure",
-                                -1, supports_interleave);
+  // hdr and laser interleave params
+  setAndGetDeviceParameter<int>(
+      hdr_index1_laser_control_, "hdr_index1_laser_control", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index1_laser_control", OB_PROP_LASER_CONTROL_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index1_depth_exposure_, "hdr_index1_depth_exposure", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index1_depth_exposure", OB_PROP_DEPTH_EXPOSURE_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index1_depth_gain_, "hdr_index1_depth_gain", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index1_depth_gain", OB_PROP_DEPTH_GAIN_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index1_ir_brightness_, "hdr_index1_ir_brightness", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index1_ir_brightness", OB_PROP_IR_BRIGHTNESS_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index1_ir_ae_max_exposure_, "hdr_index1_ir_ae_max_exposure", -1,
+      supports_hdr_interleave && supports_interleave_property("hdr_index1_ir_ae_max_exposure",
+                                                              OB_PROP_IR_AE_MAX_EXPOSURE_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index0_laser_control_, "hdr_index0_laser_control", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index0_laser_control", OB_PROP_LASER_CONTROL_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index0_depth_exposure_, "hdr_index0_depth_exposure", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index0_depth_exposure", OB_PROP_DEPTH_EXPOSURE_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index0_depth_gain_, "hdr_index0_depth_gain", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index0_depth_gain", OB_PROP_DEPTH_GAIN_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index0_ir_brightness_, "hdr_index0_ir_brightness", -1,
+      supports_hdr_interleave &&
+          supports_interleave_property("hdr_index0_ir_brightness", OB_PROP_IR_BRIGHTNESS_INT));
+  setAndGetDeviceParameter<int>(
+      hdr_index0_ir_ae_max_exposure_, "hdr_index0_ir_ae_max_exposure", -1,
+      supports_hdr_interleave && supports_interleave_property("hdr_index0_ir_ae_max_exposure",
+                                                              OB_PROP_IR_AE_MAX_EXPOSURE_INT));
+
+  setAndGetDeviceParameter<int>(
+      laser_index1_laser_control_, "laser_index1_laser_control", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index1_laser_control", OB_PROP_LASER_CONTROL_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index1_depth_exposure_, "laser_index1_depth_exposure", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index1_depth_exposure", OB_PROP_DEPTH_EXPOSURE_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index1_depth_gain_, "laser_index1_depth_gain", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index1_depth_gain", OB_PROP_DEPTH_GAIN_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index1_ir_brightness_, "laser_index1_ir_brightness", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index1_ir_brightness", OB_PROP_IR_BRIGHTNESS_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index1_ir_ae_max_exposure_, "laser_index1_ir_ae_max_exposure", -1,
+      supports_laser_interleave && supports_interleave_property("laser_index1_ir_ae_max_exposure",
+                                                                OB_PROP_IR_AE_MAX_EXPOSURE_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index0_laser_control_, "laser_index0_laser_control", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index0_laser_control", OB_PROP_LASER_CONTROL_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index0_depth_exposure_, "laser_index0_depth_exposure", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index0_depth_exposure", OB_PROP_DEPTH_EXPOSURE_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index0_depth_gain_, "laser_index0_depth_gain", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index0_depth_gain", OB_PROP_DEPTH_GAIN_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index0_ir_brightness_, "laser_index0_ir_brightness", -1,
+      supports_laser_interleave &&
+          supports_interleave_property("laser_index0_ir_brightness", OB_PROP_IR_BRIGHTNESS_INT));
+  setAndGetDeviceParameter<int>(
+      laser_index0_ir_ae_max_exposure_, "laser_index0_ir_ae_max_exposure", -1,
+      supports_laser_interleave && supports_interleave_property("laser_index0_ir_ae_max_exposure",
+                                                                OB_PROP_IR_AE_MAX_EXPOSURE_INT));
   setAndGetDeviceParameter<bool>(disparity_offset_config_, "disparity_offset_config", false,
                                  supports_disp_offset);
   setAndGetDeviceParameter<int>(offset_index0_, "offset_index0", -1, supports_disp_offset);
