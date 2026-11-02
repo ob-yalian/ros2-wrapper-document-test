@@ -16,10 +16,46 @@
 #include "orbbec_camera/dynamic_params.h"
 #include "orbbec_camera/parameter_descriptions.h"
 
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace orbbec_camera {
 namespace {
+bool integerRangeContains(const rclcpp::ParameterValue &value,
+                          const rcl_interfaces::msg::IntegerRange &range) {
+  if (value.get_type() != rclcpp::ParameterType::PARAMETER_INTEGER) return false;
+  const auto current = value.get<int64_t>();
+  if (current < range.from_value || current > range.to_value) return false;
+  if (range.step == 0) return true;
+  if (range.step > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return false;
+  return (current - range.from_value) % static_cast<int64_t>(range.step) == 0;
+}
+
+bool floatingPointRangeContains(const rclcpp::ParameterValue &value,
+                                const rcl_interfaces::msg::FloatingPointRange &range) {
+  if (value.get_type() != rclcpp::ParameterType::PARAMETER_DOUBLE) return false;
+  const auto current = value.get<double>();
+  if (!std::isfinite(current) || current < range.from_value || current > range.to_value) {
+    return false;
+  }
+  if (range.step <= 0.0) return true;
+  const auto steps = (current - range.from_value) / range.step;
+  return std::abs(steps - std::round(steps)) <= 1e-9;
+}
+
+void removeInvalidDescriptorRanges(rcl_interfaces::msg::ParameterDescriptor &descriptor,
+                                   const rclcpp::ParameterValue &value) {
+  if (!descriptor.integer_range.empty() &&
+      !integerRangeContains(value, descriptor.integer_range.front())) {
+    descriptor.integer_range.clear();
+  }
+  if (!descriptor.floating_point_range.empty() &&
+      !floatingPointRangeContains(value, descriptor.floating_point_range.front())) {
+    descriptor.floating_point_range.clear();
+  }
+}
+
 struct ParameterRestore;
 thread_local ParameterRestore *parameter_restore = nullptr;
 
@@ -131,6 +167,7 @@ rclcpp::ParameterValue Parameters::setParam(
       if (description.additional_constraints.empty()) {
         description.additional_constraints = defaults.additional_constraints;
       }
+      removeInvalidDescriptorRanges(description, initial_value);
       result_value = node_->declare_parameter(param_name, initial_value, description);
     } else {
       // The driver node survives camera reconnects; retain its configured parameter value.
@@ -213,13 +250,35 @@ void Parameters::removeParam(const std::string &param_name) {
 }
 
 void Parameters::updateDescription(const std::string &param_name, const std::string &description) {
+  if (!node_->has_parameter(param_name)) return;
+  auto descriptor = node_->describe_parameter(param_name);
+  descriptor.description = description;
+  updateDescription(param_name, descriptor);
+}
+
+void Parameters::updateDescription(
+    const std::string &param_name,
+    const rcl_interfaces::msg::ParameterDescriptor &requested_descriptor) {
   std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
   if (!node_->has_parameter(param_name)) return;
   const auto previous = node_->describe_parameter(param_name);
-  if (!previous.dynamic_typing || previous.read_only || previous.description == description) return;
+  if (!previous.dynamic_typing || previous.read_only) return;
   const auto value = node_->get_parameter(param_name);
+  auto requested = requested_descriptor;
+  removeInvalidDescriptorRanges(requested, value.get_parameter_value());
   auto descriptor = previous;
-  descriptor.description = description;
+  descriptor.description = requested.description;
+  if (!requested.integer_range.empty()) {
+    descriptor.integer_range = requested.integer_range;
+  }
+  if (!requested.floating_point_range.empty()) {
+    descriptor.floating_point_range = requested.floating_point_range;
+  }
+  if (descriptor.description == previous.description &&
+      descriptor.integer_range == previous.integer_range &&
+      descriptor.floating_point_range == previous.floating_point_range) {
+    return;
+  }
   // Humble has no descriptor-update API. Re-declare only device parameters during
   // initialization, preserving the value, callbacks and reconnect intent.
   ParameterRestore restore(this, value);
