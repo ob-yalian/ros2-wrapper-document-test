@@ -362,10 +362,12 @@ class LiveParameterServicesTest : public DynamicParametersTest {
   rclcpp::executors::SingleThreadedExecutor executor;
 };
 
-TEST_F(LiveParameterServicesTest, RemoteGetReadsDeviceAndPreservesBatchOrderOnFailure) {
+TEST_F(LiveParameterServicesTest, RemoteGetReadsStoredConfigurationWithoutAccessingDevice) {
   int actual = 120;
+  int reads = 0;
   bool readable = true;
   manager->registerParameterReader("exposure", [&] {
+    ++reads;
     if (!readable) throw std::runtime_error("simulated disconnected camera");
     return rclcpp::ParameterValue(actual);
   });
@@ -374,24 +376,25 @@ TEST_F(LiveParameterServicesTest, RemoteGetReadsDeviceAndPreservesBatchOrderOnFa
   auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", request);
   ASSERT_EQ(response->values.size(), 4u);
   EXPECT_EQ(response->values[0].integer_value, 640);
-  EXPECT_EQ(response->values[1].integer_value, 120);
+  EXPECT_EQ(response->values[1].integer_value, -1);
   EXPECT_EQ(response->values[2].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
-  EXPECT_EQ(response->values[3].integer_value, 120);
+  EXPECT_EQ(response->values[3].integer_value, -1);
   actual = 150;
   response = call<rcl_interfaces::srv::GetParameters>("get_parameters", request);
-  EXPECT_EQ(response->values[1].integer_value, 150);
+  EXPECT_EQ(response->values[1].integer_value, -1);
   readable = false;
   response = call<rcl_interfaces::srv::GetParameters>("get_parameters", request);
   ASSERT_EQ(response->values.size(), 4u);
   EXPECT_EQ(response->values[0].integer_value, 640);
-  EXPECT_EQ(response->values[1].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
-  EXPECT_EQ(response->values[3].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  EXPECT_EQ(response->values[1].integer_value, -1);
+  EXPECT_EQ(response->values[3].integer_value, -1);
   EXPECT_EQ(node->get_parameter("exposure").as_int(), -1);
   EXPECT_EQ(writes, 0);
+  EXPECT_EQ(reads, 0);
   EXPECT_FALSE(manager->hasRuntimeOverride("exposure"));
 }
 
-TEST_F(LiveParameterServicesTest, DisconnectRetainsDeclarationButDisablesDeviceReadsAndWrites) {
+TEST_F(LiveParameterServicesTest, DisconnectRetainsStoredConfigurationButDisablesDeviceWrites) {
   manager->registerParameterReader("exposure", [] { return rclcpp::ParameterValue(120); });
   manager->clearDynamicParameters();
   rcl_interfaces::srv::ListParameters::Request list;
@@ -402,7 +405,7 @@ TEST_F(LiveParameterServicesTest, DisconnectRetainsDeclarationButDisablesDeviceR
   get.names = {"exposure"};
   const auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
   ASSERT_EQ(response->values.size(), 1u);
-  EXPECT_EQ(response->values[0].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  EXPECT_EQ(response->values[0].integer_value, -1);
   rcl_interfaces::srv::SetParametersAtomically::Request set;
   set.parameters = {rclcpp::Parameter("exposure", 40).to_parameter_msg()};
   EXPECT_FALSE(call<rcl_interfaces::srv::SetParametersAtomically>("set_parameters_atomically", set)
@@ -455,7 +458,7 @@ TEST_F(LiveParameterServicesTest, StandardWriteDescribeListAndTypeServicesRemain
             listed->result.names.end());
 }
 
-TEST_F(LiveParameterServicesTest, ReadOnlyPropertyRemainsLiveAndRejectsMixedWrites) {
+TEST_F(LiveParameterServicesTest, ReadOnlyParameterUsesStoredValueWhileDeviceReaderRemainsLive) {
   auto read_only = descriptor;
   read_only.read_only = true;
   manager->setParam("read_only_gain", rclcpp::ParameterValue(-1), {}, read_only);
@@ -467,10 +470,10 @@ TEST_F(LiveParameterServicesTest, ReadOnlyPropertyRemainsLiveAndRejectsMixedWrit
   get.names = {"read_only_gain"};
   auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
   ASSERT_EQ(response->values.size(), 1u);
-  EXPECT_EQ(response->values[0].integer_value, 12);
+  EXPECT_EQ(response->values[0].integer_value, -1);
   actual = 15;
   response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
-  EXPECT_EQ(response->values[0].integer_value, 15);
+  EXPECT_EQ(response->values[0].integer_value, -1);
   EXPECT_EQ(manager->getParameter("read_only_gain").as_int(), 15);
   EXPECT_EQ(node->get_parameter("read_only_gain").as_int(), -1);
 
@@ -503,7 +506,8 @@ TEST_F(LiveParameterServicesTest, ReadOnlyPropertyRemainsLiveAndRejectsMixedWrit
   EXPECT_TRUE(node->describe_parameter("read_only_gain").read_only);
 }
 
-TEST_F(LiveParameterServicesTest, WriteOnlyControlNeverReturnsRequestedConfigurationAsReadback) {
+TEST_F(LiveParameterServicesTest,
+       WriteOnlyControlStoresConfigurationWithoutClaimingDeviceReadback) {
   manager->setParam("write_only_control", rclcpp::ParameterValue(-1), {}, descriptor);
   manager->registerParameterReader("write_only_control", []() -> rclcpp::ParameterValue {
     throw std::runtime_error("Camera property is not readable.");
@@ -528,7 +532,7 @@ TEST_F(LiveParameterServicesTest, WriteOnlyControlNeverReturnsRequestedConfigura
   get.names = {"write_only_control"};
   const auto response = call<rcl_interfaces::srv::GetParameters>("get_parameters", get);
   ASSERT_EQ(response->values.size(), 1u);
-  EXPECT_EQ(response->values[0].type, rclcpp::ParameterType::PARAMETER_NOT_SET);
+  EXPECT_EQ(response->values[0].integer_value, 40);
 }
 
 TEST_F(LiveParameterServicesTest, UnsupportedPropertyCannotBeReadOrWritten) {

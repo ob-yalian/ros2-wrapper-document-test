@@ -63,7 +63,7 @@ class Parameters {
 
   using ParameterReader = std::function<rclcpp::ParameterValue()>;
   void registerParameterReader(const std::string& name, ParameterReader reader);
-  // Read device state without changing the requested ROS configuration.
+  // Read device state for camera get services; standard param get reads the ROS store.
   rclcpp::Parameter getParameter(const std::string& name) const;
   // The driver disables rclcpp's default services before creating these endpoints.
   void startParameterServices();

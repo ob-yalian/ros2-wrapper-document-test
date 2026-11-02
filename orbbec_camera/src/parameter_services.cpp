@@ -41,7 +41,8 @@ rclcpp::ServiceBase::SharedPtr createParameterService(rclcpp::Node *node, const 
 
 void Parameters::startParameterServices() {
   if (node_->get_node_options().start_parameter_services()) {
-    throw std::logic_error("Disable default parameter services before installing live readback.");
+    throw std::logic_error(
+        "Disable default parameter services before installing parameter endpoints.");
   }
   if (!parameter_services_.empty()) return;
   const auto backend = node_->get_node_parameters_interface();
@@ -49,10 +50,10 @@ void Parameters::startParameterServices() {
       node_, "get_parameters", [this](const auto &request, auto &response) {
         for (const auto &name : request.names) {
           try {
-            response.values.push_back(getParameter(name).get_value_message());
+            response.values.push_back(node_->get_parameter(name).get_value_message());
           } catch (const std::exception &e) {
             RCLCPP_WARN_STREAM(logger_, "Could not read parameter " << name << ": " << e.what());
-            // Keep one response per requested name, without substituting stale configuration.
+            // Keep one response per requested name, including undeclared parameters.
             response.values.push_back(rclcpp::Parameter(name).get_value_message());
           } catch (...) {
             RCLCPP_WARN_STREAM(logger_, "Could not read parameter " << name << ": unknown error");
