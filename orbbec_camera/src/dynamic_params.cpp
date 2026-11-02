@@ -38,67 +38,67 @@ struct ParameterRestore {
 
 Parameters::Parameters(rclcpp::Node *node)
     : node_(node), logger_(node_->get_logger()), params_backend_(node) {
-  params_backend_.addOnSetParametersCallback([this](
-                                                 const std::vector<rclcpp::Parameter> &parameters) {
-    std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
-    rcl_interfaces::msg::SetParametersResult result;
-    result.successful = true;
-    // Updating a descriptor re-declares the same value without applying it to the device.
-    if (parameter_restore && parameter_restore->manager == this && parameters.size() == 1 &&
-        parameter_restore->value == parameters.front()) {
-      return result;
-    }
-    bool has_dynamic = false;
-    // Reject the entire request before invoking any callback with side effects.
-    for (const auto &parameter : parameters) {
-      const auto dynamic = dynamic_types_.find(parameter.get_name());
-      if (dynamic != dynamic_types_.end()) {
-        has_dynamic = true;
-        if (parameter.get_type() != dynamic->second) {
-          result.successful = false;
-          result.reason = "Invalid type for " + parameter.get_name();
+  params_backend_.addOnSetParametersCallback(
+      [this](const std::vector<rclcpp::Parameter> &parameters) {
+        std::lock_guard<std::recursive_mutex> lock(callback_mutex_);
+        rcl_interfaces::msg::SetParametersResult result;
+        result.successful = true;
+        // Updating a descriptor re-declares the same value without applying it to the device.
+        if (parameter_restore && parameter_restore->manager == this && parameters.size() == 1 &&
+            parameter_restore->value == parameters.front()) {
           return result;
         }
-        continue;
-      }
-      const auto function_it = param_functions_.find(parameter.get_name());
-      if (function_it != param_functions_.end() && function_it->second.empty()) {
-        result.successful = false;
-        result.reason = "Parameter " + parameter.get_name() + " can not be changed in runtime.";
-        return result;
-      }
-    }
-    try {
-      if (has_dynamic) {
+        bool has_dynamic = false;
+        // Reject the entire request before invoking any callback with side effects.
         for (const auto &parameter : parameters) {
-          if (dynamic_types_.count(parameter.get_name()) == 0) {
+          const auto dynamic = dynamic_types_.find(parameter.get_name());
+          if (dynamic != dynamic_types_.end()) {
+            has_dynamic = true;
+            if (parameter.get_type() != dynamic->second) {
+              result.successful = false;
+              result.reason = "Invalid type for " + parameter.get_name();
+              return result;
+            }
+            continue;
+          }
+          const auto function_it = param_functions_.find(parameter.get_name());
+          if (function_it != param_functions_.end() && function_it->second.empty()) {
             result.successful = false;
-            result.reason = "Hardware updates cannot be mixed with other parameters.";
+            result.reason = "Parameter " + parameter.get_name() + " can not be changed in runtime.";
             return result;
           }
         }
-        result = batch_setter_(parameters);
-        if (result.successful) {
-          for (const auto &parameter : parameters) {
-            runtime_updated_parameters_.insert(parameter.get_name());
-          }
-        }
-      } else {
-        for (const auto &parameter : parameters) {
-          const auto it = param_functions_.find(parameter.get_name());
-          if (it != param_functions_.end()) {
-            for (const auto &func : it->second) {
-              func(parameter);
+        try {
+          if (has_dynamic) {
+            for (const auto &parameter : parameters) {
+              if (dynamic_types_.count(parameter.get_name()) == 0) {
+                result.successful = false;
+                result.reason = "Hardware updates cannot be mixed with other parameters.";
+                return result;
+              }
+            }
+            result = batch_setter_(parameters);
+            if (result.successful) {
+              for (const auto &parameter : parameters) {
+                runtime_updated_parameters_.insert(parameter.get_name());
+              }
+            }
+          } else {
+            for (const auto &parameter : parameters) {
+              const auto it = param_functions_.find(parameter.get_name());
+              if (it != param_functions_.end()) {
+                for (const auto &func : it->second) {
+                  func(parameter);
+                }
+              }
             }
           }
+        } catch (const std::exception &e) {
+          result.successful = false;
+          result.reason = e.what();
         }
-      }
-    } catch (const std::exception &e) {
-      result.successful = false;
-      result.reason = e.what();
-    }
-    return result;
-  });
+        return result;
+      });
 }
 
 Parameters::~Parameters() noexcept {
