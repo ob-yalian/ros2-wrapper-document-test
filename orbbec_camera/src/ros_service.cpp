@@ -1103,107 +1103,11 @@ void OBCameraNode::getStreamsEnableCallback(
   }
 }
 
-void OBCameraNode::setExposureCallback(const std::shared_ptr<SetInt32::Request>& request,
-                                       std::shared_ptr<SetInt32::Response>& response,
-                                       const stream_index_pair& stream_index) {
-  auto stream = stream_index.first;
-  try {
-    switch (stream) {
-      case OB_STREAM_IR_LEFT:
-      case OB_STREAM_IR_RIGHT:
-      case OB_STREAM_IR:
-        device_->setIntProperty(OB_PROP_IR_EXPOSURE_INT, request->data);
-        ir_exposure_ = device_->getIntProperty(OB_PROP_IR_EXPOSURE_INT);
-        break;
-      case OB_STREAM_DEPTH:
-        device_->setIntProperty(OB_PROP_DEPTH_EXPOSURE_INT, request->data);
-        depth_exposure_ = device_->getIntProperty(OB_PROP_DEPTH_EXPOSURE_INT);
-        break;
-      case OB_STREAM_COLOR:
-      case OB_STREAM_COLOR_LEFT:
-      case OB_STREAM_COLOR_RIGHT:
-        device_->setIntProperty(OB_PROP_COLOR_EXPOSURE_INT, request->data);
-        color_exposure_ = device_->getIntProperty(OB_PROP_COLOR_EXPOSURE_INT);
-        break;
-      default:
-        RCLCPP_ERROR(logger_, "%s NOT a video stream", __FUNCTION__);
-        break;
-    }
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->success = false;
-    response->message = e.what();
-  } catch (...) {
-    RCLCPP_ERROR(logger_, "%s unknown error %d", __FUNCTION__, __LINE__);
-    response->success = false;
-    response->message = "unknown error";
-  }
-}
-
 void OBCameraNode::getGainCallback(const std::shared_ptr<GetInt32::Request>& request,
                                    std::shared_ptr<GetInt32::Response>& response,
                                    const stream_index_pair& stream_index) {
   (void)request;
   getParameterResponse(parameters_, sensorParameterName(stream_index, "gain"), response);
-}
-
-void OBCameraNode::setGainCallback(const std::shared_ptr<SetInt32 ::Request>& request,
-                                   std::shared_ptr<SetInt32::Response>& response,
-                                   const stream_index_pair& stream_index) {
-  auto stream = stream_index.first;
-  OBPropertyID prop_id = OB_PROP_IR_GAIN_INT;
-  try {
-    switch (stream) {
-      case OB_STREAM_IR_LEFT:
-      case OB_STREAM_IR_RIGHT:
-      case OB_STREAM_IR:
-        prop_id = OB_PROP_IR_GAIN_INT;
-        break;
-      case OB_STREAM_DEPTH:
-        prop_id = OB_PROP_DEPTH_GAIN_INT;
-        break;
-      case OB_STREAM_COLOR:
-      case OB_STREAM_COLOR_LEFT:
-      case OB_STREAM_COLOR_RIGHT:
-        prop_id = OB_PROP_COLOR_GAIN_INT;
-        break;
-      default:
-        RCLCPP_ERROR(logger_, "%s NOT a video stream", __FUNCTION__);
-        response->success = false;
-        response->message = "NOT a video stream";
-        return;
-    }
-    auto range = device_->getIntPropertyRange(prop_id);
-    if (request->data < range.min || request->data > range.max) {
-      response->success = false;
-      RCLCPP_WARN_STREAM(logger_, "Gain value is out of range");
-      response->message = "value out of range";
-      return;
-    }
-    device_->setIntProperty(prop_id, request->data);
-    const auto current_gain = device_->getIntProperty(prop_id);
-    if (stream == OB_STREAM_IR_LEFT || stream == OB_STREAM_IR_RIGHT || stream == OB_STREAM_IR) {
-      ir_gain_ = current_gain;
-    } else if (stream == OB_STREAM_DEPTH) {
-      depth_gain_ = current_gain;
-    } else if (stream == OB_STREAM_COLOR || stream == OB_STREAM_COLOR_LEFT ||
-               stream == OB_STREAM_COLOR_RIGHT) {
-      color_gain_ = current_gain;
-    }
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->success = false;
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
 }
 
 void OBCameraNode::setAeRoiCallback(const std::shared_ptr<SetArrays ::Request>& request,
@@ -1333,37 +1237,6 @@ void OBCameraNode::getWhiteBalanceCallback(const std::shared_ptr<GetInt32::Reque
   getParameterResponse(parameters_, "color_white_balance", response);
 }
 
-void OBCameraNode::setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Request>& request,
-                                           std::shared_ptr<SetInt32 ::Response>& response) {
-  try {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_WHITE_BALANCE_INT);
-    if (request->data < range.min || request->data > range.max) {
-      response->success = false;
-      RCLCPP_WARN_STREAM(logger_, "White balance value is out of range");
-      response->message = "value out of range";
-      return;
-    }
-    bool auto_white_balance = device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL);
-    if (auto_white_balance) {
-      RCLCPP_WARN(logger_, "Auto white balance is enabled, set white balance will be ignored");
-      response->success = false;
-      response->message = "auto white balance is enabled";
-      return;
-    }
-    device_->setIntProperty(OB_PROP_COLOR_WHITE_BALANCE_INT, request->data);
-    color_white_balance_ = device_->getIntProperty(OB_PROP_COLOR_WHITE_BALANCE_INT);
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
-    response->success = false;
-  } catch (...) {
-    response->message = "unknown error";
-    response->success = false;
-  }
-}
-
 void OBCameraNode::getColorWbCtrlCallback(const std::shared_ptr<GetInt32::Request>& request,
                                           std::shared_ptr<GetInt32::Response>& response) {
   (void)request;
@@ -1431,24 +1304,6 @@ void OBCameraNode::getAutoWhiteBalanceCallback(const std::shared_ptr<GetInt32::R
   getParameterResponse(parameters_, "enable_color_auto_white_balance", response);
 }
 
-void OBCameraNode::setAutoWhiteBalanceCallback(const std::shared_ptr<SetBool::Request>& request,
-                                               std::shared_ptr<SetBool::Response>& response) {
-  try {
-    device_->setBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL, request->data);
-    enable_color_auto_white_balance_ =
-        device_->getBoolProperty(OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL);
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
-}
-
 void OBCameraNode::getAeAwbStatusCallback(const std::shared_ptr<GetInt32::Request>& request,
                                           std::shared_ptr<GetInt32::Response>& response) {
   (void)request;
@@ -1511,62 +1366,6 @@ void OBCameraNode::setAwbGainCallback(const std::shared_ptr<SetAwbGain::Request>
     response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
     response->success = false;
-    response->message = e.what();
-  } catch (...) {
-    response->success = false;
-    response->message = "unknown error";
-  }
-}
-
-void OBCameraNode::setAutoExposureCallback(
-    const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-    std::shared_ptr<std_srvs::srv::SetBool::Response>& response,
-    const stream_index_pair& stream_index) {
-  auto stream = stream_index.first;
-  OBPropertyID prop_id = OB_PROP_IR_AUTO_EXPOSURE_BOOL;
-  try {
-    switch (stream) {
-      case OB_STREAM_IR_LEFT:
-      case OB_STREAM_IR_RIGHT:
-      case OB_STREAM_IR:
-        prop_id = OB_PROP_IR_AUTO_EXPOSURE_BOOL;
-        break;
-      case OB_STREAM_DEPTH:
-        prop_id = OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL;
-        break;
-      case OB_STREAM_COLOR:
-      case OB_STREAM_COLOR_LEFT:
-      case OB_STREAM_COLOR_RIGHT:
-        prop_id = OB_PROP_COLOR_AUTO_EXPOSURE_BOOL;
-        break;
-      default:
-        RCLCPP_ERROR(logger_, "%s NOT a video stream", __FUNCTION__);
-        response->success = false;
-        response->message = "NOT a video stream";
-        return;
-    }
-    auto range = device_->getIntPropertyRange(prop_id);
-    if (request->data < range.min || request->data > range.max) {
-      response->success = false;
-      RCLCPP_WARN_STREAM(logger_, "Auto exposure value is out of range");
-      response->message = "value out of range";
-      return;
-    }
-    device_->setIntProperty(prop_id, request->data);
-    const bool current_auto_exposure = device_->getBoolProperty(prop_id);
-    if (stream == OB_STREAM_IR_LEFT || stream == OB_STREAM_IR_RIGHT || stream == OB_STREAM_IR) {
-      enable_ir_auto_exposure_ = current_auto_exposure;
-    } else if (stream == OB_STREAM_DEPTH) {
-      enable_ir_auto_exposure_ = current_auto_exposure;
-    } else if (stream == OB_STREAM_COLOR || stream == OB_STREAM_COLOR_LEFT ||
-               stream == OB_STREAM_COLOR_RIGHT) {
-      enable_color_auto_exposure_ = current_auto_exposure;
-    }
-    response->success = true;
-  } catch (const ob::Error& e) {
-    response->success = false;
-    response->message = orbbec_camera::formatObErrorWithStatus(e);
-  } catch (const std::exception& e) {
     response->message = e.what();
   } catch (...) {
     response->success = false;

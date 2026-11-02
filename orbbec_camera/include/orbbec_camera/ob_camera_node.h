@@ -516,23 +516,12 @@ class OBCameraNode {
                            std::shared_ptr<GetInt32::Response>& response,
                            const stream_index_pair& stream_index);
 
-  void setExposureCallback(const std::shared_ptr<SetInt32::Request>& request,
-                           std::shared_ptr<SetInt32::Response>& response,
-                           const stream_index_pair& stream_index);
-
   void getGainCallback(const std::shared_ptr<GetInt32::Request>& request,
                        std::shared_ptr<GetInt32::Response>& response,
                        const stream_index_pair& stream_index);
 
-  void setGainCallback(const std::shared_ptr<SetInt32::Request>& request,
-                       std::shared_ptr<SetInt32::Response>& response,
-                       const stream_index_pair& stream_index);
-
   void getWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                std::shared_ptr<GetInt32::Response>& response);
-
-  void setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Request>& request,
-                               std::shared_ptr<SetInt32 ::Response>& response);
 
   void getColorWbCtrlCallback(const std::shared_ptr<GetInt32::Request>& request,
                               std::shared_ptr<GetInt32::Response>& response);
@@ -543,9 +532,6 @@ class OBCameraNode {
   void getAutoWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                    std::shared_ptr<GetInt32::Response>& response);
 
-  void setAutoWhiteBalanceCallback(const std::shared_ptr<SetBool::Request>& request,
-                                   std::shared_ptr<SetBool::Response>& response);
-
   void getAeAwbStatusCallback(const std::shared_ptr<GetInt32::Request>& request,
                               std::shared_ptr<GetInt32::Response>& response);
 
@@ -554,10 +540,6 @@ class OBCameraNode {
 
   void setAwbGainCallback(const std::shared_ptr<SetAwbGain::Request>& request,
                           std::shared_ptr<SetAwbGain::Response>& response);
-
-  void setAutoExposureCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response,
-                               const stream_index_pair& stream_index);
 
   void setAeRoiCallback(const std::shared_ptr<SetArrays::Request>& request,
                         std::shared_ptr<SetArrays::Response>& response,
