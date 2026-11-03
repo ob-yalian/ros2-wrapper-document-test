@@ -7460,7 +7460,15 @@ void OBCameraNode::setDisparitySearchOffset() {
     if (disparity_search_offset_ >= 0 && disparity_search_offset_ <= 127 &&
         device_->isPropertySupported(OB_PROP_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_WRITE)) {
       device_->setIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT, disparity_search_offset_);
-      RCLCPP_INFO_STREAM(logger_, "Set disparity search offset to " << disparity_search_offset_);
+      // The device applies the setting asynchronously; wait to avoid reading the previous value.
+      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      const bool has_current =
+          device_->isPropertySupported(OB_PROP_CURRENT_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_READ);
+      const int readback_offset = device_->getIntProperty(
+          has_current ? OB_PROP_CURRENT_DISP_SEARCH_OFFSET_INT : OB_PROP_DISP_SEARCH_OFFSET_INT);
+      RCLCPP_INFO_STREAM(logger_,
+                         "disparity_search_offset: requested=" << disparity_search_offset_
+                                                               << " readback=" << readback_offset);
     }
   });
 

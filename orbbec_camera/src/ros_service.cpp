@@ -82,33 +82,6 @@ std::string sensorParameterName(const stream_index_pair& stream, const std::stri
   return "color_" + setting;
 }
 
-bool isGemini330SeriesForDisparity(uint32_t pid) {
-  return pid == GEMINI_335_PID || pid == GEMINI_336_PID || pid == GEMINI_330_PID ||
-         pid == GEMINI_335L_PID || pid == GEMINI_336L_PID || pid == GEMINI_330L_PID ||
-         pid == GEMINI_335LG_PID || pid == GEMINI_335LE_PID || pid == GEMINI_338_PID ||
-         pid == GEMINI_338LG_PID || pid == GEMINI_338LE_PID || pid == GEMINI_338L_PID ||
-         pid == GEMINI_331L_PID;
-}
-
-bool isSupportedDisparityResolutionForPid(uint32_t pid, int width, int height) {
-  if (pid == GEMINI_335LE_PID || pid == GEMINI_338LE_PID) {
-    return (width == 1280 && height == 800) || (width == 640 && height == 400) ||
-           (width == 424 && height == 266) || (width == 320 && height == 200);
-  }
-
-  return (width == 1280 && height == 800) || (width == 1280 && height == 720) ||
-         (width == 640 && height == 400) || (width == 424 && height == 266);
-}
-
-std::string getDisparityResolutionHintByPid(uint32_t pid) {
-  if (pid == GEMINI_335LE_PID || pid == GEMINI_338LE_PID) {
-    return "Supported resolutions for the current device: 1280x800/640x400/424x266/320x200";
-  }
-
-  return "Supported resolutions for the current device: "
-         "1280x800/1280x720/640x400/424x266";
-}
-
 std::string alignTargetStreamToString(OBStreamType stream_type) {
   switch (stream_type) {
     case OB_STREAM_COLOR:
@@ -858,15 +831,6 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
       return;
     }
 
-    if (isGemini330SeriesForDisparity(pid_) &&
-        !isSupportedDisparityResolutionForPid(pid_, width_[DEPTH], height_[DEPTH])) {
-      response->success = false;
-      response->message = "Current depth resolution " + std::to_string(width_[DEPTH]) + "x" +
-                          std::to_string(height_[DEPTH]) + " is not supported. " +
-                          getDisparityResolutionHintByPid(pid_);
-      return;
-    }
-
     auto range = getCachedIntPropertyRange(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
     const int requested_mode_value = request->data;
     int hw_mode_index = -1;
@@ -892,14 +856,22 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
     }
 
     device_->setIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT, hw_mode_index);
-    auto current_mode_index = device_->getIntProperty(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
-    auto current_mode_value = (current_mode_index == 0)   ? 64
-                              : (current_mode_index == 1) ? 128
-                              : (current_mode_index == 2) ? 256
-                                                          : current_mode_index;
+    // The device applies the setting asynchronously; wait to avoid reading the previous value.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    const bool has_current = device_->isPropertySupported(
+        OB_PROP_CURRENT_DISP_SEARCH_RANGE_MODE_INT, OB_PERMISSION_READ);
+    const int current_mode_index =
+        device_->getIntProperty(has_current ? OB_PROP_CURRENT_DISP_SEARCH_RANGE_MODE_INT
+                                            : OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
+    const int current_mode_value = (current_mode_index == 0)   ? 64
+                                   : (current_mode_index == 1) ? 128
+                                   : (current_mode_index == 2) ? 256
+                                                               : current_mode_index;
+    response->message = "disparity_range_mode: requested=" + std::to_string(requested_mode_value) +
+                        " readback=" + std::to_string(current_mode_value);
+    RCLCPP_INFO_STREAM(logger_, response->message);
     disparity_range_mode_ = current_mode_value;
     response->success = true;
-    response->message = "disparity_range_mode updated to " + std::to_string(current_mode_value);
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = orbbec_camera::formatObErrorWithStatus(e);
@@ -935,15 +907,6 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
       return;
     }
 
-    if (isGemini330SeriesForDisparity(pid_) &&
-        !isSupportedDisparityResolutionForPid(pid_, width_[DEPTH], height_[DEPTH])) {
-      response->success = false;
-      response->message = "Current depth resolution " + std::to_string(width_[DEPTH]) + "x" +
-                          std::to_string(height_[DEPTH]) + " is not supported. " +
-                          getDisparityResolutionHintByPid(pid_);
-      return;
-    }
-
     auto range = getCachedIntPropertyRange(OB_PROP_DISP_SEARCH_OFFSET_INT);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
@@ -954,11 +917,17 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
     }
 
     device_->setIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT, request->data);
-    auto current_offset = device_->getIntProperty(OB_PROP_DISP_SEARCH_OFFSET_INT);
+    // The device applies the setting asynchronously; wait to avoid reading the previous value.
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    const bool has_current =
+        device_->isPropertySupported(OB_PROP_CURRENT_DISP_SEARCH_OFFSET_INT, OB_PERMISSION_READ);
+    const int current_offset = device_->getIntProperty(
+        has_current ? OB_PROP_CURRENT_DISP_SEARCH_OFFSET_INT : OB_PROP_DISP_SEARCH_OFFSET_INT);
+    response->message = "disparity_search_offset: requested=" + std::to_string(request->data) +
+                        " readback=" + std::to_string(current_offset);
+    RCLCPP_INFO_STREAM(logger_, response->message);
     disparity_search_offset_ = current_offset;
-    RCLCPP_INFO_STREAM(logger_, "Set disparity_search_offset to " << current_offset);
     response->success = true;
-    response->message = "disparity_search_offset updated to " + std::to_string(current_offset);
   } catch (const ob::Error& e) {
     response->success = false;
     response->message = orbbec_camera::formatObErrorWithStatus(e);
