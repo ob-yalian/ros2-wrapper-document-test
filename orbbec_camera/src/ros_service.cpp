@@ -867,7 +867,7 @@ void OBCameraNode::setDisparityRangeModeCallback(const std::shared_ptr<SetInt32:
       return;
     }
 
-    auto range = device_->getIntPropertyRange(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_DISP_SEARCH_RANGE_MODE_INT);
     const int requested_mode_value = request->data;
     int hw_mode_index = -1;
     if (requested_mode_value == 64) {
@@ -944,7 +944,7 @@ void OBCameraNode::setDisparitySearchOffsetCallback(
       return;
     }
 
-    auto range = device_->getIntPropertyRange(OB_PROP_DISP_SEARCH_OFFSET_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_DISP_SEARCH_OFFSET_INT);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
       response->message =
@@ -988,7 +988,7 @@ void OBCameraNode::setSyncIoVoltageLevelCallback(const std::shared_ptr<SetInt32:
       return;
     }
 
-    auto range = device_->getIntPropertyRange(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
       response->message =
@@ -1361,7 +1361,7 @@ void OBCameraNode::setColorWbCtrlCallback(const std::shared_ptr<SetInt32::Reques
 
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
   try {
-    const auto range = device_->getIntPropertyRange(OB_PROP_COLOR_WB_CTRL_INT);
+    const auto range = getCachedIntPropertyRange(OB_PROP_COLOR_WB_CTRL_INT);
     if (request->data < range.min || request->data > range.max) {
       response->success = false;
       response->message = "value out of range [" + std::to_string(range.min) + ", " +
@@ -1370,6 +1370,7 @@ void OBCameraNode::setColorWbCtrlCallback(const std::shared_ptr<SetInt32::Reques
     }
 
     device_->setIntProperty(OB_PROP_COLOR_WB_CTRL_INT, request->data);
+    invalidatePropertyRanges();
     response->success = true;
     response->message = "OK";
     if (isPropertyReadable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
@@ -1381,12 +1382,15 @@ void OBCameraNode::setColorWbCtrlCallback(const std::shared_ptr<SetInt32::Reques
       }
     }
   } catch (const ob::Error& e) {
+    invalidatePropertyRanges();
     response->success = false;
     response->message = orbbec_camera::formatObErrorWithStatus(e);
   } catch (const std::exception& e) {
+    invalidatePropertyRanges();
     response->success = false;
     response->message = e.what();
   } catch (...) {
+    invalidatePropertyRanges();
     response->success = false;
     response->message = "unknown error";
   }

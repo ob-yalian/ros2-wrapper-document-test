@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "orbbec_camera/property_range_cache.h"
+
 #include <nlohmann/json.hpp>
 
 #include <chrono>
@@ -409,6 +411,17 @@ class OBCameraNode {
   void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
                                  OBPropertyID property_id, rclcpp::ParameterType type) const;
 
+  OBIntPropertyRange getCachedIntPropertyRange(OBPropertyID id) const;
+  OBFloatPropertyRange getCachedFloatPropertyRange(OBPropertyID id) const;
+  OBBoolPropertyRange getCachedBoolPropertyRange(OBPropertyID id) const;
+  void invalidatePropertyRanges();
+  void refreshPropertyRangesIfDirty() const;
+  mutable std::atomic<bool> property_ranges_dirty_{false};
+  std::atomic<bool> property_range_first_frame_pending_{false};
+  mutable PropertyRangeCache<OBIntPropertyRange> int_property_ranges_;
+  mutable PropertyRangeCache<OBFloatPropertyRange> float_property_ranges_;
+  mutable PropertyRangeCache<OBBoolPropertyRange> bool_property_ranges_;
+
   bool isDynamicProperty(OBPropertyID property_id) const;
   void setupDynamicParameters();
   void setupRuntimeControls();
@@ -422,6 +435,8 @@ class OBCameraNode {
   void setupPointCloudPublishers();
   void addRuntimeControl(const std::vector<std::string>& names, Parameters::BatchSetter setter);
   rcl_interfaces::msg::SetParametersResult setDynamicParameters(
+      const std::vector<rclcpp::Parameter>& parameters);
+  rcl_interfaces::msg::SetParametersResult applyDynamicParameters(
       const std::vector<rclcpp::Parameter>& parameters);
 
   struct DynamicProperty {

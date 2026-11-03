@@ -1053,6 +1053,34 @@ void OBCameraNode::setAndGetPropertyParameter(T &param, const std::string &param
   }
 }
 
+OBIntPropertyRange OBCameraNode::getCachedIntPropertyRange(OBPropertyID id) const {
+  refreshPropertyRangesIfDirty();
+  return int_property_ranges_.get(id, [this, id] { return device_->getIntPropertyRange(id); });
+}
+
+OBFloatPropertyRange OBCameraNode::getCachedFloatPropertyRange(OBPropertyID id) const {
+  refreshPropertyRangesIfDirty();
+  return float_property_ranges_.get(id, [this, id] { return device_->getFloatPropertyRange(id); });
+}
+
+OBBoolPropertyRange OBCameraNode::getCachedBoolPropertyRange(OBPropertyID id) const {
+  refreshPropertyRangesIfDirty();
+  return bool_property_ranges_.get(id, [this, id] { return device_->getBoolPropertyRange(id); });
+}
+
+void OBCameraNode::refreshPropertyRangesIfDirty() const {
+  if (!property_ranges_dirty_.exchange(false)) return;
+  int_property_ranges_.clear();
+  float_property_ranges_.clear();
+  bool_property_ranges_.clear();
+}
+
+void OBCameraNode::invalidatePropertyRanges() {
+  int_property_ranges_.clear();
+  float_property_ranges_.clear();
+  bool_property_ranges_.clear();
+}
+
 void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor &descriptor,
                                              OBPropertyID property_id,
                                              rclcpp::ParameterType type) const {
@@ -1101,10 +1129,10 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
       switch (property.type) {
         case OB_BOOL_PROPERTY:
           range << " Camera default: " << std::boolalpha
-                << device_->getBoolPropertyRange(property_id).def << ".";
+                << getCachedBoolPropertyRange(property_id).def << ".";
           break;
         case OB_INT_PROPERTY: {
-          const auto value = device_->getIntPropertyRange(property_id);
+          const auto value = getCachedIntPropertyRange(property_id);
           if (type == rclcpp::ParameterType::PARAMETER_BOOL) {
             range << " Camera default: " << std::boolalpha << (value.def != 0) << ".";
           } else if (property_id == OB_PROP_DISP_SEARCH_RANGE_MODE_INT) {
@@ -1117,7 +1145,7 @@ void OBCameraNode::appendPropertyDescription(rcl_interfaces::msg::ParameterDescr
           break;
         }
         case OB_FLOAT_PROPERTY:
-          append_range(device_->getFloatPropertyRange(property_id));
+          append_range(getCachedFloatPropertyRange(property_id));
           break;
         case OB_STRUCT_PROPERTY:
           return;
@@ -1259,6 +1287,7 @@ void OBCameraNode::clean() noexcept {
 }
 
 void OBCameraNode::setupDevicePreset() {
+  invalidatePropertyRanges();
   if (is_playback_device_ && (!depth_work_mode_.empty() || !device_preset_.empty())) {
     RCLCPP_INFO_STREAM(logger_, "Skip device preset selection during bag playback");
   } else if (!depth_work_mode_.empty() &&
@@ -1332,6 +1361,7 @@ void OBCameraNode::setupDevicePreset() {
 }
 
 void OBCameraNode::setupPresetResolution() {
+  invalidatePropertyRanges();
   if (!preset_resolution_config_.empty()) {
     OBPresetResolutionConfig presetResolutionConfig;
     std::istringstream iss(preset_resolution_config_);
@@ -1421,7 +1451,7 @@ void OBCameraNode::setupDevices() {
   }
   if (sync_io_voltage_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT, OB_PERMISSION_READ_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT);
     if (sync_io_voltage_level_ < range.min || sync_io_voltage_level_ > range.max) {
       RCLCPP_ERROR_STREAM(
           logger_, "sync IO voltage level is out of range " << range.min << " - " << range.max);
@@ -1476,7 +1506,7 @@ void OBCameraNode::setupDevices() {
   }
   if (laser_energy_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_LASER_ENERGY_LEVEL_INT, OB_PERMISSION_READ_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_LASER_ENERGY_LEVEL_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_LASER_ENERGY_LEVEL_INT);
     if (laser_energy_level_ < range.min || laser_energy_level_ > range.max) {
       RCLCPP_ERROR_STREAM(logger_,
                           "Laser energy level is out of range " << range.min << " - " << range.max);
@@ -1562,7 +1592,7 @@ void OBCameraNode::setupDevices() {
   }
   if (ldp_power_level_ != -1 &&
       device_->isPropertySupported(OB_PROP_LASER_POWER_LEVEL_CONTROL_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_LASER_POWER_LEVEL_CONTROL_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_LASER_POWER_LEVEL_CONTROL_INT);
     if (ldp_power_level_ < range.min || ldp_power_level_ > range.max) {
       RCLCPP_ERROR(logger_, "ldp power level value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1650,7 +1680,7 @@ void OBCameraNode::setupDevices() {
                                           OB_PERMISSION_READ_WRITE) &&
              !depth_precision_str_.empty()) {
     auto depth_unit_flexible_adjustment = depthPrecisionFromString(depth_precision_str_);
-    auto range = device_->getFloatPropertyRange(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT);
+    auto range = getCachedFloatPropertyRange(OB_PROP_DEPTH_UNIT_FLEXIBLE_ADJUSTMENT_FLOAT);
     RCLCPP_INFO_STREAM(logger_,
                        "Depth unit flexible adjustment range: " << range.min << " - " << range.max);
     if (depth_unit_flexible_adjustment < range.min || depth_unit_flexible_adjustment > range.max) {
@@ -1794,7 +1824,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_EXPOSURE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_EXPOSURE_INT);
     if (color_exposure_ < range.min || color_exposure_ > range.max) {
       RCLCPP_ERROR(logger_, "color exposure value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1807,7 +1837,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_gain_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_GAIN_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_GAIN_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_GAIN_INT);
     if (color_gain_ < range.min || color_gain_ > range.max) {
       RCLCPP_ERROR(logger_, "color gain value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1823,7 +1853,7 @@ void OBCameraNode::setupDevices() {
     if (!device_->isPropertySupported(OB_PROP_MJPEG_QUALITY_INT, OB_PERMISSION_WRITE)) {
       RCLCPP_WARN_STREAM(logger_, "color_mjpeg_quality is not supported by this device");
     } else {
-      auto range = device_->getIntPropertyRange(OB_PROP_MJPEG_QUALITY_INT);
+      auto range = getCachedIntPropertyRange(OB_PROP_MJPEG_QUALITY_INT);
       if (color_mjpeg_quality_ < range.min || color_mjpeg_quality_ > range.max) {
         RCLCPP_ERROR(logger_,
                      "color MJPEG quality value %d is out of range[%d,%d], please check the value",
@@ -1863,7 +1893,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_white_balance_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_WHITE_BALANCE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_WHITE_BALANCE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_WHITE_BALANCE_INT);
     if (color_white_balance_ < range.min || color_white_balance_ > range.max) {
       RCLCPP_ERROR(logger_,
                    "color white balance value is out of range[%d,%d], please check the value",
@@ -1878,7 +1908,7 @@ void OBCameraNode::setupDevices() {
 
   if (color_ae_max_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_AE_MAX_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_AE_MAX_EXPOSURE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_AE_MAX_EXPOSURE_INT);
     if (color_ae_max_exposure_ < range.min || color_ae_max_exposure_ > range.max) {
       RCLCPP_ERROR(logger_,
                    "color AE max exposure value is out of range[%d,%d], please check the value",
@@ -1893,7 +1923,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_ae_max_gain_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_AE_MAX_GAIN_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_AE_MAX_GAIN_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_AE_MAX_GAIN_INT);
     if (color_ae_max_gain_ < range.min || color_ae_max_gain_ > range.max) {
       RCLCPP_ERROR(logger_,
                    "color AE max gain value is out of range[%d,%d], please check the value",
@@ -1907,7 +1937,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_brightness_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_BRIGHTNESS_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_BRIGHTNESS_INT);
     if (color_brightness_ < range.min || color_brightness_ > range.max) {
       RCLCPP_ERROR(logger_, "color brightness value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1920,7 +1950,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_roi_brightness_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_ROI_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_ROI_BRIGHTNESS_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_ROI_BRIGHTNESS_INT);
     if (color_roi_brightness_ < range.min || color_roi_brightness_ > range.max) {
       RCLCPP_ERROR(logger_,
                    "color roi brightness value is out of range[%d,%d], please check the value",
@@ -1934,7 +1964,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_sharpness_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_SHARPNESS_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_SHARPNESS_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_SHARPNESS_INT);
     if (color_sharpness_ < range.min || color_sharpness_ > range.max) {
       RCLCPP_ERROR(logger_, "color sharpness value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1947,7 +1977,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_gamma_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_GAMMA_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_GAMMA_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_GAMMA_INT);
     if (color_gamma_ < range.min || color_gamma_ > range.max) {
       RCLCPP_ERROR(logger_, "color gamm value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1959,7 +1989,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_saturation_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_SATURATION_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_SATURATION_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_SATURATION_INT);
     if (color_saturation_ < range.min || color_saturation_ > range.max) {
       RCLCPP_ERROR(logger_, "color saturation value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1972,7 +2002,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_contrast_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_CONTRAST_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_CONTRAST_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_CONTRAST_INT);
     if (color_contrast_ < range.min || color_contrast_ > range.max) {
       RCLCPP_ERROR(logger_, "color contrast value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -1985,7 +2015,7 @@ void OBCameraNode::setupDevices() {
   }
   if (color_hue_ != -1 &&
       device_->isPropertySupported(OB_PROP_COLOR_HUE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_COLOR_HUE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_COLOR_HUE_INT);
     if (color_hue_ < range.min || color_hue_ > range.max) {
       RCLCPP_ERROR(logger_, "color hue value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2053,7 +2083,7 @@ void OBCameraNode::setupDevices() {
   }
   if (depth_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_DEPTH_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_DEPTH_EXPOSURE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_DEPTH_EXPOSURE_INT);
     if (depth_exposure_ < range.min || depth_exposure_ > range.max) {
       RCLCPP_ERROR(logger_, "depth exposure value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2066,7 +2096,7 @@ void OBCameraNode::setupDevices() {
   }
   if (depth_gain_ != -1 &&
       device_->isPropertySupported(OB_PROP_DEPTH_GAIN_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_DEPTH_GAIN_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_DEPTH_GAIN_INT);
     if (depth_gain_ < range.min || depth_gain_ > range.max) {
       RCLCPP_ERROR(logger_, "depth gain value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2101,7 +2131,7 @@ void OBCameraNode::setupDevices() {
   }
   if (mean_intensity_set_point_ != -1 &&
       device_->isPropertySupported(OB_PROP_IR_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_IR_BRIGHTNESS_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_IR_BRIGHTNESS_INT);
     if (mean_intensity_set_point_ < range.min || mean_intensity_set_point_ > range.max) {
       RCLCPP_ERROR(logger_, "depth brightness value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2115,7 +2145,7 @@ void OBCameraNode::setupDevices() {
   // ir ae max
   if (ir_ae_max_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_IR_AE_MAX_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_IR_AE_MAX_EXPOSURE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_IR_AE_MAX_EXPOSURE_INT);
     if (ir_ae_max_exposure_ < range.min || ir_ae_max_exposure_ > range.max) {
       RCLCPP_ERROR(logger_,
                    "IR AE max exposure value is out of range[%d,%d], please check the value",
@@ -2130,7 +2160,7 @@ void OBCameraNode::setupDevices() {
   // ir brightness
   if (ir_brightness_ != -1 &&
       device_->isPropertySupported(OB_PROP_IR_BRIGHTNESS_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_IR_BRIGHTNESS_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_IR_BRIGHTNESS_INT);
     if (ir_brightness_ < range.min || ir_brightness_ > range.max) {
       RCLCPP_ERROR(logger_, "IR brightness value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2143,7 +2173,7 @@ void OBCameraNode::setupDevices() {
   }
   if (ir_exposure_ != -1 &&
       device_->isPropertySupported(OB_PROP_IR_EXPOSURE_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_IR_EXPOSURE_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_IR_EXPOSURE_INT);
     if (ir_exposure_ < range.min || ir_exposure_ > range.max) {
       RCLCPP_ERROR(logger_, "ir exposure value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2154,7 +2184,7 @@ void OBCameraNode::setupDevices() {
     }
   }
   if (ir_gain_ != -1 && device_->isPropertySupported(OB_PROP_IR_GAIN_INT, OB_PERMISSION_WRITE)) {
-    auto range = device_->getIntPropertyRange(OB_PROP_IR_GAIN_INT);
+    auto range = getCachedIntPropertyRange(OB_PROP_IR_GAIN_INT);
     if (ir_gain_ < range.min || ir_gain_ > range.max) {
       RCLCPP_ERROR(logger_, "ir gain value is out of range[%d,%d], please check the value",
                    range.min, range.max);
@@ -2179,7 +2209,7 @@ void OBCameraNode::setupDevices() {
         device_->getIntProperty(OB_PROP_DEPTH_MAX_DIFF_INT);
     if (noise_removal_filter_min_diff_ != -1 &&
         default_noise_removal_filter_min_diff != noise_removal_filter_min_diff_) {
-      auto range = device_->getIntPropertyRange(OB_PROP_DEPTH_MAX_DIFF_INT);
+      auto range = getCachedIntPropertyRange(OB_PROP_DEPTH_MAX_DIFF_INT);
       if (noise_removal_filter_min_diff_ < range.min ||
           noise_removal_filter_min_diff_ > range.max) {
         RCLCPP_ERROR(logger_,
@@ -2203,7 +2233,7 @@ void OBCameraNode::setupDevices() {
         device_->getIntProperty(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
     if (noise_removal_filter_max_size_ != -1 &&
         default_noise_removal_filter_max_size != noise_removal_filter_max_size_) {
-      auto range = device_->getIntPropertyRange(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
+      auto range = getCachedIntPropertyRange(OB_PROP_DEPTH_MAX_SPECKLE_SIZE_INT);
       if (noise_removal_filter_max_size_ < range.min ||
           noise_removal_filter_max_size_ > range.max) {
         RCLCPP_ERROR(logger_,
@@ -2363,6 +2393,7 @@ void OBCameraNode::setupDevices() {
       });
     }
   }
+  invalidatePropertyRanges();
 }
 
 bool OBCameraNode::exportConfigJsonToFile(const std::string &file_path, std::string &message) {
@@ -3936,7 +3967,10 @@ void OBCameraNode::setupDepthPostProcessFilter() {
   set_filter_srv_ = node_->create_service<SetFilter>(
       "set_filter", [this](const std::shared_ptr<SetFilter ::Request> request,
                            std::shared_ptr<SetFilter ::Response> response) {
+        const bool changes_ranges = normalizeDepthFilterName(request->filter_name) == "HDRMerge";
+        if (changes_ranges) invalidatePropertyRanges();
         setFilterCallback(request, response);
+        if (changes_ranges) invalidatePropertyRanges();
         if (response->success) {
           const auto failures = synchronizeFilterParameters(request->filter_name);
           if (!failures.empty()) {
@@ -4833,6 +4867,8 @@ int OBCameraNode::init_interleave_laser_param() {
   return 0;
 }
 void OBCameraNode::startStreams() {
+  invalidatePropertyRanges();
+  property_range_first_frame_pending_.store(true);
   if (pipeline_ != nullptr) {
     pipeline_.reset();
   }
@@ -4908,6 +4944,7 @@ void OBCameraNode::startStreams() {
                      OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT)));
   }
   pipeline_started_.store(true);
+  invalidatePropertyRanges();
 }
 
 void OBCameraNode::startIMUSyncStream() {
@@ -5011,6 +5048,7 @@ void OBCameraNode::restartPlaybackStreams() {
 
 void OBCameraNode::stopStreams() {
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  invalidatePropertyRanges();
 
   if (!pipeline_started_ || !pipeline_) {
     RCLCPP_DEBUG_STREAM(logger_, "pipeline not started or not exist, skip stop pipeline");
@@ -8184,6 +8222,8 @@ void OBCameraNode::onNewFrameCallback(const std::shared_ptr<ob::Frame> &frame,
   if (frame == nullptr) {
     return;
   }
+  // SDK capture threads only mark metadata dirty; range queries stay on control paths.
+  if (property_range_first_frame_pending_.exchange(false)) property_ranges_dirty_.store(true);
   const bool log_image_timestamps =
       timestamp_csv_logger_ && timestamp_csv_logger_->imageStreamEnabled(stream_index.first);
   const auto record_image_publish_skipped = [&]() {

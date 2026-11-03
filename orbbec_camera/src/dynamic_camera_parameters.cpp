@@ -114,6 +114,32 @@ void OBCameraNode::setupDynamicParameters() {
 rcl_interfaces::msg::SetParametersResult OBCameraNode::setDynamicParameters(
     const std::vector<rclcpp::Parameter> &parameters) {
   std::lock_guard<decltype(device_lock_)> lock(device_lock_);
+  const bool changes_ranges =
+      std::any_of(parameters.begin(), parameters.end(), [](const auto &value) {
+        const auto &name = value.get_name();
+        return name == "enable_color_auto_exposure" || name == "enable_depth_auto_exposure" ||
+               name == "enable_ir_auto_exposure" || name == "enable_color_auto_white_balance" ||
+               name == "enable_color_auto_exposure_priority" ||
+               name == "enable_depth_auto_exposure_priority" || name == "ae_reference_stream" ||
+               name == "ae_strategy" || name == "enable_ir_long_exposure" ||
+               name == "color_ae_max_exposure" || name == "ir_ae_max_exposure" ||
+               name == "color_ae_max_gain" || name == "disparity_range_mode" ||
+               name == "enable_hdr_merge" || name.rfind("hdr_merge_", 0) == 0 ||
+               name.rfind("color_ae_roi_", 0) == 0 || name.rfind("depth_ae_roi_", 0) == 0;
+      });
+  try {
+    const auto result = applyDynamicParameters(parameters);
+    // Also invalidate after failures: writes and best-effort rollback may change SDK state.
+    if (changes_ranges) invalidatePropertyRanges();
+    return result;
+  } catch (...) {
+    if (changes_ranges) invalidatePropertyRanges();
+    throw;
+  }
+}
+
+rcl_interfaces::msg::SetParametersResult OBCameraNode::applyDynamicParameters(
+    const std::vector<rclcpp::Parameter> &parameters) {
   rcl_interfaces::msg::SetParametersResult result;
   if (!is_camera_node_initialized_.load() || !is_running_.load()) {
     result.reason = "Camera is initializing or disconnected.";
@@ -167,13 +193,13 @@ rcl_interfaces::msg::SetParametersResult OBCameraNode::setDynamicParameters(
       }
       if (property.type == rclcpp::ParameterType::PARAMETER_INTEGER) {
         const auto requested = value.as_int();
-        const auto range = device_->getIntPropertyRange(property.id);
+        const auto range = getCachedIntPropertyRange(property.id);
         if (requested == -1 || requested < range.min || requested > range.max ||
             requested < std::numeric_limits<int>::min() ||
             requested > std::numeric_limits<int>::max() ||
             (range.step > 0 && (requested - range.min) % range.step != 0)) {
           throw std::invalid_argument(name +
-                                      " is outside the current SDK range/step; -1 is launch-only.");
+                                      " is outside the cached SDK range/step; -1 is launch-only.");
         }
       }
       previous.push_back(readDynamicProperty(property));

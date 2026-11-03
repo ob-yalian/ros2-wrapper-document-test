@@ -652,7 +652,7 @@ void OBCameraNode::setupFilterParameterDescriptions() {
         auto descriptor = describeCameraParameter(binding.first);
         if (type == rclcpp::ParameterType::PARAMETER_STRING) {
           try {
-            const auto range = device_->getIntPropertyRange(binding.second);
+            const auto range = getCachedIntPropertyRange(binding.second);
             const OBFilterConfigSchemaItem schema{nullptr,
                                                   OB_FILTER_CONFIG_VALUE_TYPE_INT,
                                                   static_cast<double>(range.min),

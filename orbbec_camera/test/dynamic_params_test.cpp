@@ -22,6 +22,7 @@
 #include <stdexcept>
 
 #include "orbbec_camera/dynamic_params.h"
+#include "orbbec_camera/property_range_cache.h"
 #include "orbbec_camera/parameter_sensor_support.h"
 
 namespace orbbec_camera {
@@ -64,6 +65,44 @@ TEST(ParameterSensorSupport, MissingSensorsAndUnknownCapabilitiesHaveDifferentSe
   EXPECT_TRUE(supportsParameterSensors("enable_laser", {OB_SENSOR_LIDAR}, true));
   EXPECT_TRUE(supportsParameterSensors("ir_ae_max_exposure", {OB_SENSOR_DEPTH}, true));
   EXPECT_FALSE(supportsParameterSensors("ir_gain", {OB_SENSOR_DEPTH}, true));
+}
+
+TEST(PropertyRangeCache, RepeatedAccessReusesOneSuccessfulQuery) {
+  PropertyRangeCache<int> cache;
+  int reads = 0;
+  const auto query = [&] { return ++reads; };
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, query), 1);
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, query), 1);
+  EXPECT_EQ(reads, 1);
+}
+
+TEST(PropertyRangeCache, StateInvalidationRefreshesTheNextAccessOnly) {
+  PropertyRangeCache<int> cache;
+  int reads = 0;
+  const auto query = [&] { return ++reads; };
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, query), 1);
+  cache.clear();
+  EXPECT_EQ(reads, 1);
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, query), 2);
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, query), 2);
+  EXPECT_EQ(reads, 2);
+}
+
+TEST(PropertyRangeCache, DifferentPropertiesAndCameraInstancesDoNotShareEntries) {
+  PropertyRangeCache<int> first;
+  PropertyRangeCache<int> second;
+  EXPECT_EQ(first.get(OB_PROP_COLOR_EXPOSURE_INT, [] { return 10; }), 10);
+  EXPECT_EQ(first.get(OB_PROP_COLOR_GAIN_INT, [] { return 20; }), 20);
+  EXPECT_EQ(second.get(OB_PROP_COLOR_EXPOSURE_INT, [] { return 30; }), 30);
+}
+
+TEST(PropertyRangeCache, FailedQueriesDoNotPoisonTheCache) {
+  PropertyRangeCache<int> cache;
+  EXPECT_THROW(cache.get(OB_PROP_COLOR_EXPOSURE_INT,
+                         []() -> int { throw std::runtime_error("Device disconnected"); }),
+               std::runtime_error);
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, [] { return 40; }), 40);
+  EXPECT_EQ(cache.get(OB_PROP_COLOR_EXPOSURE_INT, [] { return 50; }), 40);
 }
 
 class DynamicParametersTest : public ::testing::Test {
