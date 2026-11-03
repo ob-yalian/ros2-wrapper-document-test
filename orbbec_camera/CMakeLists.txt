@@ -189,6 +189,11 @@ set(EXTRA_TARGETS
 set(SOURCE_FILES
   src/d2c_viewer.cpp
   src/dynamic_params.cpp
+  src/parameter_services.cpp
+  src/camera_parameter_readback.cpp
+  src/dynamic_camera_parameters.cpp
+  src/runtime_camera_parameters.cpp
+  src/parameter_descriptions.cpp
   src/image_publisher.cpp
   src/frame_timestamp_csv_logger.cpp
   src/imu_timestamp_csv_logger.cpp
@@ -456,6 +461,10 @@ if(BUILD_TESTING)
     ament_add_gtest(stream_status_test test/stream_status_test.cpp)
     target_link_directories(stream_status_test PRIVATE ${ORBBEC_LIBS_DIR})
     target_link_libraries(stream_status_test ${PROJECT_NAME})
+
+    ament_add_gtest(dynamic_params_test test/dynamic_params_test.cpp)
+    target_link_directories(dynamic_params_test PRIVATE ${ORBBEC_LIBS_DIR})
+    target_link_libraries(dynamic_params_test ${PROJECT_NAME})
 endif()
 
 ament_export_include_directories(include)

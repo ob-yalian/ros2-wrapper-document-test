@@ -20,8 +20,6 @@ def generate_launch_description():
         DeclareLaunchArgument('bag_record_filename', default_value=''),
         DeclareLaunchArgument('bag_filename', default_value=''),
         DeclareLaunchArgument('bag_loop', default_value='false'),
-        DeclareLaunchArgument('vendor_id', default_value='0x2bc5'),
-        DeclareLaunchArgument('product_id', default_value=''),
         DeclareLaunchArgument('enable_point_cloud', default_value='true'),
         DeclareLaunchArgument('point_cloud_decimation_filter_factor', default_value='1'),
         DeclareLaunchArgument('enable_colored_point_cloud', default_value='false'),
@@ -122,7 +120,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_threshold_filter', default_value='true'),
         DeclareLaunchArgument('threshold_filter_max', default_value='-1'),
         DeclareLaunchArgument('threshold_filter_min', default_value='-1'),
-        DeclareLaunchArgument('use_hardware_time', default_value='false'),
+        DeclareLaunchArgument('time_domain', default_value='system'),
         DeclareLaunchArgument('timestamp_clock_type', default_value=''),  # realtime or monotonic, default is realtime.
         DeclareLaunchArgument('enable_frame_drop_log', default_value='false'),
         DeclareLaunchArgument('frame_timestamp_csv_file', default_value=''),

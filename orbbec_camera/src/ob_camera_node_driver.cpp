@@ -16,6 +16,7 @@
 
 #include "orbbec_camera/ob_camera_node_driver.h"
 #include "orbbec_camera/utils.h"
+#include "orbbec_camera/parameter_descriptions.h"
 #include <fcntl.h>
 #include <semaphore.h>
 #include <sys/shm.h>
@@ -52,6 +53,23 @@ std::string g_camera_name = "orbbec_camera";  // Assuming this is declared elsew
 std::string g_time_domain = "global";         // Assuming this is declared elsewhere
 namespace {
 constexpr auto kStreamStartDelayAfterReconnect = std::chrono::seconds(5);
+
+rcl_interfaces::msg::ParameterDescriptor describeStartupParameter(const std::string &name) {
+  auto descriptor = orbbec_camera::describeCameraParameter(name);
+  descriptor.read_only = true;
+  return descriptor;
+}
+
+template <class T>
+T readStartupOverride(rclcpp::Node &node, const std::string &name, const T &default_value) {
+  const auto &overrides = node.get_node_parameters_interface()->get_parameter_overrides();
+  const auto found = overrides.find(name);
+  if (found == overrides.end()) return default_value;
+  if (found->second.get_type() != rclcpp::ParameterValue(default_value).get_type()) {
+    throw rclcpp::exceptions::InvalidParameterTypeException(name, "Invalid startup value type.");
+  }
+  return found->second.get<T>();
+}
 
 std::filesystem::path getPackageSharePath(const std::string &package_name) {
 #ifdef ORBBEC_AMENT_INDEX_USES_FILESYSTEM_PATHS
@@ -174,7 +192,8 @@ int rosLogSeverityFromString(const std::string_view &log_level) {
 }  // namespace
 
 OBCameraNodeDriver::OBCameraNodeDriver(const rclcpp::NodeOptions &node_options)
-    : Node("orbbec_camera_node", "/", node_options),
+    : Node("orbbec_camera_node", "/",
+           rclcpp::NodeOptions(node_options).start_parameter_services(false)),
       node_options_(node_options),
       config_path_(
           (getPackageSharePath("orbbec_camera") / "config" / "OrbbecSDKConfig_v2.0.xml").string()),
@@ -186,7 +205,7 @@ OBCameraNodeDriver::OBCameraNodeDriver(const rclcpp::NodeOptions &node_options)
 
 OBCameraNodeDriver::OBCameraNodeDriver(const std::string &node_name, const std::string &ns,
                                        const rclcpp::NodeOptions &node_options)
-    : Node(node_name, ns, node_options),
+    : Node(node_name, ns, rclcpp::NodeOptions(node_options).start_parameter_services(false)),
       node_options_(node_options),
       config_path_(
           (getPackageSharePath("orbbec_camera") / "config" / "OrbbecSDKConfig_v2.0.xml").string()),
@@ -246,9 +265,6 @@ OBCameraNodeDriver::~OBCameraNodeDriver() {
   }
 
   // Now stop threads
-  if (device_count_update_thread_ && device_count_update_thread_->joinable()) {
-    device_count_update_thread_->join();
-  }
   if (query_thread_ && query_thread_->joinable()) {
     query_thread_->join();
   }
@@ -293,11 +309,14 @@ void OBCameraNodeDriver::init() {
   signal(SIGFPE, crashSignalHandler);   // float point exception
   signal(SIGILL, crashSignalHandler);   // illegal instruction
   ob::Context::setExtensionsDirectory(extension_path_.c_str());
-  g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name);
-  auto log_level_str = declare_parameter<std::string>("log_level", "info");
+  g_camera_name = declare_parameter<std::string>("camera_name", g_camera_name,
+                                                 describeStartupParameter("camera_name"));
+  auto log_level_str =
+      declare_parameter<std::string>("log_level", "info", describeStartupParameter("log_level"));
   auto log_level = obLogSeverityFromString(log_level_str);
   auto ros_log_level = rosLogSeverityFromString(log_level_str);
-  auto log_file_name = declare_parameter<std::string>("log_file_name", "");
+  auto log_file_name = declare_parameter<std::string>("log_file_name", "",
+                                                      describeStartupParameter("log_file_name"));
   std::string log_path = getLogDirectoryForCamera(g_camera_name);
   // Set logger to console
   ob::Context::setLoggerToConsole(log_level);
@@ -322,7 +341,8 @@ void OBCameraNodeDriver::init() {
   // Bag file playback mode: load a previously recorded .bag file as a virtual
   // device instead of enumerating real hardware. Must be checked before the
   // ob::Context / device discovery machinery is set up below.
-  device_type_ = declare_parameter<std::string>("device_type", "camera");
+  device_type_ = declare_parameter<std::string>("device_type", "camera",
+                                                describeStartupParameter("device_type"));
   rcl_interfaces::msg::ParameterDescriptor device_status_descriptor;
   device_status_descriptor.description =
       "Device status publication period in seconds; 0 disables publication and statistics.";
@@ -333,27 +353,31 @@ void OBCameraNodeDriver::init() {
       (device_status_period_ > 0.0 && device_status_period_ < 1e-9)) {
     throw std::invalid_argument("device_status_period must be 0 or at least 1e-9 seconds");
   }
-  bag_filename_ = declare_parameter<std::string>("bag_filename", "");
-  bag_loop_ = declare_parameter<bool>("bag_loop", false);
+  bag_filename_ =
+      declare_parameter<std::string>("bag_filename", "", describeStartupParameter("bag_filename"));
+  bag_loop_ = declare_parameter<bool>("bag_loop", false, describeStartupParameter("bag_loop"));
   if (!bag_filename_.empty()) {
     is_alive_.store(true);
     parameters_ = std::make_shared<Parameters>(this);
+    if (node_options_.start_parameter_services()) parameters_->startParameterServices();
     initializeBagPlayback();
     return;
   }
 
   // Force IP
-  force_ip_enable_ = declare_parameter<bool>("force_ip_enable", false);
-  force_ip_mac_ = declare_parameter<std::string>("force_ip_mac", "");
-  force_ip_address_ = declare_parameter<std::string>("force_ip_address", "192.168.1.10");
-  force_ip_subnet_mask_ = declare_parameter<std::string>("force_ip_subnet_mask", "255.255.255.0");
-  force_ip_gateway_ = declare_parameter<std::string>("force_ip_gateway", "192.168.1.1");
+  force_ip_enable_ = readStartupOverride<bool>(*this, "force_ip_enable", false);
+  force_ip_mac_ = readStartupOverride<std::string>(*this, "force_ip_mac", "");
+  force_ip_address_ = readStartupOverride<std::string>(*this, "force_ip_address", "192.168.1.10");
+  force_ip_subnet_mask_ =
+      readStartupOverride<std::string>(*this, "force_ip_subnet_mask", "255.255.255.0");
+  force_ip_gateway_ = readStartupOverride<std::string>(*this, "force_ip_gateway", "192.168.1.1");
   if (config_path_.empty()) {
     ctx_ = std::make_unique<ob::Context>();
   } else {
     ctx_ = std::make_unique<ob::Context>(config_path_.c_str());
   }
-  timestamp_clock_type_str_ = declare_parameter<std::string>("timestamp_clock_type", "");
+  timestamp_clock_type_str_ = declare_parameter<std::string>(
+      "timestamp_clock_type", "", describeStartupParameter("timestamp_clock_type"));
   if (!timestamp_clock_type_str_.empty()) {
     auto timestamp_clock_type = timestampClockTypeFromString(timestamp_clock_type_str_);
     try {
@@ -368,11 +392,15 @@ void OBCameraNodeDriver::init() {
   }
   applyForceIpConfig();
 
-  connection_delay_ = static_cast<int>(declare_parameter<int>("connection_delay", 100));
-  enable_sync_host_time_ = declare_parameter<bool>("enable_sync_host_time", true);
-  double time_sync_period = declare_parameter<double>("time_sync_period", 60.0);
+  connection_delay_ = static_cast<int>(declare_parameter<int>(
+      "connection_delay", 100, describeStartupParameter("connection_delay")));
+  enable_sync_host_time_ = declare_parameter<bool>(
+      "enable_sync_host_time", true, describeStartupParameter("enable_sync_host_time"));
+  double time_sync_period = declare_parameter<double>("time_sync_period", 60.0,
+                                                      describeStartupParameter("time_sync_period"));
   time_sync_period_ = std::chrono::milliseconds((int)(time_sync_period * 1000));
-  g_time_domain = declare_parameter<std::string>("time_domain", g_time_domain);
+  g_time_domain = declare_parameter<std::string>("time_domain", g_time_domain,
+                                                 describeStartupParameter("time_domain"));
   orb_device_lock_shm_fd_ = shm_open(ORB_DEFAULT_LOCK_NAME.c_str(), O_CREAT | O_RDWR, 0666);
   if (orb_device_lock_shm_fd_ < 0) {
     RCLCPP_ERROR_STREAM(logger_, "Failed to open shared memory " << ORB_DEFAULT_LOCK_NAME);
@@ -404,17 +432,23 @@ void OBCameraNodeDriver::init() {
   // Initialize the reset device completion time to allow immediate device connection on startup
   last_reset_device_completion_time_ = std::chrono::steady_clock::now() - std::chrono::seconds(10);
   parameters_ = std::make_shared<Parameters>(this);
-  serial_number_ = declare_parameter<std::string>("serial_number", "");
-  bag_record_filename_ = declare_parameter<std::string>("bag_record_filename", "");
-  bag_record_compression_ = declare_parameter<bool>("bag_record_compression", true);
-  device_num_ = static_cast<int>(declare_parameter<int>("device_num", 1));
-  usb_port_ = declare_parameter<std::string>("usb_port", "");
-  net_device_ip_ = declare_parameter<std::string>("net_device_ip", "");
-  const auto net_device_port = declare_parameter<int64_t>("net_device_port", 0);
+  if (node_options_.start_parameter_services()) parameters_->startParameterServices();
+  serial_number_ = declare_parameter<std::string>("serial_number", "",
+                                                  describeStartupParameter("serial_number"));
+  bag_record_filename_ = declare_parameter<std::string>(
+      "bag_record_filename", "", describeStartupParameter("bag_record_filename"));
+  bag_record_compression_ = declare_parameter<bool>(
+      "bag_record_compression", true, describeStartupParameter("bag_record_compression"));
+  device_num_ = static_cast<int>(
+      declare_parameter<int>("device_num", 1, describeStartupParameter("device_num")));
+  usb_port_ = declare_parameter<std::string>("usb_port", "", describeStartupParameter("usb_port"));
+  net_device_ip_ = readStartupOverride<std::string>(*this, "net_device_ip", "");
+  const auto net_device_port = readStartupOverride<int64_t>(*this, "net_device_port", 0);
   validateNetDeviceParameters(net_device_ip_, net_device_port);
   net_device_port_ = static_cast<int>(net_device_port);
-  enumerate_net_device_ = declare_parameter<bool>("enumerate_net_device", false);
-  uvc_backend_ = declare_parameter<std::string>("uvc_backend", "libuvc");
+  enumerate_net_device_ = readStartupOverride<bool>(*this, "enumerate_net_device", false);
+  uvc_backend_ = declare_parameter<std::string>("uvc_backend", "libuvc",
+                                                describeStartupParameter("uvc_backend"));
   const bool use_explicit_net_device = !enumerate_net_device_ && !net_device_ip_.empty();
   if (use_explicit_net_device) {
     RCLCPP_INFO_STREAM(logger_, "Using direct network connection to " << net_device_ip_ << ":"
@@ -425,7 +459,8 @@ void OBCameraNodeDriver::init() {
                                                 "enumerate_net_device=false for direct IP/port "
                                                 "connection across subnets or VLANs");
   }
-  device_access_mode_str_ = declare_parameter<std::string>("device_access_mode", "Default");
+  device_access_mode_str_ = declare_parameter<std::string>(
+      "device_access_mode", "Default", describeStartupParameter("device_access_mode"));
   device_access_mode_ = stringToAccessMode(device_access_mode_str_);
   RCLCPP_INFO_STREAM(logger_, "Device access mode: " << device_access_mode_str_ << " ("
                                                      << device_access_mode_ << ")");
@@ -1235,6 +1270,9 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   bool initialized = false;
   device_info_ = device_->getDeviceInfo();
   RCLCPP_DEBUG_STREAM(logger_, "Try to connect device via " << device_info_->connectionType());
+  if (!playback_device_ && std::string(device_info_->getConnectionType()) == "Ethernet") {
+    declareNetworkParameters();
+  }
 
   while (retry_count < max_retries && !initialized) {
     try {
@@ -1399,6 +1437,23 @@ void OBCameraNodeDriver::initializeDevice(const std::shared_ptr<ob::Device> &dev
   }
 
 }  // namespace orbbec_camera
+
+void OBCameraNodeDriver::declareNetworkParameters() {
+  // Read connection settings before discovery; expose them only for network devices.
+  const auto declare = [this](const std::string &name, const auto &value) {
+    if (!has_parameter(name)) {
+      declare_parameter(name, rclcpp::ParameterValue(value), describeStartupParameter(name), true);
+    }
+  };
+  declare("force_ip_enable", force_ip_enable_);
+  declare("force_ip_mac", force_ip_mac_);
+  declare("force_ip_address", force_ip_address_);
+  declare("force_ip_subnet_mask", force_ip_subnet_mask_);
+  declare("force_ip_gateway", force_ip_gateway_);
+  declare("net_device_ip", net_device_ip_);
+  declare("net_device_port", net_device_port_);
+  declare("enumerate_net_device", enumerate_net_device_);
+}
 
 bool OBCameraNodeDriver::applyForceIpConfig() {
   if (!force_ip_enable_) {

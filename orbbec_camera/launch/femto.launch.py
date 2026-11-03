@@ -20,7 +20,6 @@ def generate_launch_description():
         DeclareLaunchArgument("bag_record_filename", default_value=""),
         DeclareLaunchArgument("bag_filename", default_value=""),
         DeclareLaunchArgument("bag_loop", default_value="false"),
-        DeclareLaunchArgument("product_id", default_value=""),
         DeclareLaunchArgument("enable_point_cloud", default_value="true"),
         DeclareLaunchArgument("cloud_frame_id", default_value=""),
         DeclareLaunchArgument("enable_colored_point_cloud", default_value="false"),

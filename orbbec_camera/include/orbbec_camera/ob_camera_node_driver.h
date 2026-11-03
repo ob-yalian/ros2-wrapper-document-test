@@ -90,6 +90,7 @@ class OBCameraNodeDriver : public rclcpp::Node {
       const std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Request> request,
       std::shared_ptr<orbbec_camera_msgs::srv::SetBagRecording::Response> response);
   bool applyForceIpConfig();
+  void declareNetworkParameters();
 
   OBDeviceAccessMode stringToAccessMode(const std::string& mode_str);
   std::string accessModeToString(OBDeviceAccessMode mode);
@@ -123,7 +124,6 @@ class OBCameraNodeDriver : public rclcpp::Node {
   std::string uvc_backend_;
   std::shared_ptr<Parameters> parameters_ = nullptr;
   std::shared_ptr<std::thread> query_thread_ = nullptr;
-  std::shared_ptr<std::thread> device_count_update_thread_ = nullptr;
   std::recursive_mutex device_lock_;
   int device_num_ = 1;
   rclcpp::TimerBase::SharedPtr check_connect_timer_ = nullptr;

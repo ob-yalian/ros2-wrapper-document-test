@@ -21,10 +21,12 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <optional>
 #include <queue>
 #include <rclcpp/rclcpp.hpp>
+#include <set>
 #include <string>
 #include <stdexcept>
 #include <unordered_map>
@@ -207,10 +209,21 @@ class OBCameraNode {
                bool is_playback_device = false, bool stream_status_enabled = true);
 
   template <class T>
-  void setAndGetNodeParameter(
-      T& param, const std::string& param_name, const T& default_value,
-      const rcl_interfaces::msg::ParameterDescriptor& parameter_descriptor =
-          rcl_interfaces::msg::ParameterDescriptor());  // set and get parameter
+  void setAndGetNodeParameter(T& param, const std::string& param_name, const T& default_value,
+                              const rcl_interfaces::msg::ParameterDescriptor& parameter_descriptor =
+                                  rcl_interfaces::msg::ParameterDescriptor(),
+                              bool ignore_override = false);  // set and get parameter
+
+  template <class T>
+  void setAndGetNodeParameter(std::atomic<T>& param, const std::string& name,
+                              const T& default_value,
+                              const rcl_interfaces::msg::ParameterDescriptor& descriptor =
+                                  rcl_interfaces::msg::ParameterDescriptor(),
+                              bool ignore_override = false) {
+    T value = param.load();
+    setAndGetNodeParameter(value, name, default_value, descriptor, ignore_override);
+    param.store(value);
+  }
 
   ~OBCameraNode() noexcept;
 
@@ -282,11 +295,17 @@ class OBCameraNode {
 
   void setupDevices();
 
+  void setupDevicePreset();
+
+  void enumerateStreams();
+
   void loadConfigJson();
 
   void captureInitialRosParameters();
 
   bool isLaunchParamProvided(const std::string& param_name) const;
+  bool isStartupParameterSkipped(const std::string& param_name,
+                                 const rclcpp::ParameterValue& default_value) const;
 
   bool exportConfigJsonToFile(const std::string& file_path, std::string& message);
 
@@ -336,7 +355,82 @@ class OBCameraNode {
 
   void selectBaseStream();
 
-  void getParameters();
+  void getCommonParameters();
+  void getSensorParameters();
+  void setupPresetResolution();
+  void refreshParameterSensors();
+  bool isSensorParameterSupported(const std::string& name) const;
+  void skipUnsupportedParameter(const std::string& name,
+                                const rclcpp::ParameterValue& default_value);
+
+  void getDevicePresetParameters();
+
+  void getImageStreamParameters();
+
+  void getFilterParameters();
+
+  void getPropertyParameters();
+
+  void validateParameters();
+
+  bool queryDeviceCapability(const std::string& name, const std::function<bool()>& query) const;
+
+  bool isPropertyParameterSupported(const std::string& param_name, OBPropertyID property_id,
+                                    OBPermissionType permission = OB_PERMISSION_WRITE) const;
+
+  template <class T>
+  void setAndGetDeviceParameter(T& param, const std::string& param_name, const T& default_value,
+                                bool supported = true);
+
+  template <class T>
+  void setAndGetDeviceParameter(std::atomic<T>& param, const std::string& name,
+                                const T& default_value, bool supported = true) {
+    T value = param.load();
+    setAndGetDeviceParameter(value, name, default_value, supported);
+    param.store(value);
+  }
+
+  template <class T>
+  void setAndGetPropertyParameter(T& param, const std::string& param_name, const T& default_value,
+                                  OBPropertyID property_id);
+
+  template <class T>
+  void setAndGetFilterParameter(T& param, const std::string& param_name, const T& default_value);
+
+  void initializeRecommendedFilters();
+  void loadRecommendedFilters(const stream_index_pair& stream,
+                              std::vector<std::shared_ptr<ob::Filter>>& filters);
+  bool supportsRecommendedFilter(const stream_index_pair& stream,
+                                 const std::string& filter_name) const;
+  void setupFilterParameterSupport();
+  bool isFilterParameterSupported(const std::string& name) const;
+  void setupFalsePositiveFilterParameters();
+
+  void appendPropertyDescription(rcl_interfaces::msg::ParameterDescriptor& descriptor,
+                                 OBPropertyID property_id, rclcpp::ParameterType type) const;
+
+  bool isDynamicProperty(OBPropertyID property_id) const;
+  void setupDynamicParameters();
+  void setupRuntimeControls();
+  void setupFilterParameterDescriptions();
+  void setupParameterReaders();
+  void setupFilterParameterReaders();
+  std::string synchronizeFilterParameters(const std::string& filter_name);
+  void addParameterReader(const std::string& name, Parameters::ParameterReader reader);
+  rclcpp::ParameterValue readPropertyParameter(const std::string& name, OBPropertyID id,
+                                               rclcpp::ParameterType type) const;
+  void setupPointCloudPublishers();
+  void addRuntimeControl(const std::vector<std::string>& names, Parameters::BatchSetter setter);
+  rcl_interfaces::msg::SetParametersResult setDynamicParameters(
+      const std::vector<rclcpp::Parameter>& parameters);
+
+  struct DynamicProperty {
+    OBPropertyID id;
+    rclcpp::ParameterType type;
+    std::function<void(const rclcpp::ParameterValue&)> update_cache;
+  };
+  rclcpp::ParameterValue readDynamicProperty(const DynamicProperty& property) const;
+  void writeDynamicProperty(const DynamicProperty& property, const rclcpp::ParameterValue& value);
 
   void setupTopics();
 
@@ -434,23 +528,12 @@ class OBCameraNode {
                            std::shared_ptr<GetInt32::Response>& response,
                            const stream_index_pair& stream_index);
 
-  void setExposureCallback(const std::shared_ptr<SetInt32::Request>& request,
-                           std::shared_ptr<SetInt32::Response>& response,
-                           const stream_index_pair& stream_index);
-
   void getGainCallback(const std::shared_ptr<GetInt32::Request>& request,
                        std::shared_ptr<GetInt32::Response>& response,
                        const stream_index_pair& stream_index);
 
-  void setGainCallback(const std::shared_ptr<SetInt32::Request>& request,
-                       std::shared_ptr<SetInt32::Response>& response,
-                       const stream_index_pair& stream_index);
-
   void getWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                std::shared_ptr<GetInt32::Response>& response);
-
-  void setWhiteBalanceCallback(const std::shared_ptr<SetInt32 ::Request>& request,
-                               std::shared_ptr<SetInt32 ::Response>& response);
 
   void getColorWbCtrlCallback(const std::shared_ptr<GetInt32::Request>& request,
                               std::shared_ptr<GetInt32::Response>& response);
@@ -461,9 +544,6 @@ class OBCameraNode {
   void getAutoWhiteBalanceCallback(const std::shared_ptr<GetInt32::Request>& request,
                                    std::shared_ptr<GetInt32::Response>& response);
 
-  void setAutoWhiteBalanceCallback(const std::shared_ptr<SetBool::Request>& request,
-                                   std::shared_ptr<SetBool::Response>& response);
-
   void getAeAwbStatusCallback(const std::shared_ptr<GetInt32::Request>& request,
                               std::shared_ptr<GetInt32::Response>& response);
 
@@ -472,10 +552,6 @@ class OBCameraNode {
 
   void setAwbGainCallback(const std::shared_ptr<SetAwbGain::Request>& request,
                           std::shared_ptr<SetAwbGain::Response>& response);
-
-  void setAutoExposureCallback(const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
-                               std::shared_ptr<std_srvs::srv::SetBool::Response>& response,
-                               const stream_index_pair& stream_index);
 
   void setAeRoiCallback(const std::shared_ptr<SetArrays::Request>& request,
                         std::shared_ptr<SetArrays::Response>& response,
@@ -727,12 +803,8 @@ class OBCameraNode {
   std::atomic_bool pipeline_started_{false};
   std::string camera_name_ = "camera";
   std::string accel_gyro_frame_id_ = "camera_accel_gyro_optical_frame";
-  const std::string imu_frame_id_ = "camera_gyro_frame";
   std::shared_ptr<ob::Config> pipeline_config_ = nullptr;
   std::map<stream_index_pair, std::shared_ptr<ob::Sensor>> sensors_;
-  std::map<stream_index_pair, ob_camera_intrinsic> stream_intrinsics_;
-  std::map<stream_index_pair, sensor_msgs::msg::CameraInfo> camera_infos_;
-  std::map<stream_index_pair, OBCameraParam> ob_camera_param_;
   std::map<stream_index_pair, OBExtrinsic> depth_to_other_extrinsics_;
   std::map<stream_index_pair, rclcpp::Publisher<orbbec_camera_msgs::msg::Extrinsics>::SharedPtr>
       depth_to_other_extrinsics_publishers_;
@@ -759,7 +831,6 @@ class OBCameraNode {
       supported_profiles_;
   std::map<stream_index_pair, std::shared_ptr<ob::StreamProfile>> stream_profile_;
   stream_index_pair base_stream_ = DEPTH;
-  std::map<stream_index_pair, uint32_t> seq_;
   std::map<stream_index_pair, cv::Mat> images_;
   std::map<stream_index_pair, std::string> encoding_;
   std::map<stream_index_pair, int> unit_step_size_;
@@ -820,7 +891,6 @@ class OBCameraNode {
   rclcpp::Service<orbbec_camera_msgs::srv::GetBool>::SharedPtr get_ptp_config_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_flood_enable_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_fan_work_mode_srv_;
-  rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr toggle_sensors_srv_;
   rclcpp::Service<GetInt32>::SharedPtr get_lrm_measure_distance_srv_;
   rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr set_reset_timestamp_srv_;
   rclcpp::Service<SetInt32>::SharedPtr set_interleaver_laser_sync_srv_;
@@ -843,36 +913,36 @@ class OBCameraNode {
   rclcpp::Service<SetString>::SharedPtr set_ae_strategy_srv_;
 
   bool enable_sync_output_accel_gyro_ = false;
-  bool publish_tf_ = false;
+  std::atomic<bool> publish_tf_ = false;
   bool tf_published_ = false;
   std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_ = nullptr;
   std::shared_ptr<tf2_ros::TransformBroadcaster> dynamic_tf_broadcaster_ = nullptr;
   std::vector<geometry_msgs::msg::TransformStamped> tf_msgs;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr depth_registration_cloud_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr depth_cloud_pub_;
-  bool enable_point_cloud_ = true;
-  bool enable_colored_point_cloud_ = false;
-  int point_cloud_decimation_filter_factor_ = 1;
+  std::atomic<bool> enable_point_cloud_ = true;
+  std::atomic<bool> enable_colored_point_cloud_ = false;
+  std::atomic<int> point_cloud_decimation_filter_factor_ = 1;
   std::recursive_mutex point_cloud_mutex_;
 
   orbbec_camera_msgs::msg::DeviceInfo device_info_;
   std::string point_cloud_qos_;
   std::vector<geometry_msgs::msg::TransformStamped> static_tf_msgs_;
   std::shared_ptr<std::thread> tf_thread_ = nullptr;
+  std::atomic<bool> tf_thread_running_{false};
   std::condition_variable tf_cv_;
-  double tf_publish_rate_ = 10.0;
+  std::atomic<double> tf_publish_rate_ = 10.0;
   std::unique_ptr<camera_info_manager::CameraInfoManager> ir_info_manager_ = nullptr;
   std::unique_ptr<camera_info_manager::CameraInfoManager> color_info_manager_ = nullptr;
   std::string color_info_url_;
   std::string ir_info_url_;
-  std::optional<OBCameraParam> camera_param_;
   std::string colorizer_mode_ = "none";
   bool enable_d2c_viewer_ = false;
   std::unique_ptr<D2CViewer> d2c_viewer_ = nullptr;
   std::map<stream_index_pair, std::atomic_bool> save_images_;
   std::map<stream_index_pair, int> save_images_count_;
   std::mutex save_images_mutex_;
-  int max_save_images_count_ = 10;
+  std::atomic<int> max_save_images_count_ = 10;
   std::atomic_bool save_point_cloud_{false};
   std::atomic_bool save_colored_point_cloud_{false};
   rclcpp::Service<std_srvs::srv::Empty>::SharedPtr save_images_srv_;
@@ -887,7 +957,6 @@ class OBCameraNode {
   bool enable_ir_long_exposure_ = false;
   bool enable_ldp_ = true;
   int ldp_power_level_ = -1;
-  int color_rotation_ = -1;
   // color ae roi
   int color_ae_roi_left_ = -1;
   int color_ae_roi_top_ = -1;
@@ -954,8 +1023,6 @@ class OBCameraNode {
   int frames_per_trigger_ = 1;
   bool enable_ptp_config_ = false;
   std::string depth_precision_str_;
-  OB_DEPTH_PRECISION_LEVEL depth_precision_ = OB_PRECISION_0MM8;
-  double depth_precision_float_ = 0.10;
   // IMU
   std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> imu_publishers_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_gyro_accel_publisher_;
@@ -964,8 +1031,8 @@ class OBCameraNode {
   std::map<stream_index_pair, std::string> imu_range_;
   std::map<stream_index_pair, std::string> imu_qos_;
   std::map<stream_index_pair, bool> imu_started_;
-  double linear_accel_cov_ = 0.0001;
-  double angular_vel_cov_ = 0.0001;
+  std::atomic<double> linear_accel_cov_ = 0.0001;
+  std::atomic<double> angular_vel_cov_ = 0.0001;
   std::deque<IMUData> imu_history_;
   IMUData accel_data_{ACCEL, {0, 0, 0}, -1.0};
   bool enable_accel_data_correction_ = true;
@@ -1012,7 +1079,7 @@ class OBCameraNode {
   // For color
   ColorFrameQueue color_frame_queue_;
   ColorQueueStats color_frame_queue_stats_;
-  int color_frame_queue_max_frames_ = 1;
+  std::atomic<int> color_frame_queue_max_frames_ = 1;
   std::shared_ptr<std::thread> colorFrameThread_ = nullptr;
   std::atomic_bool stop_color_frame_threads_{false};
   std::mutex color_frame_queue_lock_;
@@ -1021,7 +1088,7 @@ class OBCameraNode {
   // For left color
   ColorFrameQueue left_color_frame_queue_;
   ColorQueueStats left_color_frame_queue_stats_;
-  int left_color_frame_queue_max_frames_ = 1;
+  std::atomic<int> left_color_frame_queue_max_frames_ = 1;
   std::shared_ptr<std::thread> leftColorFrameThread_ = nullptr;
   std::mutex left_color_frame_queue_lock_;
   std::condition_variable left_color_frame_queue_cv_;
@@ -1029,12 +1096,12 @@ class OBCameraNode {
   // For right color
   ColorFrameQueue right_color_frame_queue_;
   ColorQueueStats right_color_frame_queue_stats_;
-  int right_color_frame_queue_max_frames_ = 1;
+  std::atomic<int> right_color_frame_queue_max_frames_ = 1;
   std::shared_ptr<std::thread> rightColorFrameThread_ = nullptr;
   std::mutex right_color_frame_queue_lock_;
   std::condition_variable right_color_frame_queue_cv_;
 
-  bool ordered_pc_ = false;
+  std::atomic<bool> ordered_pc_ = false;
   bool enable_depth_scale_ = true;
   int depth_decimation_factor_ = 1;
   int left_ir_decimation_factor_ = 1;
@@ -1106,21 +1173,19 @@ class OBCameraNode {
   bool retry_on_usb3_detection_failure_ = false;
   bool config_json_loaded_ = false;
   std::unordered_set<std::string> initial_ros_params_;
+  std::unordered_set<std::string> startup_skip_parameters_;
+  std::unordered_set<std::string> device_param_names_;
+  std::set<OBSensorType> parameter_sensor_types_;
+  bool parameter_sensors_known_{false};
+  std::map<std::string, DynamicProperty> dynamic_properties_;
+  std::map<std::string, std::pair<OBPropertyID, rclcpp::ParameterType>> property_parameters_;
+  std::map<std::string, std::string> runtime_control_groups_;
+  std::map<std::string, Parameters::BatchSetter> runtime_control_setters_;
+  bool enable_depth_auto_exposure_ = true;
   std::atomic_bool is_camera_node_initialized_{false};
   int laser_energy_level_ = -1;
   ob::PointCloudFilter depth_point_cloud_filter_;
   ob::PointCloudFilter color_point_cloud_filter_;
-  std::optional<OBCalibrationParam> calibration_param_;
-  std::optional<OBXYTables> xy_tables_;
-  float* xy_table_data_ = nullptr;
-  uint32_t xy_table_data_size_ = 0;
-  uint8_t* rgb_point_cloud_buffer_ = nullptr;
-  uint32_t rgb_point_cloud_buffer_size_ = 0;
-  std::optional<OBXYTables> depth_xy_tables_;
-  float* depth_xy_table_data_ = nullptr;
-  uint32_t depth_xy_table_data_size_ = 0;
-  uint8_t* depth_point_cloud_buffer_ = nullptr;
-  uint32_t depth_point_cloud_buffer_size_ = 0;
   int min_depth_limit_ = 0;
   int max_depth_limit_ = 0;
   std::string time_domain_ = "global";  // device, system, global
@@ -1144,7 +1209,6 @@ class OBCameraNode {
   std::map<stream_index_pair, bool> enable_undistortion_;
   std::shared_ptr<ob::UnDistortionFilter> hw_d2c_color_undistortion_filter_;
   bool hw_d2c_color_undistortion_configured_ = false;
-  bool has_first_color_frame_ = false;
   bool use_intra_process_ = false;
   // True when device_ is an ob::PlaybackDevice. Real-device-only hardware
   // tuning (heartbeat, USB3 retry, laser, sync config, etc.) is skipped in
@@ -1154,6 +1218,7 @@ class OBCameraNode {
   bool stream_status_enabled_ = true;
   std::string cloud_frame_id_;
   std::mutex depth_filter_mutex_;
+  std::mutex image_filter_mutex_;
   std::vector<std::shared_ptr<ob::Filter>> depth_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> color_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_color_filter_list_;
@@ -1161,6 +1226,10 @@ class OBCameraNode {
   std::vector<std::shared_ptr<ob::Filter>> ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> left_ir_filter_list_;
   std::vector<std::shared_ptr<ob::Filter>> right_ir_filter_list_;
+  // An absent entry means the recommendation query failed; an empty set is a known empty list.
+  std::map<stream_index_pair, std::set<std::string>> recommended_filter_names_;
+  std::map<std::string, bool> filter_parameter_support_;
+  std::map<std::string, OBPropertyID> filter_property_ids_;
 
   // interleave AE
   std::string interleave_ae_mode_;  // hdr or laser

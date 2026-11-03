@@ -608,14 +608,18 @@ OB_DEPTH_PRECISION_LEVEL depthPrecisionLevelFromString(
     return OB_PRECISION_1MM;
   } else if (depth_precision_level_str == "0.8mm") {
     return OB_PRECISION_0MM8;
+  } else if (depth_precision_level_str == "0.5mm") {
+    return OB_PRECISION_0MM5;
   } else if (depth_precision_level_str == "0.4mm") {
     return OB_PRECISION_0MM4;
   } else if (depth_precision_level_str == "0.2mm") {
     return OB_PRECISION_0MM2;
   } else if (depth_precision_level_str == "0.1mm") {
     return OB_PRECISION_0MM1;
+  } else if (depth_precision_level_str == "0.05mm") {
+    return OB_PRECISION_0MM05;
   } else {
-    return OB_PRECISION_0MM8;
+    return OB_PRECISION_UNKNOWN;
   }
 }
 
@@ -653,12 +657,16 @@ std::string depthPrecisionLevelToString(int value) {
       return "1mm";
     case OB_PRECISION_0MM8:
       return "0.8mm";
+    case OB_PRECISION_0MM5:
+      return "0.5mm";
     case OB_PRECISION_0MM4:
       return "0.4mm";
     case OB_PRECISION_0MM2:
       return "0.2mm";
     case OB_PRECISION_0MM1:
       return "0.1mm";
+    case OB_PRECISION_0MM05:
+      return "0.05mm";
     default:
       return "unknown";
   }

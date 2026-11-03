@@ -58,7 +58,6 @@ def generate_launch_description():
         DeclareLaunchArgument('usb_port', default_value=''),
         DeclareLaunchArgument('device_num', default_value='1'),
         DeclareLaunchArgument('uvc_backend', default_value='libuvc'),#libuvc or v4l2
-        DeclareLaunchArgument('product_id', default_value=''),
         DeclareLaunchArgument('enable_point_cloud', default_value='true'),
         DeclareLaunchArgument('point_cloud_decimation_filter_factor', default_value='1'),
         DeclareLaunchArgument('cloud_frame_id', default_value=''),
@@ -101,7 +100,7 @@ def generate_launch_description():
         DeclareLaunchArgument('ir_fps', default_value='0'),
         DeclareLaunchArgument('ir_format', default_value='ANY'),
         DeclareLaunchArgument('enable_ir', default_value='true'),
-        DeclareLaunchArgument('flip_ir', default_value='false'),
+        DeclareLaunchArgument('ir_mirror', default_value='false'),
         DeclareLaunchArgument('ir_qos', default_value='default'),
         DeclareLaunchArgument('ir_camera_info_qos', default_value='default'),
         DeclareLaunchArgument('enable_ir_auto_exposure', default_value='true'),
