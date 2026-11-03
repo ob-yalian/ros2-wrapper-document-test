@@ -22,9 +22,49 @@
 #include <stdexcept>
 
 #include "orbbec_camera/dynamic_params.h"
+#include "orbbec_camera/parameter_sensor_support.h"
 
 namespace orbbec_camera {
 namespace {
+
+TEST(ParameterSensorSupport, DualColorExcludesDepthAndIrButRetainsSharedColorAndDeviceControls) {
+  const std::set<OBSensorType> sensors = {OB_SENSOR_COLOR_LEFT, OB_SENSOR_COLOR_RIGHT};
+  for (const auto &name : {"depth_exposure", "ir_gain", "depth_ae_roi_left", "ir_ae_max_exposure",
+                           "interleave_frame_enable", "hdr_index0_depth_gain",
+                           "laser_index1_depth_gain", "depth_precision", "enable_point_cloud",
+                           "depth_registration", "enable_depth", "color_width", "enable_laser"}) {
+    EXPECT_FALSE(supportsParameterSensors(name, sensors, true)) << name;
+  }
+  for (const auto &name :
+       {"color_exposure", "enable_color_auto_exposure", "color_ae_roi_left", "left_color_mirror",
+        "right_color_width", "enable_right_color", "enable_left_color_decimation_filter",
+        "device_preset", "depth_work_mode", "sync_mode", "depth_delay_us", "enable_ptp_config",
+        "monitor_poll_interval_sec"}) {
+    EXPECT_TRUE(supportsParameterSensors(name, sensors, true)) << name;
+  }
+}
+
+TEST(ParameterSensorSupport, SensorPresenceDoesNotDependOnEnabledStreams) {
+  const std::set<OBSensorType> sensors = {OB_SENSOR_DEPTH, OB_SENSOR_IR_LEFT, OB_SENSOR_IR_RIGHT,
+                                          OB_SENSOR_COLOR};
+  for (const auto &name : {"depth_exposure", "ir_exposure", "depth_precision", "ir_ae_max_exposure",
+                           "interleave_frame_enable", "enable_color", "color_gain",
+                           "depth_registration", "enable_laser"}) {
+    EXPECT_TRUE(supportsParameterSensors(name, sensors, true)) << name;
+  }
+  EXPECT_FALSE(supportsParameterSensors("enable_left_color", sensors, true));
+  EXPECT_FALSE(supportsParameterSensors("enable_accel_data_correction", sensors, true));
+}
+
+TEST(ParameterSensorSupport, MissingSensorsAndUnknownCapabilitiesHaveDifferentSemantics) {
+  EXPECT_FALSE(supportsParameterSensors("depth_exposure", {}, true));
+  EXPECT_TRUE(supportsParameterSensors("depth_exposure", {}, false));
+  EXPECT_TRUE(supportsParameterSensors("device_preset", {}, true));
+  EXPECT_TRUE(supportsParameterSensors("enable_accel_data_correction", {OB_SENSOR_ACCEL}, true));
+  EXPECT_TRUE(supportsParameterSensors("enable_laser", {OB_SENSOR_LIDAR}, true));
+  EXPECT_TRUE(supportsParameterSensors("ir_ae_max_exposure", {OB_SENSOR_DEPTH}, true));
+  EXPECT_FALSE(supportsParameterSensors("ir_gain", {OB_SENSOR_DEPTH}, true));
+}
 
 class DynamicParametersTest : public ::testing::Test {
  protected:

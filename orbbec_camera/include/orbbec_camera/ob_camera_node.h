@@ -356,6 +356,12 @@ class OBCameraNode {
   void selectBaseStream();
 
   void getCommonParameters();
+  void getSensorParameters();
+  void setupPresetResolution();
+  void refreshParameterSensors();
+  bool isSensorParameterSupported(const std::string& name) const;
+  void skipUnsupportedParameter(const std::string& name,
+                                const rclcpp::ParameterValue& default_value);
 
   void getDevicePresetParameters();
 
@@ -1167,6 +1173,8 @@ class OBCameraNode {
   std::unordered_set<std::string> initial_ros_params_;
   std::unordered_set<std::string> startup_skip_parameters_;
   std::unordered_set<std::string> device_param_names_;
+  std::set<OBSensorType> parameter_sensor_types_;
+  bool parameter_sensors_known_{false};
   std::map<std::string, DynamicProperty> dynamic_properties_;
   std::map<std::string, std::pair<OBPropertyID, rclcpp::ParameterType>> property_parameters_;
   std::map<std::string, std::string> runtime_control_groups_;

@@ -179,96 +179,125 @@ std::string OBSyncModeToString(const OBMultiDeviceSyncMode& mode) {
 
 void OBCameraNode::setupCameraCtrlServices() {
   using std_srvs::srv::SetBool;
-  get_color_queue_stats_srv_ = node_->create_service<SetBool>(
-      "get_color_queue_stats", [this](const std::shared_ptr<SetBool::Request> request,
-                                      std::shared_ptr<SetBool::Response> response) {
-        getColorQueueStatsCallback(request, response);
-      });
+  const auto can_read = [this](const std::string& name) {
+    if (!node_->has_parameter(name) || !isSensorParameterSupported(name)) return false;
+    const auto property = property_parameters_.find(name);
+    return property != property_parameters_.end() &&
+           isPropertyReadable(device_, property->second.first);
+  };
+  const auto can_set = [this](const std::string& name) {
+    return node_->has_parameter(name) && isSensorParameterSupported(name) &&
+           !node_->describe_parameter(name).read_only;
+  };
+  const bool has_color =
+      sensors_.count(COLOR) || sensors_.count(COLOR_LEFT) || sensors_.count(COLOR_RIGHT);
+  const bool has_depth = sensors_.count(DEPTH) != 0;
+  if (has_color) {
+    get_color_queue_stats_srv_ = node_->create_service<SetBool>(
+        "get_color_queue_stats", [this](const std::shared_ptr<SetBool::Request> request,
+                                        std::shared_ptr<SetBool::Response> response) {
+          getColorQueueStatsCallback(request, response);
+        });
+  }
   for (auto stream_index : IMAGE_STREAMS) {
-    if (!enable_stream_[stream_index]) {
+    if (!enable_stream_[stream_index] || sensors_.count(stream_index) == 0) {
       continue;
     }
     auto stream_name = stream_name_[stream_index];
     std::string service_name = "get_" + stream_name + "_exposure";
-    get_exposure_srv_[stream_index] = node_->create_service<GetInt32>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<GetInt32::Request> request,
-                                            std::shared_ptr<GetInt32::Response> response) {
-          getExposureCallback(request, response, stream_index);
-        });
+    if (can_read(sensorParameterName(stream_index, "exposure"))) {
+      get_exposure_srv_[stream_index] = node_->create_service<GetInt32>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<GetInt32::Request> request,
+                                              std::shared_ptr<GetInt32::Response> response) {
+            getExposureCallback(request, response, stream_index);
+          });
+    }
 
     service_name = "set_" + stream_name + "_exposure";
-    set_exposure_srv_[stream_index] = node_->create_service<SetInt32>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
-                                            std::shared_ptr<SetInt32::Response> response) {
-          setParameterResponse(
-              node_, parameters_,
-              {rclcpp::Parameter(sensorParameterName(stream_index, "exposure"), request->data)},
-              response);
-        });
+    if (can_set(sensorParameterName(stream_index, "exposure"))) {
+      set_exposure_srv_[stream_index] = node_->create_service<SetInt32>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
+                                              std::shared_ptr<SetInt32::Response> response) {
+            setParameterResponse(
+                node_, parameters_,
+                {rclcpp::Parameter(sensorParameterName(stream_index, "exposure"), request->data)},
+                response);
+          });
+    }
     service_name = "get_" + stream_name + "_gain";
-    get_gain_srv_[stream_index] = node_->create_service<GetInt32>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<GetInt32::Request> request,
-                                            std::shared_ptr<GetInt32::Response> response) {
-          getGainCallback(request, response, stream_index);
-        });
+    if (can_read(sensorParameterName(stream_index, "gain"))) {
+      get_gain_srv_[stream_index] = node_->create_service<GetInt32>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<GetInt32::Request> request,
+                                              std::shared_ptr<GetInt32::Response> response) {
+            getGainCallback(request, response, stream_index);
+          });
+    }
 
     service_name = "set_" + stream_name + "_gain";
-    set_gain_srv_[stream_index] = node_->create_service<SetInt32>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
-                                            std::shared_ptr<SetInt32::Response> response) {
-          setParameterResponse(
-              node_, parameters_,
-              {rclcpp::Parameter(sensorParameterName(stream_index, "gain"), request->data)},
-              response);
-        });
+    if (can_set(sensorParameterName(stream_index, "gain"))) {
+      set_gain_srv_[stream_index] = node_->create_service<SetInt32>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
+                                              std::shared_ptr<SetInt32::Response> response) {
+            setParameterResponse(
+                node_, parameters_,
+                {rclcpp::Parameter(sensorParameterName(stream_index, "gain"), request->data)},
+                response);
+          });
+    }
     service_name = "set_" + stream_name + "_auto_exposure";
-    set_auto_exposure_srv_[stream_index] = node_->create_service<SetBool>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
-                                            std::shared_ptr<SetBool::Response> response) {
-          setParameterResponse(
-              node_, parameters_,
-              {rclcpp::Parameter("enable_" + sensorParameterName(stream_index, "auto_exposure"),
-                                 request->data)},
-              response);
-        });
+    if (can_set("enable_" + sensorParameterName(stream_index, "auto_exposure"))) {
+      set_auto_exposure_srv_[stream_index] = node_->create_service<SetBool>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
+                                              std::shared_ptr<SetBool::Response> response) {
+            setParameterResponse(
+                node_, parameters_,
+                {rclcpp::Parameter("enable_" + sensorParameterName(stream_index, "auto_exposure"),
+                                   request->data)},
+                response);
+          });
+    }
 
     service_name = "set_" + stream_name + "_ae_roi";
-    set_ae_roi_srv_[stream_index] = node_->create_service<SetArrays>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetArrays::Request> request,
-                                            std::shared_ptr<SetArrays::Response> response) {
-          if (request->data_param.size() != 4) {
-            response->success = false;
-            response->message = "ROI requires four coordinates.";
-            return;
-          }
-          const bool color = stream_index.first == OB_STREAM_COLOR ||
-                             stream_index.first == OB_STREAM_COLOR_LEFT ||
-                             stream_index.first == OB_STREAM_COLOR_RIGHT;
-          const auto stream = color ? COLOR : DEPTH;
-          const std::string prefix = color ? "color_ae_roi_" : "depth_ae_roi_";
-          const std::vector<std::string> names = {"left", "right", "top", "bottom"};
-          const std::vector<int> bounds = {width_[stream], width_[stream], height_[stream],
-                                           height_[stream]};
-          std::vector<rclcpp::Parameter> values;
-          for (size_t i = 0; i < names.size(); ++i) {
-            const auto value = request->data_param[i];
-            if (!std::isfinite(value) || value < std::numeric_limits<int16_t>::min() ||
-                value > std::numeric_limits<int16_t>::max() || bounds[i] <= 0) {
+    if (can_set((stream_index == COLOR || stream_index == COLOR_LEFT || stream_index == COLOR_RIGHT)
+                    ? "color_ae_roi_left"
+                    : "depth_ae_roi_left")) {
+      set_ae_roi_srv_[stream_index] = node_->create_service<SetArrays>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetArrays::Request> request,
+                                              std::shared_ptr<SetArrays::Response> response) {
+            if (request->data_param.size() != 4) {
               response->success = false;
-              response->message = "ROI coordinate or stream dimensions are invalid.";
+              response->message = "ROI requires four coordinates.";
               return;
             }
-            const int coordinate = std::clamp(static_cast<int>(value), 0, bounds[i] - 1);
-            values.emplace_back(prefix + names[i], coordinate);
-          }
-          setParameterResponse(node_, parameters_, values, response);
-        });
+            const bool color = stream_index.first == OB_STREAM_COLOR ||
+                               stream_index.first == OB_STREAM_COLOR_LEFT ||
+                               stream_index.first == OB_STREAM_COLOR_RIGHT;
+            const auto stream = color ? COLOR : DEPTH;
+            const std::string prefix = color ? "color_ae_roi_" : "depth_ae_roi_";
+            const std::vector<std::string> names = {"left", "right", "top", "bottom"};
+            const std::vector<int> bounds = {width_[stream], width_[stream], height_[stream],
+                                             height_[stream]};
+            std::vector<rclcpp::Parameter> values;
+            for (size_t i = 0; i < names.size(); ++i) {
+              const auto value = request->data_param[i];
+              if (!std::isfinite(value) || value < std::numeric_limits<int16_t>::min() ||
+                  value > std::numeric_limits<int16_t>::max() || bounds[i] <= 0) {
+                response->success = false;
+                response->message = "ROI coordinate or stream dimensions are invalid.";
+                return;
+              }
+              const int coordinate = std::clamp(static_cast<int>(value), 0, bounds[i] - 1);
+              values.emplace_back(prefix + names[i], coordinate);
+            }
+            setParameterResponse(node_, parameters_, values, response);
+          });
+    }
 
     service_name = "toggle_" + stream_name;
 
@@ -284,35 +313,41 @@ void OBCameraNode::setupCameraCtrlServices() {
           }
         });
     service_name = "set_" + stream_name + "_mirror";
-    set_mirror_srv_[stream_index] = node_->create_service<SetBool>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
-                                            std::shared_ptr<SetBool::Response> response) {
-          setParameterResponse(
-              node_, parameters_,
-              {rclcpp::Parameter(stream_name_.at(stream_index) + "_mirror", request->data)},
-              response);
-        });
+    if (can_set(stream_name + "_mirror")) {
+      set_mirror_srv_[stream_index] = node_->create_service<SetBool>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
+                                              std::shared_ptr<SetBool::Response> response) {
+            setParameterResponse(
+                node_, parameters_,
+                {rclcpp::Parameter(stream_name_.at(stream_index) + "_mirror", request->data)},
+                response);
+          });
+    }
     service_name = "set_" + stream_name + "_flip";
-    set_flip_srv_[stream_index] = node_->create_service<SetBool>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
-                                            std::shared_ptr<SetBool::Response> response) {
-          setParameterResponse(
-              node_, parameters_,
-              {rclcpp::Parameter(stream_name_.at(stream_index) + "_flip", request->data)},
-              response);
-        });
+    if (can_set(stream_name + "_flip")) {
+      set_flip_srv_[stream_index] = node_->create_service<SetBool>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetBool::Request> request,
+                                              std::shared_ptr<SetBool::Response> response) {
+            setParameterResponse(
+                node_, parameters_,
+                {rclcpp::Parameter(stream_name_.at(stream_index) + "_flip", request->data)},
+                response);
+          });
+    }
     service_name = "set_" + stream_name + "_rotation";
-    set_rotation_srv_[stream_index] = node_->create_service<SetInt32>(
-        service_name,
-        [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
-                                            std::shared_ptr<SetInt32::Response> response) {
-          setParameterResponse(
-              node_, parameters_,
-              {rclcpp::Parameter(stream_name_.at(stream_index) + "_rotation", request->data)},
-              response);
-        });
+    if (can_set(stream_name + "_rotation")) {
+      set_rotation_srv_[stream_index] = node_->create_service<SetInt32>(
+          service_name,
+          [this, stream_index = stream_index](const std::shared_ptr<SetInt32::Request> request,
+                                              std::shared_ptr<SetInt32::Response> response) {
+            setParameterResponse(
+                node_, parameters_,
+                {rclcpp::Parameter(stream_name_.at(stream_index) + "_rotation", request->data)},
+                response);
+          });
+    }
   }
   if (isPropertyWritable(device_, OB_PROP_FAN_WORK_MODE_INT)) {
     set_fan_work_mode_srv_ = node_->create_service<SetInt32>(
@@ -321,7 +356,7 @@ void OBCameraNode::setupCameraCtrlServices() {
           setFanWorkModeCallback(request, response);
         });
   }
-  if (isPropertyWritable(device_, OB_PROP_FLOOD_BOOL)) {
+  if (has_depth && isPropertyWritable(device_, OB_PROP_FLOOD_BOOL)) {
     set_flood_enable_srv_ = node_->create_service<SetBool>(
         "set_flood_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                    const std::shared_ptr<SetBool::Request> request,
@@ -331,30 +366,34 @@ void OBCameraNode::setupCameraCtrlServices() {
   }
   if (isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT) ||
       isPropertyWritable(device_, OB_PROP_LASER_BOOL)) {
-    set_laser_enable_srv_ = node_->create_service<SetBool>(
-        "set_laser_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                                   const std::shared_ptr<SetBool::Request> request,
-                                   std::shared_ptr<SetBool::Response> response) {
-          (void)request_header;
-          setParameterResponse(node_, parameters_,
-                               {rclcpp::Parameter("enable_laser", request->data)}, response);
-        });
+    if (can_set("enable_laser")) {
+      set_laser_enable_srv_ = node_->create_service<SetBool>(
+          "set_laser_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                     const std::shared_ptr<SetBool::Request> request,
+                                     std::shared_ptr<SetBool::Response> response) {
+            (void)request_header;
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("enable_laser", request->data)}, response);
+          });
+    }
   }
   if (isPropertyWritable(device_, OB_PROP_LDP_BOOL) &&
       ((isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT) &&
         isPropertyWritable(device_, OB_PROP_LASER_CONTROL_INT)) ||
        (isPropertyReadable(device_, OB_PROP_LASER_BOOL) &&
         isPropertyWritable(device_, OB_PROP_LASER_BOOL)))) {
-    set_ldp_enable_srv_ = node_->create_service<SetBool>(
-        "set_ldp_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                                 const std::shared_ptr<SetBool::Request> request,
-                                 std::shared_ptr<SetBool::Response> response) {
-          (void)request_header;
-          setParameterResponse(node_, parameters_, {rclcpp::Parameter("enable_ldp", request->data)},
-                               response);
-        });
+    if (can_set("enable_ldp")) {
+      set_ldp_enable_srv_ = node_->create_service<SetBool>(
+          "set_ldp_enable", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                   const std::shared_ptr<SetBool::Request> request,
+                                   std::shared_ptr<SetBool::Response> response) {
+            (void)request_header;
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("enable_ldp", request->data)}, response);
+          });
+    }
   }
-  if (isPropertyReadable(device_, OB_PROP_LDP_BOOL) &&
+  if (isSensorParameterSupported("enable_ldp") && isPropertyReadable(device_, OB_PROP_LDP_BOOL) &&
       isPropertyReadable(device_, OB_PROP_LDP_STATUS_BOOL)) {
     get_ldp_status_srv_ = node_->create_service<GetBool>(
         "get_ldp_status", [this](const std::shared_ptr<rmw_request_id_t> request_header,
@@ -364,8 +403,9 @@ void OBCameraNode::setupCameraCtrlServices() {
           getLdpStatusCallback(request, response);
         });
   }
-  if (isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT) ||
-      isPropertyReadable(device_, OB_PROP_LASER_BOOL)) {
+  if (isSensorParameterSupported("enable_laser") &&
+      (isPropertyReadable(device_, OB_PROP_LASER_CONTROL_INT) ||
+       isPropertyReadable(device_, OB_PROP_LASER_BOOL))) {
     get_laser_status_srv_ = node_->create_service<GetBool>(
         "get_laser_status", [this](const std::shared_ptr<rmw_request_id_t> request_header,
                                    const std::shared_ptr<GetBool::Request> request,
@@ -376,14 +416,16 @@ void OBCameraNode::setupCameraCtrlServices() {
   }
   if (isPropertyReadable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL) &&
       isPropertyWritable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL)) {
-    set_ptp_config_srv_ = node_->create_service<SetBool>(
-        "set_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
-                                 const std::shared_ptr<SetBool::Request> request,
-                                 std::shared_ptr<SetBool::Response> response) {
-          (void)request_header;
-          setParameterResponse(node_, parameters_,
-                               {rclcpp::Parameter("enable_ptp_config", request->data)}, response);
-        });
+    if (can_set("enable_ptp_config")) {
+      set_ptp_config_srv_ = node_->create_service<SetBool>(
+          "set_ptp_config", [this](const std::shared_ptr<rmw_request_id_t> request_header,
+                                   const std::shared_ptr<SetBool::Request> request,
+                                   std::shared_ptr<SetBool::Response> response) {
+            (void)request_header;
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("enable_ptp_config", request->data)}, response);
+          });
+    }
   }
   if (isPropertyReadable(device_, OB_DEVICE_PTP_CLOCK_SYNC_ENABLE_BOOL)) {
     get_ptp_config_srv_ = node_->create_service<GetBool>(
@@ -395,59 +437,67 @@ void OBCameraNode::setupCameraCtrlServices() {
         });
   }
 
-  get_white_balance_srv_ = node_->create_service<GetInt32>(
-      "get_white_balance", [this](const std::shared_ptr<GetInt32::Request> request,
-                                  std::shared_ptr<GetInt32::Response> response) {
-        getWhiteBalanceCallback(request, response);
-      });
+  if (can_read("color_white_balance")) {
+    get_white_balance_srv_ = node_->create_service<GetInt32>(
+        "get_white_balance", [this](const std::shared_ptr<GetInt32::Request> request,
+                                    std::shared_ptr<GetInt32::Response> response) {
+          getWhiteBalanceCallback(request, response);
+        });
+  }
 
-  set_white_balance_srv_ = node_->create_service<SetInt32>(
-      "set_white_balance", [this](const std::shared_ptr<SetInt32::Request> request,
-                                  std::shared_ptr<SetInt32::Response> response) {
-        setParameterResponse(node_, parameters_,
-                             {rclcpp::Parameter("color_white_balance", request->data)}, response);
-      });
-  if (isPropertyReadable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
+  if (can_set("color_white_balance")) {
+    set_white_balance_srv_ = node_->create_service<SetInt32>(
+        "set_white_balance", [this](const std::shared_ptr<SetInt32::Request> request,
+                                    std::shared_ptr<SetInt32::Response> response) {
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("color_white_balance", request->data)}, response);
+        });
+  }
+  if (has_color && isPropertyReadable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
     get_color_wb_ctrl_srv_ = node_->create_service<GetInt32>(
         "get_color_wb_ctrl", [this](const std::shared_ptr<GetInt32::Request> request,
                                     std::shared_ptr<GetInt32::Response> response) {
           getColorWbCtrlCallback(request, response);
         });
   }
-  if (isPropertyWritable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
+  if (has_color && isPropertyWritable(device_, OB_PROP_COLOR_WB_CTRL_INT)) {
     set_color_wb_ctrl_srv_ = node_->create_service<SetInt32>(
         "set_color_wb_ctrl", [this](const std::shared_ptr<SetInt32::Request> request,
                                     std::shared_ptr<SetInt32::Response> response) {
           setColorWbCtrlCallback(request, response);
         });
   }
-  get_auto_white_balance_srv_ = node_->create_service<GetInt32>(
-      "get_auto_white_balance", [this](const std::shared_ptr<GetInt32::Request> request,
-                                       std::shared_ptr<GetInt32::Response> response) {
-        getAutoWhiteBalanceCallback(request, response);
-      });
-  set_auto_white_balance_srv_ = node_->create_service<SetBool>(
-      "set_auto_white_balance", [this](const std::shared_ptr<SetBool::Request> request,
-                                       std::shared_ptr<SetBool::Response> response) {
-        setParameterResponse(node_, parameters_,
-                             {rclcpp::Parameter("enable_color_auto_white_balance", request->data)},
-                             response);
-      });
-  if (isPropertyReadable(device_, OB_PROP_COLOR_AE_AWB_STAT_INT)) {
+  if (can_read("enable_color_auto_white_balance")) {
+    get_auto_white_balance_srv_ = node_->create_service<GetInt32>(
+        "get_auto_white_balance", [this](const std::shared_ptr<GetInt32::Request> request,
+                                         std::shared_ptr<GetInt32::Response> response) {
+          getAutoWhiteBalanceCallback(request, response);
+        });
+  }
+  if (can_set("enable_color_auto_white_balance")) {
+    set_auto_white_balance_srv_ = node_->create_service<SetBool>(
+        "set_auto_white_balance", [this](const std::shared_ptr<SetBool::Request> request,
+                                         std::shared_ptr<SetBool::Response> response) {
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter("enable_color_auto_white_balance", request->data)}, response);
+        });
+  }
+  if (has_color && isPropertyReadable(device_, OB_PROP_COLOR_AE_AWB_STAT_INT)) {
     get_ae_awb_status_srv_ = node_->create_service<GetInt32>(
         "get_color_ae_awb_status", [this](const std::shared_ptr<GetInt32::Request> request,
                                           std::shared_ptr<GetInt32::Response> response) {
           getAeAwbStatusCallback(request, response);
         });
   }
-  if (isPropertyReadable(device_, OB_STRUCT_COLOR_AWB_GAIN)) {
+  if (has_color && isPropertyReadable(device_, OB_STRUCT_COLOR_AWB_GAIN)) {
     get_awb_gain_srv_ = node_->create_service<GetAwbGain>(
         "get_color_awb_gain", [this](const std::shared_ptr<GetAwbGain::Request> request,
                                      std::shared_ptr<GetAwbGain::Response> response) {
           getAwbGainCallback(request, response);
         });
   }
-  if (isPropertyWritable(device_, OB_STRUCT_COLOR_AWB_GAIN)) {
+  if (has_color && isPropertyWritable(device_, OB_STRUCT_COLOR_AWB_GAIN)) {
     set_awb_gain_srv_ = node_->create_service<SetAwbGain>(
         "set_color_awb_gain", [this](const std::shared_ptr<SetAwbGain::Request> request,
                                      std::shared_ptr<SetAwbGain::Response> response) {
@@ -495,31 +545,37 @@ void OBCameraNode::setupCameraCtrlServices() {
                             std::shared_ptr<std_srvs::srv::Empty::Response> response) {
         saveImageCallback(request, response);
       });
-  save_point_cloud_srv_ = node_->create_service<std_srvs::srv::Empty>(
-      "save_point_cloud", [this](const std::shared_ptr<std_srvs::srv::Empty::Request> request,
-                                 std::shared_ptr<std_srvs::srv::Empty::Response> response) {
-        savePointCloudCallback(request, response);
-      });
+  if (has_depth) {
+    save_point_cloud_srv_ = node_->create_service<std_srvs::srv::Empty>(
+        "save_point_cloud", [this](const std::shared_ptr<std_srvs::srv::Empty::Request> request,
+                                   std::shared_ptr<std_srvs::srv::Empty::Response> response) {
+          savePointCloudCallback(request, response);
+        });
+  }
   export_config_json_srv_ = node_->create_service<SetString>(
       "export_config_json", [this](const std::shared_ptr<SetString::Request> request,
                                    std::shared_ptr<SetString::Response> response) {
         exportConfigJsonCallback(request, response);
       });
   if (isPropertyWritable(device_, OB_PROP_IR_CHANNEL_DATA_SOURCE_INT)) {
-    switch_ir_camera_srv_ = node_->create_service<SetString>(
-        "switch_ir", [this](const std::shared_ptr<SetString::Request> request,
-                            std::shared_ptr<SetString::Response> response) {
-          switchIRCameraCallback(request, response);
-        });
+    if (sensors_.count(INFRA0) || sensors_.count(INFRA1) || sensors_.count(INFRA2)) {
+      switch_ir_camera_srv_ = node_->create_service<SetString>(
+          "switch_ir", [this](const std::shared_ptr<SetString::Request> request,
+                              std::shared_ptr<SetString::Response> response) {
+            switchIRCameraCallback(request, response);
+          });
+    }
   }
   if (isPropertyWritable(device_, OB_PROP_IR_LONG_EXPOSURE_BOOL)) {
-    set_ir_long_exposure_srv_ = node_->create_service<SetBool>(
-        "set_ir_long_exposure", [this](const std::shared_ptr<SetBool::Request> request,
-                                       std::shared_ptr<SetBool::Response> response) {
-          setParameterResponse(node_, parameters_,
-                               {rclcpp::Parameter("enable_ir_long_exposure", request->data)},
-                               response);
-        });
+    if (can_set("enable_ir_long_exposure")) {
+      set_ir_long_exposure_srv_ = node_->create_service<SetBool>(
+          "set_ir_long_exposure", [this](const std::shared_ptr<SetBool::Request> request,
+                                         std::shared_ptr<SetBool::Response> response) {
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("enable_ir_long_exposure", request->data)},
+                                 response);
+          });
+    }
   }
   if (isPropertyReadable(device_, OB_PROP_LDP_MEASURE_DISTANCE_INT)) {
     get_lrm_measure_distance_srv_ = node_->create_service<GetInt32>(
@@ -537,11 +593,13 @@ void OBCameraNode::setupCameraCtrlServices() {
         });
   }
   if (isPropertyWritable(device_, OB_PROP_FRAME_INTERLEAVE_LASER_PATTERN_SYNC_DELAY_INT)) {
-    set_interleaver_laser_sync_srv_ = node_->create_service<SetInt32>(
-        "set_sync_interleaverlaser", [this](const std::shared_ptr<SetInt32::Request> request,
-                                            std::shared_ptr<SetInt32::Response> response) {
-          setSYNCInterleaveLaserCallback(request, response);
-        });
+    if (has_depth) {
+      set_interleaver_laser_sync_srv_ = node_->create_service<SetInt32>(
+          "set_sync_interleaverlaser", [this](const std::shared_ptr<SetInt32::Request> request,
+                                              std::shared_ptr<SetInt32::Response> response) {
+            setSYNCInterleaveLaserCallback(request, response);
+          });
+    }
   }
   set_sync_host_time_srv_ = node_->create_service<SetBool>(
       "set_sync_hosttime", [this](const std::shared_ptr<SetBool::Request> request,
@@ -575,18 +633,22 @@ void OBCameraNode::setupCameraCtrlServices() {
           getUserCalibParamsCallback(request, response);
         });
   }
-  set_ae_reference_stream_srv_ = node_->create_service<SetString>(
-      "set_ae_reference_stream", [this](const std::shared_ptr<SetString::Request> request,
-                                        std::shared_ptr<SetString::Response> response) {
-        setParameterResponse(node_, parameters_,
-                             {rclcpp::Parameter("ae_reference_stream", request->data)}, response);
-      });
-  set_ae_strategy_srv_ = node_->create_service<SetString>(
-      "set_ae_strategy", [this](const std::shared_ptr<SetString::Request> request,
-                                std::shared_ptr<SetString::Response> response) {
-        setParameterResponse(node_, parameters_, {rclcpp::Parameter("ae_strategy", request->data)},
-                             response);
-      });
+  if (can_set("ae_reference_stream")) {
+    set_ae_reference_stream_srv_ = node_->create_service<SetString>(
+        "set_ae_reference_stream", [this](const std::shared_ptr<SetString::Request> request,
+                                          std::shared_ptr<SetString::Response> response) {
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("ae_reference_stream", request->data)}, response);
+        });
+  }
+  if (can_set("ae_strategy")) {
+    set_ae_strategy_srv_ = node_->create_service<SetString>(
+        "set_ae_strategy", [this](const std::shared_ptr<SetString::Request> request,
+                                  std::shared_ptr<SetString::Response> response) {
+          setParameterResponse(node_, parameters_,
+                               {rclcpp::Parameter("ae_strategy", request->data)}, response);
+        });
+  }
   set_streams_enable_srv_ = node_->create_service<SetBool>(
       "set_streams_enable", [this](const std::shared_ptr<SetBool::Request> request,
                                    std::shared_ptr<SetBool::Response> response) {
@@ -597,16 +659,18 @@ void OBCameraNode::setupCameraCtrlServices() {
             response->message += "; parameter synchronization failed: " + failures;
         }
       });
-  set_image_registration_mode_srv_ = node_->create_service<SetString>(
-      "set_image_registration_mode", [this](const std::shared_ptr<SetString::Request> request,
-                                            std::shared_ptr<SetString::Response> response) {
-        setImageRegistrationModeCallback(request, response);
-        if (response->success) {
-          const auto failures = parameters_->synchronizeParameters();
-          if (!failures.empty())
-            response->message += "; parameter synchronization failed: " + failures;
-        }
-      });
+  if (has_depth && sensors_.count(COLOR) != 0) {
+    set_image_registration_mode_srv_ = node_->create_service<SetString>(
+        "set_image_registration_mode", [this](const std::shared_ptr<SetString::Request> request,
+                                              std::shared_ptr<SetString::Response> response) {
+          setImageRegistrationModeCallback(request, response);
+          if (response->success) {
+            const auto failures = parameters_->synchronizeParameters();
+            if (!failures.empty())
+              response->message += "; parameter synchronization failed: " + failures;
+          }
+        });
+  }
   set_stream_profile_srv_ = node_->create_service<SetStreamProfile>(
       "set_stream_profile", [this](const std::shared_ptr<SetStreamProfile::Request> request,
                                    std::shared_ptr<SetStreamProfile::Response> response) {
@@ -622,44 +686,54 @@ void OBCameraNode::setupCameraCtrlServices() {
                                    std::shared_ptr<GetBool::Response> response) {
         getStreamsEnableCallback(request, response);
       });
-  set_point_cloud_decimation_srv_ = node_->create_service<SetInt32>(
-      "set_point_cloud_decimation", [this](const std::shared_ptr<SetInt32::Request> request,
-                                           std::shared_ptr<SetInt32::Response> response) {
-        setParameterResponse(
-            node_, parameters_,
-            {rclcpp::Parameter("point_cloud_decimation_filter_factor", request->data)}, response);
-      });
-  get_point_cloud_decimation_srv_ = node_->create_service<GetInt32>(
-      "get_point_cloud_decimation", [this](const std::shared_ptr<GetInt32::Request> request,
-                                           std::shared_ptr<GetInt32::Response> response) {
-        getPointCloudDecimationCallback(request, response);
-      });
-  if (isPropertyWritable(device_, OB_PROP_DISP_SEARCH_RANGE_MODE_INT)) {
-    set_disparity_range_mode_srv_ = node_->create_service<SetInt32>(
-        "set_disparity_range_mode", [this](const std::shared_ptr<SetInt32::Request> request,
-                                           std::shared_ptr<SetInt32::Response> response) {
-          setParameterResponse(node_, parameters_,
-                               {rclcpp::Parameter("disparity_range_mode", request->data)},
-                               response);
+  if (can_set("point_cloud_decimation_filter_factor")) {
+    set_point_cloud_decimation_srv_ = node_->create_service<SetInt32>(
+        "set_point_cloud_decimation", [this](const std::shared_ptr<SetInt32::Request> request,
+                                             std::shared_ptr<SetInt32::Response> response) {
+          setParameterResponse(
+              node_, parameters_,
+              {rclcpp::Parameter("point_cloud_decimation_filter_factor", request->data)}, response);
         });
+  }
+  if (node_->has_parameter("point_cloud_decimation_filter_factor")) {
+    get_point_cloud_decimation_srv_ = node_->create_service<GetInt32>(
+        "get_point_cloud_decimation", [this](const std::shared_ptr<GetInt32::Request> request,
+                                             std::shared_ptr<GetInt32::Response> response) {
+          getPointCloudDecimationCallback(request, response);
+        });
+  }
+  if (isPropertyWritable(device_, OB_PROP_DISP_SEARCH_RANGE_MODE_INT)) {
+    if (can_set("disparity_range_mode")) {
+      set_disparity_range_mode_srv_ = node_->create_service<SetInt32>(
+          "set_disparity_range_mode", [this](const std::shared_ptr<SetInt32::Request> request,
+                                             std::shared_ptr<SetInt32::Response> response) {
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("disparity_range_mode", request->data)},
+                                 response);
+          });
+    }
   }
   if (isPropertyWritable(device_, OB_PROP_DISP_SEARCH_OFFSET_INT)) {
-    set_disparity_search_offset_srv_ = node_->create_service<SetInt32>(
-        "set_disparity_search_offset", [this](const std::shared_ptr<SetInt32::Request> request,
-                                              std::shared_ptr<SetInt32::Response> response) {
-          setParameterResponse(node_, parameters_,
-                               {rclcpp::Parameter("disparity_search_offset", request->data)},
-                               response);
-        });
+    if (can_set("disparity_search_offset")) {
+      set_disparity_search_offset_srv_ = node_->create_service<SetInt32>(
+          "set_disparity_search_offset", [this](const std::shared_ptr<SetInt32::Request> request,
+                                                std::shared_ptr<SetInt32::Response> response) {
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("disparity_search_offset", request->data)},
+                                 response);
+          });
+    }
   }
   if (isPropertyWritable(device_, OB_PROP_USB_SYNC_VOLTAGE_LEVEL_INT)) {
-    set_sync_io_voltage_level_srv_ = node_->create_service<SetInt32>(
-        "set_sync_io_voltage_level", [this](const std::shared_ptr<SetInt32::Request> request,
-                                            std::shared_ptr<SetInt32::Response> response) {
-          setParameterResponse(node_, parameters_,
-                               {rclcpp::Parameter("sync_io_voltage_level", request->data)},
-                               response);
-        });
+    if (can_set("sync_io_voltage_level")) {
+      set_sync_io_voltage_level_srv_ = node_->create_service<SetInt32>(
+          "set_sync_io_voltage_level", [this](const std::shared_ptr<SetInt32::Request> request,
+                                              std::shared_ptr<SetInt32::Response> response) {
+            setParameterResponse(node_, parameters_,
+                                 {rclcpp::Parameter("sync_io_voltage_level", request->data)},
+                                 response);
+          });
+    }
   }
 }
 
