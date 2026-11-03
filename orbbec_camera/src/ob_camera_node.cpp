@@ -1239,10 +1239,10 @@ void OBCameraNode::setupDevices() {
         device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_enable);
       } else if (device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
         if (!enable_ldp_) {
-          auto laser_enable = device_->getIntProperty(OB_PROP_LASER_BOOL);
+          auto laser_enable = device_->getBoolProperty(OB_PROP_LASER_BOOL);
           device_->setBoolProperty(OB_PROP_LDP_BOOL, enable_ldp_);
           std::this_thread::sleep_for(std::chrono::milliseconds(3));
-          device_->setIntProperty(OB_PROP_LASER_BOOL, laser_enable);
+          device_->setBoolProperty(OB_PROP_LASER_BOOL, laser_enable);
         } else {
           device_->setBoolProperty(OB_PROP_LDP_BOOL, enable_ldp_);
         }
@@ -1278,10 +1278,10 @@ void OBCameraNode::setupDevices() {
   }
   if (should_apply_launch_config("enable_laser") &&
       device_->isPropertySupported(OB_PROP_LASER_BOOL, OB_PERMISSION_READ_WRITE)) {
-    TRY_TO_SET_PROPERTY(setIntProperty, OB_PROP_LASER_BOOL, enable_laser_);
+    TRY_TO_SET_PROPERTY(setBoolProperty, OB_PROP_LASER_BOOL, enable_laser_);
     TRY_EXECUTE_BLOCK(RCLCPP_INFO_STREAM(
-        logger_,
-        "Current laser control: " << (device_->getIntProperty(OB_PROP_LASER_BOOL) ? "ON" : "OFF")));
+        logger_, "Current laser control: "
+                     << (device_->getBoolProperty(OB_PROP_LASER_BOOL) ? "ON" : "OFF")));
   }
   if (!sync_mode_str_.empty()) {
     TRY_EXECUTE_BLOCK({
