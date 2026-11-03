@@ -59,6 +59,7 @@ def generate_launch_description():
         DeclareLaunchArgument('depth_fps', default_value='10'),
         DeclareLaunchArgument('depth_format', default_value='Y12'),
         DeclareLaunchArgument('enable_depth', default_value='true'),
+        DeclareLaunchArgument('enable_laser', default_value='true'),
         DeclareLaunchArgument('depth_flip', default_value='false'),
         DeclareLaunchArgument('depth_mirror', default_value='false'),
         DeclareLaunchArgument('depth_rotation', default_value='-1'),

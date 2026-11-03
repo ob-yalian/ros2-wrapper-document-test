@@ -1517,7 +1517,7 @@ void OBCameraNode::setLaserEnableCallback(
     const std::shared_ptr<std_srvs::srv::SetBool::Request>& request,
     std::shared_ptr<std_srvs::srv::SetBool::Response>& response) {
   (void)request_header;
-  (void)response;
+  std::lock_guard<decltype(device_lock_)> lock(device_lock_);
   int laser_enable = request->data ? 1 : 0;
   try {
     bool property_modified = false;
@@ -1525,13 +1525,17 @@ void OBCameraNode::setLaserEnableCallback(
       device_->setIntProperty(OB_PROP_LASER_CONTROL_INT, laser_enable);
       property_modified = true;
     } else if (isPropertyWritable(device_, OB_PROP_LASER_BOOL)) {
-      device_->setIntProperty(OB_PROP_LASER_BOOL, laser_enable);
+      device_->setBoolProperty(OB_PROP_LASER_BOOL, request->data);
       property_modified = true;
     }
     if (property_modified) {
       enable_laser_ = request->data;
+      response->success = true;
+      response->message = "OK";
+    } else {
+      response->success = false;
+      response->message = "Laser property is not supported";
     }
-    response->success = true;
   } catch (const ob::Error& e) {
     response->message = orbbec_camera::formatObErrorWithStatus(e);
     response->success = false;
@@ -1568,10 +1572,10 @@ void OBCameraNode::setLdpEnableCallback(
     } else if (isPropertyReadable(device_, OB_PROP_LASER_BOOL) &&
                isPropertyWritable(device_, OB_PROP_LASER_BOOL)) {
       if (!ldp_enable) {
-        auto laser_enable = device_->getIntProperty(OB_PROP_LASER_BOOL);
+        auto laser_enable = device_->getBoolProperty(OB_PROP_LASER_BOOL);
         device_->setBoolProperty(OB_PROP_LDP_BOOL, ldp_enable);
         std::this_thread::sleep_for(std::chrono::milliseconds(3));
-        device_->setIntProperty(OB_PROP_LASER_BOOL, laser_enable);
+        device_->setBoolProperty(OB_PROP_LASER_BOOL, laser_enable);
       } else {
         device_->setBoolProperty(OB_PROP_LDP_BOOL, ldp_enable);
       }
