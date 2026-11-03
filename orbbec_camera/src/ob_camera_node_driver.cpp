@@ -1240,8 +1240,10 @@ void OBCameraNodeDriver::setupDiagnosticUpdater() {
     return;
   }
   try {
-    const auto period =
-        parameters_->setParam("diagnostic_period", rclcpp::ParameterValue(0.0)).get<double>();
+    const auto period = parameters_
+                            ->setParam("diagnostic_period", rclcpp::ParameterValue(0.0), {},
+                                       describeStartupParameter("diagnostic_period"))
+                            .get<double>();
     if (period <= 0.0) {
       return;
     }

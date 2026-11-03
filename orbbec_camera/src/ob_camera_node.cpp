@@ -9665,6 +9665,27 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
       return;
     }
 
+    if (normalized_request_filter_name == "HDRMerge" && has_positional_params) {
+      if (request->filter_param.size() < 4) {
+        fail("HDRMerge requires exposure_1, gain_1, exposure_2 and gain_2");
+        return;
+      }
+      const auto exposure_range = getCachedIntPropertyRange(OB_PROP_DEPTH_EXPOSURE_INT);
+      const auto gain_range = getCachedIntPropertyRange(OB_PROP_DEPTH_GAIN_INT);
+      const std::array<const char *, 4> names = {"exposure_1", "gain_1", "exposure_2", "gain_2"};
+      // Validate before enabling the filter or converting floats to unsigned SDK fields.
+      for (size_t index = 0; index < names.size(); ++index) {
+        const double value = request->filter_param[index];
+        const auto &range = index % 2 == 0 ? exposure_range : gain_range;
+        if (!std::isfinite(value) || value < 0 || std::floor(value) != value || value < range.min ||
+            value > range.max ||
+            (range.step > 0 && (static_cast<int64_t>(value) - range.min) % range.step != 0)) {
+          fail(std::string("HDRMerge ") + names[index] + " is outside the SDK range/step");
+          return;
+        }
+      }
+    }
+
     if (normalized_request_filter_name == "EnhancedDepthFilter") {
       std::string message;
       if (!applyEnhancedDepthFilterConfig(request->filter_enable, request->filter_param,
