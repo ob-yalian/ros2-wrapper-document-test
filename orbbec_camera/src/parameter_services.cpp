@@ -17,6 +17,7 @@
 #include "orbbec_camera/dynamic_params.h"
 
 #include <rclcpp/parameter_service.hpp>
+#include <rclcpp/version.h>
 #include <stdexcept>
 
 namespace orbbec_camera {
@@ -24,6 +25,11 @@ namespace {
 template <typename Service, typename Callback>
 rclcpp::ServiceBase::SharedPtr createParameterService(rclcpp::Node *node, const std::string &method,
                                                       Callback callback) {
+#if RCLCPP_VERSION_MAJOR >= 28
+  const auto qos = rclcpp::ParametersQoS();
+#else
+  const auto qos = rmw_qos_profile_parameters;
+#endif
   return node->create_service<Service>(
       std::string(node->get_name()) + "/" + method,
       [callback, logger = node->get_logger()](
@@ -35,7 +41,7 @@ rclcpp::ServiceBase::SharedPtr createParameterService(rclcpp::Node *node, const 
           RCLCPP_WARN_STREAM(logger, "Parameter service failed: " << e.what());
         }
       },
-      rmw_qos_profile_parameters);
+      qos);
 }
 }  // namespace
 
