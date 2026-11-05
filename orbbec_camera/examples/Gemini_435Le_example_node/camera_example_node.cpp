@@ -195,9 +195,9 @@ class CameraExampleNode : public rclcpp::Node {
     RCLCPP_INFO(this->get_logger(), "--------------------------------------------");
     for (const auto &stream : msg->streams) {
       RCLCPP_INFO(this->get_logger(),
-                  "Topic: %s, Subscribers: %s, Pre-publish Rate: %.2f Hz, Avg Delay: %.2f ms",
+                  "Topic: %s, Subscribers: %s, Publish Rate: %.2f Hz, Avg Delay: %.2f ms",
                   stream.topic_name.c_str(), stream.has_subscribers ? "true" : "false",
-                  stream.pre_publish_frame_rate_hz, stream.delay_ms_avg);
+                  stream.publish_rate_hz, stream.delay_ms_avg);
     }
 
     RCLCPP_INFO(this->get_logger(), "Device Online: %s", msg->device_online ? "True" : "False");

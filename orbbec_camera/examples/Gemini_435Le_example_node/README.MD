@@ -109,7 +109,7 @@ ros2 service call /camera/get_device_info orbbec_camera_msgs/srv/GetDeviceInfo "
 ### 2.4 Device Status
 
 `/camera/device_status` is a real-time topic provided by the Orbbec camera for monitoring device status and performance metrics.
-`pre_publish_frame_rate_hz` counts frames before the publish/transport call, rather than
+`publish_rate_hz` counts frames before the publish/transport call, rather than
 messages received by a subscriber. Set `device_status_period:=0.0` at launch to disable device
 status publication and statistics; positive values set the period in seconds (default: 1.0).
 
