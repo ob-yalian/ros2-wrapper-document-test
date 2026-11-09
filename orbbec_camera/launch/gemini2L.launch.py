@@ -116,6 +116,7 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_color_auto_white_balance", default_value="true"),
         DeclareLaunchArgument("color_white_balance", default_value="-1"),
         DeclareLaunchArgument("color_brightness", default_value="-1"),
+        DeclareLaunchArgument("color_powerline_freq", default_value=""),  # disable, 50hz, 60hz, auto
         DeclareLaunchArgument("color_denoising_level", default_value="-1"),
         DeclareLaunchArgument('enable_color_decimation_filter', default_value='false'),
         DeclareLaunchArgument('color_decimation_filter_scale', default_value='-1'),
@@ -205,6 +206,7 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_firmware_log", default_value="false"),
         DeclareLaunchArgument("monitor_poll_interval_sec", default_value="-1"),
         DeclareLaunchArgument("device_status_period", default_value="1.0"),
+        DeclareLaunchArgument("diagnostic_period", default_value="1.0"),  # seconds
         DeclareLaunchArgument("time_domain", default_value="global"),
         DeclareLaunchArgument("timestamp_clock_type", default_value=""),  # realtime or monotonic, default is realtime.
         DeclareLaunchArgument("enable_frame_drop_log", default_value="false"),
