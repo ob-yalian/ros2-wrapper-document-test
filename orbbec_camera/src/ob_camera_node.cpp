@@ -70,6 +70,12 @@ std::string OBCameraNode::normalizeDepthFilterName(const std::string &filter_nam
 
 namespace {
 
+void validateThresholdFilterRange(double minimum, double maximum) {
+  if (!std::isfinite(minimum) || !std::isfinite(maximum) || minimum > maximum) {
+    throw std::invalid_argument("ThresholdFilter requires finite min <= max.");
+  }
+}
+
 template <typename NodeTopicsInterfaceT>
 auto resolveTopicNameCompat(const NodeTopicsInterfaceT &topics_interface,
                             const std::string &topic_name, const std::string &, const std::string &,
@@ -3813,6 +3819,11 @@ void OBCameraNode::setupDepthPostProcessFilter() {
     auto filter = depth_filter_list_[i];
     std::string filter_name = filter->type();
     RCLCPP_DEBUG_STREAM(logger_, "Configuring depth filter: " << filter_name);
+    if (filter_name == "ThresholdFilter") {
+      validateThresholdFilterRange(
+          threshold_filter_min_ == -1 ? filter->getConfigValue("min") : threshold_filter_min_,
+          threshold_filter_max_ == -1 ? filter->getConfigValue("max") : threshold_filter_max_);
+    }
     if (filter_params.find(filter_name) != filter_params.end() &&
         isFilterParameterSupported(filter_param_names[filter_name]) &&
         isLaunchParamProvided(filter_param_names[filter_name])) {
@@ -9527,6 +9538,16 @@ bool OBCameraNode::applyNamedDepthFilterConfig(
     parsed_params.emplace_back(param_name, parsed_value);
   }
 
+  if (normalized_filter_name == "ThresholdFilter") {
+    double minimum = existing_filter->getConfigValue("min");
+    double maximum = existing_filter->getConfigValue("max");
+    for (const auto &param : parsed_params) {
+      if (param.first == "min") minimum = param.second;
+      if (param.first == "max") maximum = param.second;
+    }
+    validateThresholdFilterRange(minimum, maximum);
+  }
+
   existing_filter->enable(enabled);
   for (const auto &parsed_param : parsed_params) {
     existing_filter->setConfigValue(parsed_param.first, parsed_param.second);
@@ -9864,6 +9885,9 @@ void OBCameraNode::setFilterCallback(const std::shared_ptr<SetFilter ::Request> 
         enable_sequence_id_filter_ = request->filter_enable;
       } else if (normalized_request_filter_name == "ThresholdFilter") {
         auto threshold_filter = existing_filter->as<ob::ThresholdFilter>();
+        if (request->filter_param.size() >= 2) {
+          validateThresholdFilterRange(request->filter_param[0], request->filter_param[1]);
+        }
         threshold_filter->enable(request->filter_enable);
         if (request->filter_param.size() > 1) {
           auto threshold_filter_min = request->filter_param[0];
